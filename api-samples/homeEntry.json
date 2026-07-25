@@ -1,0 +1,104 @@
+﻿{
+    "batter":  [
+                   {
+                       "hittype":  "좌투좌타",
+                       "pos":  "우익수",
+                       "pitchingStyle":  null,
+                       "name":  "김동혁",
+                       "pcode":  "52504"
+                   },
+                   {
+                       "hittype":  "우투우타",
+                       "pos":  "유격수",
+                       "pitchingStyle":  null,
+                       "name":  "김세민",
+                       "pcode":  "52514"
+                   },
+                   {
+                       "hittype":  "우투우타",
+                       "pos":  "2루수",
+                       "pitchingStyle":  null,
+                       "name":  "한태양",
+                       "pcode":  "52568"
+                   },
+                   {
+                       "hittype":  "우투좌타",
+                       "pos":  "우익수",
+                       "pitchingStyle":  null,
+                       "name":  "김한홀",
+                       "pcode":  "56595"
+                   }
+               ],
+    "pitcher":  [
+                    {
+                        "hittype":  "우투우타",
+                        "pos":  "투수",
+                        "pitchingStyle":  "우완투수",
+                        "name":  "최준용",
+                        "pcode":  "50556"
+                    },
+                    {
+                        "hittype":  "우투우타",
+                        "pos":  "투수",
+                        "pitchingStyle":  "우완투수",
+                        "name":  "김기준",
+                        "pcode":  "53540"
+                    },
+                    {
+                        "hittype":  "우투우타",
+                        "pos":  "투수",
+                        "pitchingStyle":  "우완투수",
+                        "name":  "이이무라",
+                        "pcode":  "56503"
+                    },
+                    {
+                        "hittype":  "우투우타",
+                        "pos":  "투수",
+                        "pitchingStyle":  "우완투수",
+                        "name":  "비슬리",
+                        "pcode":  "56523"
+                    },
+                    {
+                        "hittype":  "우투우타",
+                        "pos":  "투수",
+                        "pitchingStyle":  "우완투수",
+                        "name":  "로드리게스",
+                        "pcode":  "56531"
+                    },
+                    {
+                        "hittype":  "우투좌타",
+                        "pos":  "투수",
+                        "pitchingStyle":  "우완투수",
+                        "name":  "김원중",
+                        "pcode":  "62528"
+                    },
+                    {
+                        "hittype":  "우투우타",
+                        "pos":  "투수",
+                        "pitchingStyle":  "우완투수",
+                        "name":  "박세웅",
+                        "pcode":  "64021"
+                    },
+                    {
+                        "hittype":  "우투좌타",
+                        "pos":  "투수",
+                        "pitchingStyle":  "우완투수",
+                        "name":  "김강현",
+                        "pcode":  "65522"
+                    },
+                    {
+                        "hittype":  "우투우타",
+                        "pos":  "투수",
+                        "pitchingStyle":  "우완투수",
+                        "name":  "나균안",
+                        "pcode":  "67539"
+                    },
+                    {
+                        "hittype":  "우투좌타",
+                        "pos":  "투수",
+                        "pitchingStyle":  "우완투수",
+                        "name":  "현도훈",
+                        "pcode":  "68260"
+                    }
+                ]
+}
