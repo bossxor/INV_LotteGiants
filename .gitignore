@@ -24,3 +24,10 @@ tab_*.png
 final*.png
 ui*.xml
 api-samples/
+# APK artifacts (keep locally, don't track)
+*.apk
+LotteGiantsLive-*.apk
+
+# UI test dumps
+tab_*.xml
+ui*.xml
