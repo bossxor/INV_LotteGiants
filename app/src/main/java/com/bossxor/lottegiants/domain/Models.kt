@@ -4,6 +4,12 @@ import kotlinx.serialization.Serializable
 
 const val LOTTE_TEAM_CODE = "LT"
 
+/** 네이버 스포츠 KBO 팀 엠블럼 (투명 배경 PNG) */
+fun teamLogoUrl(teamCode: String): String =
+    "https://sports-phinf.pstatic.net/team/kbo/default/$teamCode.png"
+
+val LOTTE_LOGO_URL = teamLogoUrl(LOTTE_TEAM_CODE)
+
 @Serializable
 enum class GameStatus { BEFORE, LIVE, ENDED, CANCELED }
 
@@ -19,6 +25,16 @@ data class MiniGame(
     val statusText: String,
     val stadium: String = "",
     val startTime: String = "",
+    val homeLogoUrl: String = "",
+    val awayLogoUrl: String = "",
+    val homeStarter: String = "",
+    val awayStarter: String = "",
+    val broadChannel: String = "",
+    val winPitcherName: String = "",
+    val losePitcherName: String = "",
+    val gameDate: String = "",
+    val homeTeamCode: String = "",
+    val awayTeamCode: String = "",
 )
 
 @Serializable
@@ -29,7 +45,200 @@ data class LineupSlot(
     val seasonAvg: Double? = null,
     val todayHits: Int = 0,
     val todayAtBats: Int = 0,
+    val todayPa: Int = 0,
+    val todayRbi: Int = 0,
+    val todayRun: Int = 0,
+    val todayAvg: Double? = null,
     val isSubstitute: Boolean = false,
+    val playerCode: String = "",
+    val backNumber: String = "",
+    val hitType: String = "",
+)
+
+@Serializable
+data class PitcherLine(
+    val name: String,
+    val playerCode: String = "",
+    val backNumber: String = "",
+    val innings: String = "",
+    val hits: Int = 0,
+    val runs: Int = 0,
+    val earnedRuns: Int = 0,
+    val strikeouts: Int = 0,
+    val walks: Int = 0,
+    val pitchCount: Int = 0,
+    val battersFaced: Int = 0,
+    val homeRunsAllowed: Int = 0,
+    val seasonEra: String = "",
+    val seqno: Int = 0,
+)
+
+@Serializable
+data class StadiumWeather(
+    val stadium: String,
+    val temperatureC: Double,
+    val weatherCode: Int,
+    val precipProbability: Int? = null,
+    val summary: String,
+    val updatedAt: String = "",
+)
+
+@Serializable
+data class PlayerDetail(
+    val playerCode: String,
+    val name: String,
+    val backNumber: String = "",
+    val hitType: String = "",
+    val position: String = "",
+    val birth: String = "",
+    val heightCm: String = "",
+    val weightKg: String = "",
+    val seasonAvg: String = "",
+    val seasonGames: Int = 0,
+    val seasonHits: Int = 0,
+    val seasonAb: Int = 0,
+    val seasonHr: Int = 0,
+    val seasonRbi: Int = 0,
+    val seasonObp: String = "",
+    val seasonOps: String = "",
+    val seasonSlg: String = "",
+    val seasonSb: Int = 0,
+    val pitcherEra: String = "",
+    val pitcherWins: Int = 0,
+    val pitcherLosses: Int = 0,
+    val pitcherSo: Int = 0,
+    val pitcherInn: String = "",
+    val pitcherSaves: Int = 0,
+    val pitcherHolds: Int = 0,
+    val pitcherWhip: String = "",
+    val isPitcher: Boolean = false,
+    val todayLine: String = "",
+    val photoUrl: String = "",
+)
+
+@Serializable
+data class FavoritePlayer(
+    val code: String,
+    val name: String = "",
+    val team: String = "",
+)
+
+fun playerPhotoUrl(playerCode: String): String =
+    "https://sports-phinf.pstatic.net/player/kbo/default/$playerCode.png"
+
+@Serializable
+data class EntryPlayer(
+    val name: String,
+    val playerCode: String = "",
+    val position: String = "",
+    val hitType: String = "",
+    val backNumber: String = "",
+    val isPitcher: Boolean = false,
+)
+
+/** 특정 날짜의 공식 등록/말소 (KBO 공시) */
+@Serializable
+data class DayEntryChanges(
+    val date: String = "",
+    val registered: List<EntryPlayer> = emptyList(),
+    val removed: List<EntryPlayer> = emptyList(),
+) {
+    val hasChanges: Boolean get() = registered.isNotEmpty() || removed.isNotEmpty()
+}
+
+data class TeamHistorySection(
+    val title: String,
+    val items: List<String>,
+)
+
+enum class ThemeMode { SYSTEM, LIGHT, DARK }
+
+/** 실시간 스코어 알림/Now Bar 표시 모드 */
+enum class LiveDisplayMode {
+    /** 알림창에 이닝·BSO 등 상세 */
+    FULL,
+    /** 상태바·알림줄에 점수만 */
+    STATUS_SCORE,
+    /** 잠금화면·Now Bar 공개 표시 */
+    LOCK_NOW,
+}
+
+@Serializable
+data class LeaderPlayer(
+    val rank: Int = 0,
+    val name: String,
+    val team: String,
+    val isLotte: Boolean = false,
+    val isPitcher: Boolean = false,
+    val avg: String = "",
+    val era: String = "",
+    val games: Int = 0,
+    val hits: Int = 0,
+    val hr: Int = 0,
+    val rbi: Int = 0,
+    val ops: String = "",
+    val obp: String = "",
+    val slg: String = "",
+    val sb: Int = 0,
+    val wins: Int = 0,
+    val losses: Int = 0,
+    val saves: Int = 0,
+    val holds: Int = 0,
+    val so: Int = 0,
+    val whip: String = "",
+    val ip: String = "",
+    val playerCode: String = "",
+    /** 규정타석/이닝 충족 (타이틀 레이스용) */
+    val qualified: Boolean = false,
+)
+
+/** 크보팬식 타이틀 순위 한 줄 */
+data class TitleRankEntry(
+    val rank: Int,
+    val player: LeaderPlayer,
+    val valueLabel: String,
+)
+
+fun teamNameToCode(team: String): String = when {
+    team.contains("롯데") || team.equals("LT", true) -> "LT"
+    team.contains("삼성") || team.equals("SS", true) -> "SS"
+    team.contains("KIA") || team.contains("기아") || team.equals("HT", true) -> "HT"
+    team.contains("두산") || team.equals("OB", true) -> "OB"
+    team.contains("LG") || team.equals("LG", true) -> "LG"
+    team.contains("SSG") || team.equals("SK", true) -> "SK"
+    team.contains("한화") || team.equals("HH", true) -> "HH"
+    team.contains("키움") || team.equals("WO", true) || team.equals("넥센", true) -> "WO"
+    team.contains("NC") || team.equals("NC", true) -> "NC"
+    team.contains("KT") || team.equals("KT", true) -> "KT"
+    else -> ""
+}
+
+@Serializable
+data class RankPoint(val date: String, val rank: Int)
+
+@Serializable
+data class WeeklyPoint(val week: String, val value: Double)
+
+@Serializable
+data class LotteTeamCard(
+    val currentRank: Int = 0,
+    val gamesBehind: Double = 0.0,
+    val streak: String = "",
+    val recentForm: List<String> = emptyList(),
+    val rankHistory: List<RankPoint> = emptyList(),
+    val weeklyBatting: List<WeeklyPoint> = emptyList(),
+    val weeklyPitching: List<WeeklyPoint> = emptyList(),
+    val weeklyBattingRank: Int? = null,
+    val weeklyPitchingRank: Int? = null,
+)
+
+@Serializable
+data class RosterMove(
+    val playerCode: String = "",
+    val playerName: String = "",
+    val moveType: String = "",
+    val moveDate: String = "",
+    val isRegister: Boolean = true,
 )
 
 /** 롯데 경기 전체 상태 (앱 화면 + 위젯 + 알림 공용) */
@@ -42,10 +251,13 @@ data class LotteGameInfo(
     val isHome: Boolean,
     val opponentCode: String,
     val opponentName: String,
+    val opponentLogoUrl: String = "",
     val lotteScore: Int = 0,
     val opponentScore: Int = 0,
     val status: GameStatus = GameStatus.BEFORE,
     val statusText: String = "",
+    /** 취소·순연 사유 (API statusInfo, 예: 폭염) */
+    val cancelReason: String = "",
     val broadChannel: String = "",
     // 실시간 (relay)
     val inning: Int = 0,
@@ -66,6 +278,11 @@ data class LotteGameInfo(
     val lotteStartingPitcher: String = "",
     val opponentStartingPitcher: String = "",
     val lotteLineup: List<LineupSlot> = emptyList(),
+    val opponentLineup: List<LineupSlot> = emptyList(),
+    val lotteBenchBatters: List<LineupSlot> = emptyList(),
+    val opponentBenchBatters: List<LineupSlot> = emptyList(),
+    val lottePitchers: List<PitcherLine> = emptyList(),
+    val opponentPitchers: List<PitcherLine> = emptyList(),
     // 스코어보드
     val lotteInningScores: List<String> = emptyList(),
     val opponentInningScores: List<String> = emptyList(),
@@ -79,6 +296,117 @@ data class LotteGameInfo(
     val recentTexts: List<RelayText> = emptyList(),
     val winPitcherName: String = "",
     val losePitcherName: String = "",
+    val savePitcherName: String = "",
+    val holdPitcherName: String = "",
+    // 경기요약 확장 (프리뷰·요약)
+    val preview: GamePreview? = null,
+    val currentPitcherPitchCount: Int = 0,
+    val keyPlays: List<KeyPlay> = emptyList(),
+    val provisionalMvpName: String = "",
+    val provisionalMvpLine: String = "",
+    /** 당일 투구 위치 (네이버 ptsOptions) */
+    val pitchLocations: List<PitchLocation> = emptyList(),
+)
+
+/** 루타식 프리뷰 묶음 */
+@Serializable
+data class GamePreview(
+    val gameDate: String = "",
+    val startTime: String = "",
+    val stadium: String = "",
+    val broadChannel: String = "",
+    val lotteStarter: PreviewPitcher = PreviewPitcher(),
+    val opponentStarter: PreviewPitcher = PreviewPitcher(),
+    val lotteKeyBatter: PreviewBatter = PreviewBatter(),
+    val opponentKeyBatter: PreviewBatter = PreviewBatter(),
+    val lotteStanding: PreviewTeamLine = PreviewTeamLine(),
+    val opponentStanding: PreviewTeamLine = PreviewTeamLine(),
+    val seasonMatchup: MatchupRecord = MatchupRecord(),
+    val recentMatchups: List<MiniGame> = emptyList(),
+    val weather: StadiumWeather? = null,
+    /** 루타 API 고급 기능 자리 (미연결 시 false) */
+    val hotColdAvailable: Boolean = false,
+    val pitchAnalysisAvailable: Boolean = false,
+    val winProbAvailable: Boolean = false,
+)
+
+@Serializable
+data class PreviewPitcher(
+    val name: String = "",
+    val playerCode: String = "",
+    val era: String = "",
+    val wins: Int = 0,
+    val losses: Int = 0,
+    val strikeouts: Int = 0,
+    val innings: String = "",
+    val whip: String = "",
+    val games: Int = 0,
+)
+
+@Serializable
+data class PreviewBatter(
+    val name: String = "",
+    val playerCode: String = "",
+    val avg: String = "",
+    val hits: Int = 0,
+    val hr: Int = 0,
+    val rbi: Int = 0,
+    val games: Int = 0,
+    val ops: String = "",
+)
+
+@Serializable
+data class PreviewTeamLine(
+    val teamCode: String = "",
+    val teamName: String = "",
+    val rank: Int = 0,
+    val win: Int = 0,
+    val draw: Int = 0,
+    val lose: Int = 0,
+    val wra: Double = 0.0,
+)
+
+@Serializable
+data class MatchupRecord(
+    val wins: Int = 0,
+    val draws: Int = 0,
+    val losses: Int = 0,
+    val label: String = "",
+)
+
+@Serializable
+data class KeyPlay(
+    val inning: Int = 0,
+    val isTop: Boolean? = null,
+    val text: String = "",
+    val isScoring: Boolean = false,
+)
+
+@Serializable
+data class WinProbPoint(
+    val seq: Int = 0,
+    val label: String = "",
+    val homeProb: Double = 0.5,
+)
+
+@Serializable
+data class HotColdCell(
+    val row: Int = 0,
+    val col: Int = 0,
+    /** -1 cold ~ +1 hot */
+    val value: Float = 0f,
+)
+
+@Serializable
+data class PitchLocation(
+    val x: Float = 0f,
+    val y: Float = 0f,
+    val speed: Int = 0,
+    val pitchType: String = "",
+    val result: String = "",
+    val inning: Int = 0,
+    val topSz: Float = 3.5f,
+    val bottomSz: Float = 1.5f,
 )
 
 @Serializable
@@ -87,6 +415,8 @@ data class RelayText(
     val text: String,
     val type: Int,
     val inning: Int,
+    /** true=초, false=말, null=미상 */
+    val isTopInning: Boolean? = null,
 )
 
 /** 위젯/앱이 공유하는 전체 스냅샷 */
@@ -95,7 +425,18 @@ data class LiveSnapshot(
     val updatedAtMillis: Long = 0L,
     val lotteGame: LotteGameInfo? = null,
     val nextLotteGame: LotteGameInfo? = null,
+    val lastLotteGame: LotteGameInfo? = null,
+    val recentLotteGames: List<LotteGameInfo> = emptyList(),
     val otherGames: List<MiniGame> = emptyList(),
+    val yesterdayGames: List<MiniGame> = emptyList(),
+    val highlightText: String = "",
+    val highlightUntilMillis: Long = 0L,
+    val weather: StadiumWeather? = null,
+    /** 루타 API 연결 여부 (고급 차트용) */
+    val rutaConnected: Boolean = false,
+    val winProbSeries: List<WinProbPoint> = emptyList(),
+    val hotColdZone: List<HotColdCell> = emptyList(),
+    val pitchLocations: List<PitchLocation> = emptyList(),
 )
 
 @Serializable
@@ -116,7 +457,9 @@ data class TeamStanding(
 val LotteGameInfo.inningLabel: String
     get() = when {
         status == GameStatus.BEFORE -> startTime
-        status == GameStatus.CANCELED -> "취소"
+        status == GameStatus.CANCELED -> cancelReason.ifBlank { "취소" }.let {
+            if (it == "취소") "취소" else "취소 ($it)"
+        }
         status == GameStatus.ENDED -> "종료"
         inning <= 0 -> statusText
         else -> "${inning}회${if (isTopInning) "초" else "말"}"

@@ -6,28 +6,38 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.bossxor.lottegiants.MainActivity
 import com.bossxor.lottegiants.R
 import com.bossxor.lottegiants.data.NotificationType
 import com.bossxor.lottegiants.domain.GameStatus
+import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.inningLabel
+import com.bossxor.lottegiants.domain.playerPhotoUrl
+import com.bossxor.lottegiants.widget.WidgetAssets
+import kotlinx.coroutines.runBlocking
 
 object NotificationHelper {
 
     const val CHANNEL_LIVE = "live_score"
     const val CHANNEL_SCORE = "event_score"
+    const val CHANNEL_CONCEDE = "event_concede"
     const val CHANNEL_PITCHER = "event_pitcher"
     const val CHANNEL_HOMERUN = "event_homerun"
     const val CHANNEL_CHANCE = "event_chance"
     const val CHANNEL_LEAD = "event_lead"
     const val CHANNEL_INNING = "event_inning"
+    const val CHANNEL_EIGHTH = "event_eighth"
+    const val CHANNEL_EXTRA = "event_extra"
     const val CHANNEL_GAME = "event_game"
     const val CHANNEL_PREGAME = "event_pregame"
     const val CHANNEL_LINEUP = "event_lineup"
     const val CHANNEL_CANCEL = "event_cancel"
+    const val CHANNEL_FAVORITE = "event_favorite"
 
     const val LIVE_NOTIFICATION_ID = 1001
 
@@ -36,39 +46,60 @@ object NotificationHelper {
         fun ch(id: String, name: String, importance: Int = NotificationManager.IMPORTANCE_DEFAULT) =
             NotificationChannel(id, name, importance).also { nm.createNotificationChannel(it) }
 
-        ch(CHANNEL_LIVE, "실시간 스코어 (Now Bar)", NotificationManager.IMPORTANCE_LOW)
+        ch(CHANNEL_LIVE, "실시간 스코어", NotificationManager.IMPORTANCE_LOW)
         ch(CHANNEL_SCORE, "득점", NotificationManager.IMPORTANCE_HIGH)
+        ch(CHANNEL_CONCEDE, "실점", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_PITCHER, "투수 교체")
         ch(CHANNEL_HOMERUN, "홈런", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_CHANCE, "득점권 찬스", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_LEAD, "역전/동점", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_INNING, "이닝 교대")
+        ch(CHANNEL_EIGHTH, "8회말", NotificationManager.IMPORTANCE_HIGH)
+        ch(CHANNEL_EXTRA, "연장", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_GAME, "경기 시작/종료", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_PREGAME, "경기 30분 전")
         ch(CHANNEL_LINEUP, "선발 라인업")
         ch(CHANNEL_CANCEL, "경기 취소", NotificationManager.IMPORTANCE_HIGH)
+        ch(CHANNEL_FAVORITE, "즐겨찾기 선수", NotificationManager.IMPORTANCE_DEFAULT)
     }
 
-    fun buildLiveNotification(context: Context, game: LotteGameInfo?): Notification {
+    fun buildLiveNotification(
+        context: Context,
+        game: LotteGameInfo?,
+        mode: LiveDisplayMode = LiveDisplayMode.LOCK_NOW,
+    ): Notification {
         val intent = PendingIntent.getActivity(
             context, 0,
-            Intent(context, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_OPEN_TAB, "live"),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val title: String
-        val text: String
-        if (game == null) {
-            title = "롯데 라이브"
-            text = "대기 중"
+
+        val scoreTitle = if (game == null) {
+            "롯데 라이브"
         } else {
-            title = "롯데 ${game.lotteScore} : ${game.opponentScore} ${game.opponentName}"
-            text = buildString {
-                append(game.inningLabel)
+            "롯데 ${game.lotteScore} : ${game.opponentScore} ${game.opponentName}"
+        }
+        val summary = gameSummary(game)
+        val compactLine = gameCompactLine(game)
+        val chipText = if (game == null) {
+            "대기"
+        } else {
+            buildString {
+                append("롯데 ${game.lotteScore}:${game.opponentScore}")
+                append(" · ${game.inningLabel}")
                 if (game.status == GameStatus.LIVE) {
-                    append("  B${game.ball} S${game.strike} O${game.out}")
-                    if (game.currentBatterName.isNotBlank()) append("  ${game.currentBatterName}")
+                    append(" · B${game.ball}S${game.strike}O${game.out}")
                 }
             }
+        }
+
+        val (title, text) = when (mode) {
+            LiveDisplayMode.STATUS_SCORE -> {
+                val shortTitle = if (game == null) "롯데 라이브"
+                else "롯데 ${game.lotteScore}:${game.opponentScore}"
+                shortTitle to (game?.inningLabel ?: "")
+            }
+            LiveDisplayMode.FULL, LiveDisplayMode.LOCK_NOW -> scoreTitle to compactLine
         }
 
         val builder = NotificationCompat.Builder(context, CHANNEL_LIVE)
@@ -79,25 +110,195 @@ object NotificationHelper {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
+            .setShowWhen(mode != LiveDisplayMode.STATUS_SCORE)
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setSubText(if (mode == LiveDisplayMode.STATUS_SCORE) chipText else null)
 
-        // Android 16+ Live Updates (Now Bar)
-        try {
-            val extras = builder.build().extras
-            extras.putBoolean("android.requestPromotedOngoing", true)
-            builder.addExtras(extras)
-        } catch (_: Exception) { /* older platform */ }
+        // 커스텀 뷰가 빠진 기기(Now Bar 승격 등)에서도 요약이 보이도록 BigText 항상 설정
+        if (mode != LiveDisplayMode.STATUS_SCORE) {
+            builder.setStyle(
+                NotificationCompat.BigTextStyle()
+                    .setBigContentTitle(scoreTitle)
+                    .bigText(summary),
+            )
+        }
 
-        // Prefer official API when available
+        val useCustom = game != null &&
+            game.status == GameStatus.LIVE &&
+            mode != LiveDisplayMode.STATUS_SCORE
+        if (useCustom) {
+            val content = buildLiveRemoteViews(context, game!!, big = false)
+            val big = buildLiveRemoteViews(context, game, big = true)
+            builder
+                .setCustomContentView(content)
+                .setCustomBigContentView(big)
+                .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+        }
+
+        // Now Bar용 짧은 텍스트 — 점수·이닝·카운트까지
         @Suppress("NewApi")
         try {
-            builder.javaClass.getMethod("setRequestPromotedOngoing", Boolean::class.javaPrimitiveType)
-                .invoke(builder, true)
+            builder.javaClass.getMethod("setShortCriticalText", CharSequence::class.java)
+                .invoke(builder, chipText)
         } catch (_: Exception) { }
 
+        // 커스텀 RemoteViews와 Live Update 승격은 충돌하므로,
+        // 상세 커스텀을 쓸 때는 승격 요청을 하지 않는다.
+        if (!useCustom) {
+            try {
+                val extras = android.os.Bundle()
+                extras.putBoolean("android.requestPromotedOngoing", true)
+                builder.addExtras(extras)
+            } catch (_: Exception) { }
+            @Suppress("NewApi")
+            try {
+                builder.javaClass.getMethod("setRequestPromotedOngoing", Boolean::class.javaPrimitiveType)
+                    .invoke(builder, true)
+            } catch (_: Exception) { }
+        }
+
         return builder.build()
+    }
+
+    /** 알림 접힘 상태용 한 줄 */
+    private fun gameCompactLine(game: LotteGameInfo?): String {
+        if (game == null) return "대기 중"
+        if (game.status != GameStatus.LIVE) {
+            return game.inningLabel.ifBlank { game.opponentName }
+        }
+        return buildString {
+            append(game.inningLabel)
+            append("  B${game.ball}-S${game.strike}-O${game.out}")
+            append("  ${basesLabel(game)}")
+            if (game.currentPitcherName.isNotBlank()) {
+                append("  투 ${game.currentPitcherName}")
+                if (game.currentPitcherPitchCount > 0) append("(${game.currentPitcherPitchCount})")
+            }
+            if (game.currentBatterName.isNotBlank()) {
+                append("  타 ")
+                if (game.currentBatterOrder > 0) append("${game.currentBatterOrder}번 ")
+                append(game.currentBatterName)
+            }
+        }
+    }
+
+    /** 루타앱 경기요약에 가까운 전체 텍스트 (요약 탭과 동일 소스) */
+    private fun gameSummary(game: LotteGameInfo?): String {
+        if (game == null) return "대기 중"
+        if (game.status != GameStatus.LIVE) {
+            return buildString {
+                append(game.inningLabel.ifBlank { game.statusText.ifBlank { game.opponentName } })
+                if (game.stadium.isNotBlank()) append("\n구장  ${game.stadium}")
+                if (game.lotteStartingPitcher.isNotBlank() || game.opponentStartingPitcher.isNotBlank()) {
+                    append("\n선발  롯데 ${game.lotteStartingPitcher.ifBlank { "-" }}")
+                    append("  ·  ${game.opponentName} ${game.opponentStartingPitcher.ifBlank { "-" }}")
+                }
+            }
+        }
+        return buildString {
+            append(game.inningLabel)
+            if (game.isLotteBatting) append("  ·  롯데 공격") else append("  ·  상대 공격")
+            append("\n볼카운트  B${game.ball}  S${game.strike}  O${game.out}")
+            append("\n루상  ${basesLabel(game)}")
+            append("\n투수  ${game.currentPitcherName.ifBlank { "-" }}")
+            if (game.currentPitcherPitchCount > 0) append(" (${game.currentPitcherPitchCount}구)")
+            append("\n타자  ")
+            if (game.currentBatterOrder > 0) append("${game.currentBatterOrder}번 ")
+            append(game.currentBatterName.ifBlank { "-" })
+            if (game.nextBatterName.isNotBlank()) {
+                append("\n다음 타자  ${game.nextBatterName}")
+            }
+            if (game.stadium.isNotBlank()) append("\n구장  ${game.stadium}")
+        }
+    }
+
+    private fun basesLabel(game: LotteGameInfo): String {
+        val parts = buildList {
+            if (game.onBase1) add("1루")
+            if (game.onBase2) add("2루")
+            if (game.onBase3) add("3루")
+        }
+        return if (parts.isEmpty()) "주자 없음" else parts.joinToString("·")
+    }
+
+    private fun buildLiveRemoteViews(context: Context, game: LotteGameInfo, big: Boolean): RemoteViews {
+        val rv = RemoteViews(
+            context.packageName,
+            if (big) R.layout.notification_live_big else R.layout.notification_live,
+        )
+        rv.setTextViewText(
+            R.id.notif_score,
+            "롯데 ${game.lotteScore} : ${game.opponentScore} ${game.opponentName}",
+        )
+        rv.setTextViewText(
+            R.id.notif_inning,
+            buildString {
+                append(game.inningLabel)
+                if (game.isLotteBatting) append(" · 롯데 공격") else append(" · 상대 공격")
+            },
+        )
+        rv.setTextViewText(
+            R.id.notif_count_text,
+            "B${game.ball}  S${game.strike}  O${game.out}  ·  ${basesLabel(game)}",
+        )
+        val batterLabel = buildString {
+            if (game.currentBatterOrder > 0) append("${game.currentBatterOrder}번 ")
+            append(game.currentBatterName.ifBlank { "-" })
+        }
+        rv.setTextViewText(
+            R.id.notif_players_line,
+            buildString {
+                append("투 ${game.currentPitcherName.ifBlank { "-" }}")
+                if (game.currentPitcherPitchCount > 0) append("(${game.currentPitcherPitchCount}구)")
+                append("  ·  타 $batterLabel")
+            },
+        )
+        rv.setImageViewResource(
+            R.id.notif_bases,
+            WidgetAssets.basesDrawable(game.onBase1, game.onBase2, game.onBase3),
+        )
+        fun setDots(ids: IntArray, count: Int, kind: Char) {
+            ids.forEachIndexed { i, id ->
+                rv.setImageViewResource(id, WidgetAssets.countDot(i < count, kind))
+            }
+        }
+        setDots(intArrayOf(R.id.notif_b0, R.id.notif_b1, R.id.notif_b2, R.id.notif_b3), game.ball, 'B')
+        setDots(intArrayOf(R.id.notif_s0, R.id.notif_s1, R.id.notif_s2), game.strike, 'S')
+        setDots(intArrayOf(R.id.notif_o0, R.id.notif_o1, R.id.notif_o2), game.out, 'O')
+
+        if (big) {
+            rv.setTextViewText(R.id.notif_bases_label, "루상  ${basesLabel(game)}")
+            rv.setTextViewText(
+                R.id.notif_pitcher_name,
+                buildString {
+                    append(game.currentPitcherName.ifBlank { "-" })
+                    if (game.currentPitcherPitchCount > 0) append(" (${game.currentPitcherPitchCount}구)")
+                },
+            )
+            rv.setTextViewText(R.id.notif_batter_name, batterLabel)
+            rv.setTextViewText(
+                R.id.notif_next_batter,
+                if (game.nextBatterName.isNotBlank()) "다음 타자  ${game.nextBatterName}" else "",
+            )
+            val batterCode = (game.lotteLineup + game.opponentLineup + game.lotteBenchBatters + game.opponentBenchBatters)
+                .firstOrNull { it.name == game.currentBatterName }?.playerCode.orEmpty()
+            val pitcherBmp = runBlocking {
+                WidgetAssets.loadPlayerBitmap(context, game.currentPitcherCode, playerPhotoUrl(game.currentPitcherCode))
+            }
+            val batterBmp = runBlocking {
+                WidgetAssets.loadPlayerBitmap(context, batterCode, playerPhotoUrl(batterCode))
+            }
+            setPhotoOrFallback(rv, R.id.notif_pitcher_photo, pitcherBmp)
+            setPhotoOrFallback(rv, R.id.notif_batter_photo, batterBmp)
+        }
+        return rv
+    }
+
+    private fun setPhotoOrFallback(rv: RemoteViews, id: Int, bmp: Bitmap?) {
+        if (bmp != null) rv.setImageViewBitmap(id, bmp)
+        else rv.setImageViewResource(id, R.drawable.ic_notification)
     }
 
     fun notifyEvent(
@@ -109,30 +310,28 @@ object NotificationHelper {
     ) {
         val channel = when (type) {
             NotificationType.SCORE -> CHANNEL_SCORE
+            NotificationType.CONCEDING -> CHANNEL_CONCEDE
             NotificationType.PITCHER_CHANGE -> CHANNEL_PITCHER
             NotificationType.HOMERUN -> CHANNEL_HOMERUN
             NotificationType.SCORING_CHANCE -> CHANNEL_CHANCE
             NotificationType.LEAD_CHANGE -> CHANNEL_LEAD
             NotificationType.INNING_CHANGE -> CHANNEL_INNING
-            NotificationType.GAME_START_END -> CHANNEL_GAME
+            NotificationType.EIGHTH_INNING -> CHANNEL_EIGHTH
+            NotificationType.EXTRA_INNINGS -> CHANNEL_EXTRA
+            NotificationType.GAME_START, NotificationType.GAME_END -> CHANNEL_GAME
             NotificationType.PREGAME_REMINDER -> CHANNEL_PREGAME
             NotificationType.LINEUP -> CHANNEL_LINEUP
             NotificationType.CANCELED -> CHANNEL_CANCEL
+            NotificationType.FAVORITE_AT_BAT, NotificationType.FAVORITE_ROSTER -> CHANNEL_FAVORITE
         }
-        val pi = PendingIntent.getActivity(
-            context, id,
-            Intent(context, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
         val n = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setContentIntent(pi)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
-        runCatching { NotificationManagerCompat.from(context).notify(id, n) }
+        NotificationManagerCompat.from(context).notify(id, n)
     }
 }

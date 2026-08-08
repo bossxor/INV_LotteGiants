@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">사직 LIVE</string>
+    <string name="tile_label">사직 LIVE</string>
+    <string name="complication_label">롯데 스코어</string>
+    <string name="notification_channel">경기 알림</string>
+    <string name="no_game">경기 없음</string>
+</resources>

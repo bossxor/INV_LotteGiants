@@ -40,6 +40,8 @@ data class GameDto(
     val homeCurrentPitcherName: String? = null,
     val awayCurrentPitcherName: String? = null,
     val broadChannel: String? = null,
+    val homeTeamEmblemUrl: String? = null,
+    val awayTeamEmblemUrl: String? = null,
 )
 
 @Serializable
@@ -67,6 +69,14 @@ data class TextRelayData(
     val awayLineup: LineupDto? = null,
     val currentGameState: GameStateDto? = null,
     val textRelays: List<TextRelayDto> = emptyList(),
+    val lastValidMetricOption: MetricOptionDto? = null,
+)
+
+@Serializable
+data class MetricOptionDto(
+    val homeTeamWinRate: Double? = null,
+    val awayTeamWinRate: Double? = null,
+    val wpaByPlate: Double? = null,
 )
 
 @Serializable
@@ -106,6 +116,7 @@ data class LineupBatterDto(
     val hitType: String? = null,
     val seasonHra: Double? = null,
     val todayHra: Double? = null,
+    val vsHra: Double? = null,
     val hit: Int = 0,
     val ab: Int = 0,
     val pa: Int = 0,
@@ -120,6 +131,21 @@ data class LineupPitcherDto(
     val pcode: String = "",
     val seqno: Int = 0,
     val backnum: String? = null,
+    val inn: String? = null,
+    val hit: Int? = null,
+    val run: Int? = null,
+    val er: Int? = null,
+    val kk: Int? = null,
+    val so: Int? = null,
+    val bb: Int? = null,
+    val bf: Int? = null,
+    val hr: Int? = null,
+    val pitchCount: Int? = null,
+    val pitchcnt: Int? = null,
+    val ballCount: Int? = null,
+    val seasonEra: String? = null,
+    val todayEra: Double? = null,
+    val vsEra: String? = null,
 )
 
 @Serializable
@@ -149,6 +175,8 @@ data class TextRelayDto(
     val homeOrAway: String = "",
     val title: String? = null,
     val textOptions: List<TextOptionDto> = emptyList(),
+    val ptsOptions: List<PtsOptionDto> = emptyList(),
+    val metricOption: MetricOptionDto? = null,
 )
 
 @Serializable
@@ -156,7 +184,29 @@ data class TextOptionDto(
     val seqno: Int = 0,
     val text: String = "",
     val type: Int = 0,
+    val stuff: String? = null,
     val currentGameState: GameStateDto? = null,
+)
+
+@Serializable
+data class PtsOptionDto(
+    val pitchId: String? = null,
+    val inn: Int = 0,
+    val ballcount: Int = 0,
+    val crossPlateX: Double? = null,
+    val crossPlateY: Double? = null,
+    val topSz: Double? = null,
+    val bottomSz: Double? = null,
+    val vy0: Double? = null,
+    val vz0: Double? = null,
+    val vx0: Double? = null,
+    val z0: Double? = null,
+    val y0: Double? = null,
+    val x0: Double? = null,
+    val ax: Double? = null,
+    val ay: Double? = null,
+    val az: Double? = null,
+    val stance: String? = null,
 )
 
 @Serializable
@@ -185,4 +235,82 @@ data class TeamStatDto(
     val gameBehind: Double = 0.0,
     val continuousGameResult: String? = null,
     val lastFiveGames: String? = null,
+)
+
+@Serializable
+data class PreviewResponse(
+    val code: Int = 0,
+    val success: Boolean = false,
+    val result: PreviewResult? = null,
+)
+
+@Serializable
+data class PreviewResult(
+    val previewData: PreviewData? = null,
+)
+
+@Serializable
+data class PreviewData(
+    val homeStarter: PreviewPlayerBlock? = null,
+    val awayStarter: PreviewPlayerBlock? = null,
+    val homeTopPlayer: PreviewPlayerBlock? = null,
+    val awayTopPlayer: PreviewPlayerBlock? = null,
+    val gameInfo: PreviewGameInfo? = null,
+)
+
+@Serializable
+data class PreviewGameInfo(
+    val stadium: String? = null,
+    val gtime: String? = null,
+)
+
+@Serializable
+data class PreviewPlayerBlock(
+    val playerCode: String? = null,
+    val playerInfo: PreviewPlayerInfo? = null,
+    val currentSeasonStats: PreviewSeasonStats? = null,
+    val recentFiveGamesStats: PreviewSeasonStats? = null,
+)
+
+@Serializable
+data class PreviewPlayerInfo(
+    val backnum: String? = null,
+    val hitType: String? = null,
+    val pCode: String? = null,
+    val name: String? = null,
+    val birth: String? = null,
+    val weight: String? = null,
+    val height: String? = null,
+)
+
+@Serializable
+data class PreviewSeasonStats(
+    val ab: Int? = null,
+    val gameCount: Int? = null,
+    val hit: Int? = null,
+    val hra: String? = null,
+    val rbi: Int? = null,
+    val hr: Int? = null,
+    val obp: Double? = null,
+    val era: String? = null,
+    val w: Int? = null,
+    val l: Int? = null,
+    val kk: Int? = null,
+    val inn: String? = null,
+    val whip: String? = null,
+    val playerName: String? = null,
+    val playerCode: String? = null,
+)
+
+@Serializable
+data class OpenMeteoResponse(
+    val current: OpenMeteoCurrent? = null,
+)
+
+@Serializable
+data class OpenMeteoCurrent(
+    val time: String? = null,
+    val temperature_2m: Double? = null,
+    val weather_code: Int? = null,
+    val precipitation_probability: Int? = null,
 )

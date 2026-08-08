@@ -1,39 +1,39 @@
-# 롯데 자이언츠 실시간 현황
+# 사직스코어 (롯데 자이언츠 실시간)
 
 롯데 전용 KBO 실시간 스코어 앱 + 홈 위젯 + Now Bar(Live Update) + 이벤트 알림.
 
 ## 기능
 
-- **라이브**: 점수, 이닝, S/B/O, 루상 주자, 투수/타자/다음 타자, 선발 라인업
-- **전체 경기**: 오늘 다른 팀 경기 (이닝·점수만)
-- **KBO 순위**
-- **홈 위젯**: Glance 위젯, 경기 중 약 12초 폴링
-- **Now Bar**: 포그라운드 서비스 ongoing 알림을 Live Update로 승격
-- **이벤트 알림 10종**: 득점, 투수교체, 홈런, 득점권, 역전/동점, 이닝교대, 시작/종료, 30분 전, 라인업, 취소
-
-## APK
-
-- `LotteGiantsLive-release.apk` — 서명된 릴리스 빌드 (설치용)
-- `LotteGiantsLive-debug.apk` — 디버그 빌드
-
-설치: 폰에서 "출처를 알 수 없는 앱" 허용 후 APK 실행, 또는
-
-```bash
-adb install -r LotteGiantsLive-release.apk
-```
-
-## 권장 설정 (One UI)
-
-1. 앱 알림 허용
-2. **설정 → 배터리 최적화 예외** (실시간 위젯/Now Bar 유지)
-3. 홈 화면 길게 누르기 → 위젯 → **롯데 라이브** 추가
+- **라이브**: 점수, 이닝, S/B/O, 루상 주자, 투수/타자/다음 타자, 선발 라인업, 5탭 상세
+- **결과 / 일정**: 일별·월별 경기
+- **KBO 순위** · 타이틀 순위
+- **홈 위젯** / **Now Bar** / **이벤트 알림** (득점, 불펜 투수교체, 홈런, 취소 사유 등)
+- **설정**: 즐겨찾기(사진), 테마, GitHub 업데이트 확인
 
 ## 빌드
 
-JDK 17 + Android SDK 필요. `local.properties`에 `sdk.dir` 설정 후:
+JDK 17 + Android SDK. `local.properties`에 `sdk.dir` 설정 후:
 
 ```bash
 gradlew.bat :app:assembleRelease
+adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
-데이터는 네이버 스포츠 비공식 API (`api-gw.sports.naver.com`)를 사용합니다.
+서명: 루트에 `keystore.properties` + `lotte-release.jks` (git 제외).
+
+## GitHub 릴리스 (인앱 업데이트)
+
+앱은 `GET https://api.github.com/repos/bossxor/INV_LotteGiants/releases/latest` 로
+최신 릴리스를 확인합니다.
+
+1. `app/build.gradle.kts`의 `versionCode` / `versionName` 올리기
+2. `assembleRelease` 후 APK를 Release asset으로 업로드 (`*.apk`)
+3. **Release body에 반드시** 아래 한 줄 포함 (없으면 업데이트 검사 스킵):
+
+```
+versionCode: 2
+```
+
+4. `versionCode`가 기기에 설치된 값보다 크면 앱 시작 시 / 설정「업데이트 확인」에서 설치 제안
+
+데이터: 네이버 스포츠 비공식 API (`api-gw.sports.naver.com`).

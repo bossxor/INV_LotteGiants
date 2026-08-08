@@ -9,6 +9,7 @@ import android.os.IBinder
 import androidx.core.app.ServiceCompat
 import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.domain.GameStatus
+import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.widget.WidgetUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,14 +33,22 @@ class LiveScoreService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         NotificationHelper.createChannels(this)
-        val notification = NotificationHelper.buildLiveNotification(this, null)
-        ServiceCompat.startForeground(
-            this,
-            NotificationHelper.LIVE_NOTIFICATION_ID,
-            notification,
-            if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0
-        )
-        startPolling()
+        scope.launch {
+            val store = GiantsRepository.get(this@LiveScoreService).store
+            if (!store.isLiveScoreEnabled()) {
+                stopSelf()
+                return@launch
+            }
+            val mode = store.liveDisplayMode()
+            val notification = NotificationHelper.buildLiveNotification(this@LiveScoreService, null, mode)
+            ServiceCompat.startForeground(
+                this@LiveScoreService,
+                NotificationHelper.LIVE_NOTIFICATION_ID,
+                notification,
+                if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
+            )
+            startPolling()
+        }
         return START_STICKY
     }
 
@@ -47,26 +56,32 @@ class LiveScoreService : Service() {
         if (pollJob?.isActive == true) return
         pollJob = scope.launch {
             val repo = GiantsRepository.get(this@LiveScoreService)
+            var pollCount = 0
             while (isActive) {
+                if (!repo.store.isLiveScoreEnabled()) {
+                    stopSelf()
+                    break
+                }
+                val mode = repo.store.liveDisplayMode()
                 val snap = runCatching { repo.refreshSnapshot() }.getOrNull()
                 val game = snap?.lotteGame
                 val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
                 nm.notify(
                     NotificationHelper.LIVE_NOTIFICATION_ID,
-                    NotificationHelper.buildLiveNotification(this@LiveScoreService, game)
+                    NotificationHelper.buildLiveNotification(this@LiveScoreService, game, mode),
                 )
                 WidgetUpdater.updateAll(this@LiveScoreService)
+                WearBridge.syncSnapshot(this@LiveScoreService, snap)
                 detector.process(this@LiveScoreService, game)
+                pollCount++
+                if (pollCount % 6 == 1) {
+                    val moves = runCatching { repo.fetchRecentRosterMoves(2) }.getOrDefault(emptyList())
+                    detector.processRosterMoves(this@LiveScoreService, moves)
+                }
 
                 when (game?.status) {
-                    GameStatus.LIVE -> delay(12_000L)
-                    GameStatus.BEFORE -> {
-                        // 시작 임박이면 계속, 아니면 서비스 종료
-                        delay(60_000L)
-                        if (game.status == GameStatus.BEFORE) {
-                            // still before after refresh path handled next loop
-                        }
-                    }
+                    GameStatus.LIVE -> delay(10_000L)
+                    GameStatus.BEFORE -> delay(60_000L)
                     GameStatus.ENDED, GameStatus.CANCELED, null -> {
                         delay(5_000L)
                         stopSelf()
@@ -91,6 +106,12 @@ class LiveScoreService : Service() {
 
         fun stop(context: Context) {
             context.stopService(Intent(context, LiveScoreService::class.java))
+        }
+
+        /** 설정 변경 후 알림 즉시 반영 */
+        fun restart(context: Context) {
+            stop(context)
+            start(context)
         }
     }
 }

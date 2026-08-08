@@ -4,48 +4,94 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.bossxor.lottegiants.BuildConfig
+import com.bossxor.lottegiants.data.GiantsRepository
+import com.bossxor.lottegiants.data.UpdateChecker
+import com.bossxor.lottegiants.data.UpdateInfo
 import com.bossxor.lottegiants.domain.GameStatus
+import com.bossxor.lottegiants.domain.LeaderPlayer
+import com.bossxor.lottegiants.domain.LineupSlot
+import com.bossxor.lottegiants.domain.LotteTeamCard
+import com.bossxor.lottegiants.domain.RosterMove
+import com.bossxor.lottegiants.domain.ThemeMode
+import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.live.LiveScoreService
 import com.bossxor.lottegiants.ui.LotteGiantsTheme
 import com.bossxor.lottegiants.ui.MainViewModel
-import com.bossxor.lottegiants.ui.screens.AllGamesScreen
+import com.bossxor.lottegiants.ui.screens.EntryBoardScreen
+import com.bossxor.lottegiants.ui.screens.LeadersScreen
 import com.bossxor.lottegiants.ui.screens.LiveScreen
+import com.bossxor.lottegiants.ui.screens.PlayerDetailSheet
+import com.bossxor.lottegiants.ui.screens.ResultsScreen
 import com.bossxor.lottegiants.ui.screens.SettingsScreen
 import com.bossxor.lottegiants.ui.screens.StandingsScreen
+import com.bossxor.lottegiants.ui.screens.TeamHistoryScreen
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+private enum class Overlay { None, TeamHistory, EntryBoard, Leaders }
 
 class MainActivity : ComponentActivity() {
 
     private val vm: MainViewModel by viewModels()
 
     private val notifPermission = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
+        ActivityResultContracts.RequestPermission(),
     ) { /* ignore */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -54,10 +100,35 @@ class MainActivity : ComponentActivity() {
         requestNotifIfNeeded()
 
         setContent {
-            LotteGiantsTheme {
+            val themeMode by vm.themeMode.collectAsState()
+            LotteGiantsTheme(themeMode = themeMode) {
                 val snapshot by vm.snapshot.collectAsState()
                 val standings by vm.standings.collectAsState()
                 val error by vm.error.collectAsState()
+                val dayGames by vm.dayGames.collectAsState()
+                val dayGamesLoading by vm.dayGamesLoading.collectAsState()
+                val selectedDate by vm.selectedDate.collectAsState()
+                val secondsUntilRefresh by vm.secondsUntilRefresh.collectAsState()
+                val isRefreshing by vm.isRefreshing.collectAsState()
+                val monthGames by vm.monthGames.collectAsState()
+                val calendarMonth by vm.calendarMonth.collectAsState()
+                val weather by vm.weather.collectAsState()
+                val entryDate by vm.entryDate.collectAsState()
+                val dayEntry by vm.dayEntry.collectAsState()
+                val entryLoading by vm.entryLoading.collectAsState()
+                val recentMoves by vm.recentMoves.collectAsState()
+                val entryChangeDates by vm.entryChangeDates.collectAsState()
+                val teamCard by vm.teamCard.collectAsState()
+                val batterLeaders by vm.batterLeaders.collectAsState()
+                val pitcherLeaders by vm.pitcherLeaders.collectAsState()
+                val playerDetail by vm.playerDetail.collectAsState()
+                val playerLoading by vm.playerLoading.collectAsState()
+                val favoriteCodes by vm.favoriteCodes.collectAsState()
+                val favoritePlayers by vm.favoritePlayers.collectAsState()
+                val scope = rememberCoroutineScope()
+                var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+                var updateDownloading by remember { mutableStateOf(false) }
+                var updateChecked by remember { mutableStateOf(false) }
 
                 DisposableEffect(Unit) {
                     val observer = LifecycleEventObserver { _, event ->
@@ -66,6 +137,15 @@ class MainActivity : ComponentActivity() {
                                 vm.startPolling()
                                 if (snapshot?.lotteGame?.status == GameStatus.LIVE) {
                                     LiveScoreService.start(this@MainActivity)
+                                }
+                                if (!updateChecked) {
+                                    updateChecked = true
+                                    scope.launch {
+                                        val info = withContext(Dispatchers.IO) {
+                                            UpdateChecker.checkForUpdate(BuildConfig.VERSION_CODE)
+                                        }
+                                        if (info != null) updateInfo = info
+                                    }
                                 }
                             }
                             Lifecycle.Event.ON_STOP -> vm.stopPolling()
@@ -76,11 +156,95 @@ class MainActivity : ComponentActivity() {
                     onDispose { lifecycle.removeObserver(observer) }
                 }
 
+                updateInfo?.let { info ->
+                    AlertDialog(
+                        onDismissRequest = { if (!updateDownloading) updateInfo = null },
+                        title = { Text("업데이트 가능") },
+                        text = {
+                            Text(
+                                "새 버전 ${info.tagName.ifBlank { info.versionCode.toString() }} " +
+                                    "(versionCode ${info.versionCode})을(를) 설치할까요?",
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    scope.launch {
+                                        updateDownloading = true
+                                        val ok = withContext(Dispatchers.IO) {
+                                            UpdateChecker.downloadAndInstall(
+                                                this@MainActivity,
+                                                info.apkUrl,
+                                            )
+                                        }
+                                        updateDownloading = false
+                                        updateInfo = null
+                                        if (!ok) {
+                                            Toast.makeText(
+                                                this@MainActivity,
+                                                "다운로드에 실패했습니다.",
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                        }
+                                    }
+                                },
+                                enabled = !updateDownloading,
+                            ) {
+                                Text(if (updateDownloading) "받는 중…" else "설치")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { if (!updateDownloading) updateInfo = null }) {
+                                Text("나중에")
+                            }
+                        },
+                    )
+                }
+
                 AppScaffold(
+                    initialTab = tabFromIntent(intent.getStringExtra(EXTRA_OPEN_TAB)),
                     snapshot = snapshot,
                     standings = standings,
                     error = error,
-                    loading = snapshot == null && error == null
+                    loading = snapshot == null && error == null,
+                    dayGames = dayGames,
+                    dayGamesLoading = dayGamesLoading,
+                    selectedDate = selectedDate,
+                    onSelectDate = vm::selectDate,
+                    secondsUntilRefresh = secondsUntilRefresh,
+                    isRefreshing = isRefreshing,
+                    onRefresh = vm::refreshNow,
+                    onRefreshStandings = vm::refreshStandings,
+                    onRefreshDayGames = vm::refreshDayGames,
+                    monthGames = monthGames,
+                    calendarMonth = calendarMonth,
+                    onSelectMonth = vm::selectCalendarMonth,
+                    weather = weather,
+                    entryDate = entryDate,
+                    dayEntry = dayEntry,
+                    entryLoading = entryLoading,
+                    recentMoves = recentMoves,
+                    entryChangeDates = entryChangeDates,
+                    onSelectEntryDate = vm::selectEntryDate,
+                    onOpenEntrySmart = vm::openEntrySmart,
+                    teamCard = teamCard,
+                    batterLeaders = batterLeaders,
+                    pitcherLeaders = pitcherLeaders,
+                    themeMode = themeMode,
+                    onThemeModeChange = vm::setThemeMode,
+                    playerDetail = playerDetail,
+                    playerLoading = playerLoading,
+                    favoriteCodes = favoriteCodes,
+                    favoritePlayers = favoritePlayers,
+                    onPlayerClick = { slot ->
+                        vm.loadPlayerDetail(slot, snapshot?.lotteGame?.gameId)
+                    },
+                    onPitcherClick = { p -> vm.loadPitcherDetail(p) },
+                    onLeaderPlayerClick = { p -> vm.loadPlayerFromLeader(p) },
+                    onToggleFavorite = { code, name, team -> vm.toggleFavorite(code, name, team) },
+                    onRemoveFavorite = vm::removeFavorite,
+                    onClearPlayer = vm::clearPlayerDetail,
+                    onExit = { finish() },
                 )
             }
         }
@@ -95,52 +259,321 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    companion object {
+        const val EXTRA_OPEN_TAB = "open_tab"
+
+        fun tabFromIntent(value: String?): Int = when (value?.lowercase()) {
+            "results", "result", "1" -> 1
+            "standings", "standing", "2" -> 2
+            "settings", "3" -> 3
+            else -> 0
+        }
+    }
 }
 
 @Composable
 private fun AppScaffold(
+    initialTab: Int,
     snapshot: com.bossxor.lottegiants.domain.LiveSnapshot?,
     standings: List<com.bossxor.lottegiants.domain.TeamStanding>,
     error: String?,
     loading: Boolean,
+    dayGames: List<com.bossxor.lottegiants.domain.MiniGame>,
+    dayGamesLoading: Boolean,
+    selectedDate: java.time.LocalDate,
+    onSelectDate: (java.time.LocalDate) -> Unit,
+    secondsUntilRefresh: Int,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    onRefreshStandings: () -> Unit,
+    onRefreshDayGames: () -> Unit,
+    monthGames: List<com.bossxor.lottegiants.domain.MiniGame>,
+    calendarMonth: java.time.YearMonth,
+    onSelectMonth: (java.time.YearMonth) -> Unit,
+    weather: com.bossxor.lottegiants.domain.StadiumWeather?,
+    entryDate: java.time.LocalDate,
+    dayEntry: com.bossxor.lottegiants.domain.DayEntryChanges?,
+    entryLoading: Boolean,
+    recentMoves: List<RosterMove>,
+    entryChangeDates: Set<java.time.LocalDate>,
+    onSelectEntryDate: (java.time.LocalDate) -> Unit,
+    onOpenEntrySmart: () -> Unit,
+    teamCard: LotteTeamCard?,
+    batterLeaders: List<LeaderPlayer>,
+    pitcherLeaders: List<LeaderPlayer>,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
+    playerDetail: com.bossxor.lottegiants.domain.PlayerDetail?,
+    playerLoading: Boolean,
+    favoriteCodes: Set<String>,
+    favoritePlayers: List<com.bossxor.lottegiants.domain.FavoritePlayer>,
+    onPlayerClick: (LineupSlot) -> Unit,
+    onPitcherClick: (com.bossxor.lottegiants.domain.PitcherLine) -> Unit,
+    onLeaderPlayerClick: (LeaderPlayer) -> Unit,
+    onToggleFavorite: (String, String, String) -> Unit,
+    onRemoveFavorite: (String) -> Unit,
+    onClearPlayer: () -> Unit,
+    onExit: () -> Unit,
 ) {
-    var tab by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val store = remember { GiantsRepository.get(context).store }
+    var tab by remember { mutableIntStateOf(initialTab) }
+    var overlay by remember { mutableStateOf(Overlay.None) }
+    var showPlayerSheet by remember { mutableStateOf(false) }
+    var lastBackAt by remember { mutableLongStateOf(0L) }
+    var showOnboarding by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (!store.isOnboardingDone()) showOnboarding = true
+    }
+    LaunchedEffect(initialTab) { tab = initialTab }
+
+    BackHandler {
+        when {
+            showPlayerSheet -> {
+                showPlayerSheet = false
+                onClearPlayer()
+            }
+            overlay != Overlay.None -> overlay = Overlay.None
+            tab != 0 -> tab = 0
+            else -> {
+                val now = System.currentTimeMillis()
+                if (now - lastBackAt < 2000L) {
+                    onExit()
+                } else {
+                    lastBackAt = now
+                    Toast.makeText(context, "한 번 더 누르면 종료", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    if (showOnboarding) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("사직스코어 안내", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "알림·배터리 예외·홈 화면 위젯을 켜 두면 경기 중 스코어를 더 빠르게 볼 수 있습니다.\n설정에서 언제든 변경할 수 있습니다.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            store.setOnboardingDone(true)
+                            showOnboarding = false
+                        }
+                    },
+                ) { Text("확인") }
+            },
+        )
+    }
+
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = tab == 0,
-                    onClick = { tab = 0 },
-                    icon = { Icon(Icons.Default.Home, contentDescription = null) },
-                    label = { Text("라이브") }
+            if (overlay == Overlay.None) {
+                CompactBottomBar(
+                    selectedTab = tab,
+                    onSelectTab = { tab = it },
                 )
-                NavigationBarItem(
-                    selected = tab == 1,
-                    onClick = { tab = 1 },
-                    icon = { Icon(Icons.Default.List, contentDescription = null) },
-                    label = { Text("전체") }
+            }
+        },
+    ) { padding ->
+        Box(Modifier.padding(padding)) {
+            when (overlay) {
+                Overlay.TeamHistory -> TeamHistoryScreen(onBack = { overlay = Overlay.None })
+                Overlay.EntryBoard -> EntryBoardScreen(
+                    selectedDate = entryDate,
+                    dayEntry = dayEntry,
+                    loading = entryLoading,
+                    recentMoves = recentMoves,
+                    changeDates = entryChangeDates,
+                    onSelectDate = onSelectEntryDate,
+                    onBack = { overlay = Overlay.None },
+                    onPlayerClick = { p ->
+                        showPlayerSheet = true
+                        onPlayerClick(
+                            LineupSlot(
+                                batOrder = 0,
+                                name = p.name,
+                                position = p.position,
+                                playerCode = p.playerCode,
+                                backNumber = p.backNumber,
+                                hitType = p.hitType,
+                            ),
+                        )
+                    },
                 )
-                NavigationBarItem(
-                    selected = tab == 2,
-                    onClick = { tab = 2 },
-                    icon = { Icon(Icons.Default.Star, contentDescription = null) },
-                    label = { Text("순위") }
+                Overlay.Leaders -> LeadersScreen(
+                    batters = batterLeaders,
+                    pitchers = pitcherLeaders,
+                    favoriteCodes = favoriteCodes,
+                    onBack = { overlay = Overlay.None },
+                    onPlayerClick = { p ->
+                        showPlayerSheet = true
+                        onLeaderPlayerClick(p)
+                    },
+                    onToggleFavorite = { p ->
+                        onToggleFavorite(p.playerCode, p.name, p.team)
+                    },
                 )
-                NavigationBarItem(
-                    selected = tab == 3,
-                    onClick = { tab = 3 },
-                    icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                    label = { Text("설정") }
+                Overlay.None -> when (tab) {
+                    0 -> LiveScreen(
+                        snapshot = snapshot,
+                        error = error,
+                        loading = loading,
+                        secondsUntilRefresh = secondsUntilRefresh,
+                        isRefreshing = isRefreshing,
+                        onRefresh = onRefresh,
+                        weather = weather,
+                        batterLeaders = batterLeaders,
+                        onOpenTeamHistory = { overlay = Overlay.TeamHistory },
+                        onOpenEntryBoard = {
+                            onOpenEntrySmart()
+                            overlay = Overlay.EntryBoard
+                        },
+                        onOpenLeaders = { overlay = Overlay.Leaders },
+                        onPlayerClick = { slot ->
+                            showPlayerSheet = true
+                            onPlayerClick(slot)
+                        },
+                        onPitcherClick = { p ->
+                            showPlayerSheet = true
+                            onPitcherClick(p)
+                        },
+                        onKeyPlayerClick = { code, name ->
+                            showPlayerSheet = true
+                            val leader = batterLeaders.firstOrNull { p ->
+                                (code.isNotBlank() && p.playerCode == code) ||
+                                    (name.isNotBlank() && p.name == name)
+                            }
+                            if (leader != null) {
+                                onLeaderPlayerClick(leader)
+                            } else {
+                                onPlayerClick(LineupSlot(0, name, "", playerCode = code))
+                            }
+                        },
+                        onShare = { g ->
+                            val text = "롯데 ${g.lotteScore}:${g.opponentScore} ${g.opponentName} · ${g.inningLabel}\n#사직스코어"
+                            val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_TEXT, text)
+                            }
+                            context.startActivity(android.content.Intent.createChooser(send, "공유"))
+                        },
+                    )
+                    1 -> ResultsScreen(
+                        selectedDate = selectedDate,
+                        games = dayGames,
+                        loading = dayGamesLoading,
+                        onSelectDate = onSelectDate,
+                        calendarMonth = calendarMonth,
+                        monthGames = monthGames,
+                        onSelectMonth = onSelectMonth,
+                        onRefresh = onRefreshDayGames,
+                        refreshing = isRefreshing,
+                    )
+                    2 -> StandingsScreen(
+                        standings = standings,
+                        teamCard = teamCard,
+                        batterLeaders = batterLeaders,
+                        pitcherLeaders = pitcherLeaders,
+                        onOpenLeaders = { overlay = Overlay.Leaders },
+                        onRefresh = onRefreshStandings,
+                        refreshing = isRefreshing,
+                    )
+                    3 -> SettingsScreen(
+                        themeMode = themeMode,
+                        onThemeModeChange = onThemeModeChange,
+                        favoritePlayers = favoritePlayers,
+                        onRemoveFavorite = onRemoveFavorite,
+                    )
+                }
+            }
+
+            if (showPlayerSheet) {
+                PlayerDetailSheet(
+                    detail = playerDetail,
+                    loading = playerLoading,
+                    isFavorite = playerDetail?.playerCode?.let { it in favoriteCodes } == true,
+                    onToggleFavorite = {
+                        val d = playerDetail ?: return@PlayerDetailSheet
+                        onToggleFavorite(d.playerCode, d.name, "")
+                    },
+                    onDismiss = {
+                        showPlayerSheet = false
+                        onClearPlayer()
+                    },
                 )
             }
         }
-    ) { padding ->
-        androidx.compose.foundation.layout.Box(Modifier.padding(padding)) {
-            when (tab) {
-                0 -> LiveScreen(snapshot, error, loading)
-                1 -> AllGamesScreen(snapshot)
-                2 -> StandingsScreen(standings)
-                3 -> SettingsScreen()
+    }
+}
+
+private data class BottomTab(val label: String, val icon: ImageVector)
+
+@Composable
+private fun CompactBottomBar(selectedTab: Int, onSelectTab: (Int) -> Unit) {
+    val tabs = listOf(
+        BottomTab("라이브", Icons.Default.Home),
+        BottomTab("결과", Icons.AutoMirrored.Filled.List),
+        BottomTab("순위", Icons.Default.Star),
+        BottomTab("설정", Icons.Default.Settings),
+    )
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .windowInsetsPadding(WindowInsets.navigationBars),
+    ) {
+        HorizontalDivider(
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+        )
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            tabs.forEachIndexed { index, item ->
+                if (index > 0) {
+                    VerticalDivider(
+                        modifier = Modifier.height(28.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+                    )
+                }
+                val selected = selectedTab == index
+                val tint = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .clickable { onSelectTab(index) }
+                        .padding(vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        item.icon,
+                        contentDescription = item.label,
+                        modifier = Modifier.size(22.dp),
+                        tint = tint,
+                    )
+                    Text(
+                        item.label,
+                        fontSize = 11.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        color = tint,
+                    )
+                }
             }
         }
     }

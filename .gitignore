@@ -18,16 +18,33 @@ keystore.properties
 .DS_Store
 captures/
 *.log
+
+# Organized local artifacts (keep on disk, don't track)
+Screenshot/
+ui-dumps/
+apk-archive/
+reference/
+api-samples/
+_keubo_apk_inspect/
+
+# Legacy root dump patterns (if any remain)
 screen*.png
 lotte*.png
 tab_*.png
 final*.png
+fix_*.png
+p1_*.png
 ui*.xml
-api-samples/
+tab_*.xml
+
 # APK artifacts (keep locally, don't track)
 *.apk
 LotteGiantsLive-*.apk
 
-# UI test dumps
-tab_*.xml
-ui*.xml
+# Extracted / reverse-engineered trees
+ruta_*/
+ruta_*
+Logo/
+
+# Downloads cache
+*.hprof

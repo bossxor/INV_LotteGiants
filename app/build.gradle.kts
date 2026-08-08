@@ -15,8 +15,8 @@ android {
         applicationId = "com.bossxor.lottegiants"
         minSdk = 31
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     signingConfigs {
@@ -54,6 +54,10 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+    lint {
+        disable += "InvalidFragmentVersionForActivityResult"
     }
 }
 
@@ -78,4 +82,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.coil.compose)
+    implementation("com.google.android.gms:play-services-wearable:19.0.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
+    implementation("androidx.fragment:fragment-ktx:1.8.6")
 }

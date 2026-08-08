@@ -22,10 +22,16 @@ interface NaverSportsApi {
     ): ScheduleResponse
 
     @GET("schedule/games/{gameId}/relay")
-    suspend fun getRelay(@Path("gameId") gameId: String): RelayResponse
+    suspend fun getRelay(
+        @Path("gameId") gameId: String,
+        @Query("inning") inning: Int? = null,
+    ): RelayResponse
 
     @GET("statistics/categories/kbo/seasons/{season}/teams")
     suspend fun getStandings(@Path("season") season: String): StandingsResponse
+
+    @GET("schedule/games/{gameId}/preview")
+    suspend fun getPreview(@Path("gameId") gameId: String): PreviewResponse
 
     companion object {
         const val SCHEDULE_FIELDS =

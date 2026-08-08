@@ -1,4 +1,4 @@
-package com.bossxor.lottegiants.ui.screens
+﻿package com.bossxor.lottegiants.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -25,12 +25,13 @@ import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.ui.LotteRed
 
+/** 레거시: 라이브 스냅샷의 타구장 목록. 결과 탭은 [ResultsScreen] 사용. */
 @Composable
 fun AllGamesScreen(snapshot: LiveSnapshot?) {
     val games = snapshot?.otherGames.orEmpty()
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         Text("오늘 다른 경기", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text("점수와 이닝만 표시", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("스코어 · 이닝 표시", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
         if (games.isEmpty()) {
             Text("오늘 다른 KBO 경기가 없습니다.")
@@ -52,7 +53,7 @@ private fun MiniGameCard(g: MiniGame) {
             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column(Modifier.weight(1f)) {
             Text("${g.awayName} vs ${g.homeName}", fontWeight = FontWeight.SemiBold)
@@ -64,14 +65,14 @@ private fun MiniGameCard(g: MiniGame) {
                     GameStatus.CANCELED -> "취소"
                 },
                 fontSize = 12.sp,
-                color = if (g.status == GameStatus.LIVE) LotteRed else MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (g.status == GameStatus.LIVE) LotteRed else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         if (g.status != GameStatus.BEFORE && g.status != GameStatus.CANCELED) {
             Text(
                 "${g.awayScore} : ${g.homeScore}",
                 fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
         }
     }

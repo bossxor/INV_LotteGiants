@@ -30,6 +30,12 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         WidgetUpdater.updateAll(applicationContext)
 
         val game = snap.lotteGame
+        // 라이브 폴링이 없어도 취소·시작 등 상태 전이 알림
+        NotificationHelper.createChannels(applicationContext)
+        runCatching {
+            EventDetector(repo.store).process(applicationContext, game)
+        }
+
         when (game?.status) {
             GameStatus.LIVE -> LiveScoreService.start(applicationContext)
             GameStatus.BEFORE -> {

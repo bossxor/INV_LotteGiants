@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">롯데 라이브</string>
-    <string name="widget_description">롯데 자이언츠 실시간 경기 현황 위젯</string>
+    <string name="app_name">사직스코어</string>
+    <string name="widget_description">사직스코어 · 롯데 실시간 경기 현황</string>
 </resources>
