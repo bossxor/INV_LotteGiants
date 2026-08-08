@@ -23,18 +23,8 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 
 ## GitHub 릴리스 (인앱 업데이트)
 
-앱 실행 시(ON_START)와 설정「업데이트 확인」에서
-`GET .../repos/bossxor/INV_LotteGiants/releases/latest` 를 호출합니다.
-
-**저장소가 private**이면 공개 API는 404라 항상 최신처럼 동작합니다.
-`local.properties`(또는 환경변수)에 다음을 두고 release 빌드하세요:
-
-```
-GITHUB_TOKEN=ghp_...   # Contents: Read (fine-grained) 권장
-```
-
-토큰은 `BuildConfig.GITHUB_TOKEN`으로 APK에 들어갑니다. 공개 배포 전에는
-저장소를 public으로 바꾸거나 별도 배포 채널을 쓰는 편이 안전합니다.
+저장소는 **public**이어야 합니다(토큰 없이 `releases/latest` 조회).
+앱 실행 시(ON_START)와 설정「업데이트 확인」에서 최신 릴리스를 확인합니다.
 
 1. `app/build.gradle.kts`의 `versionCode` / `versionName` 올리기
 2. `assembleRelease` 후 APK를 Release asset으로 업로드 (`*.apk`)
@@ -45,5 +35,7 @@ versionCode: 4
 ```
 
 4. `versionCode`가 기기에 설치된 값보다 크면 앱 시작 시 설치 다이얼로그
+
+private로 되돌릴 때만 `local.properties`에 `GITHUB_TOKEN=...` 을 넣어 빌드하세요.
 
 데이터: 네이버 스포츠 비공식 API (`api-gw.sports.naver.com`).

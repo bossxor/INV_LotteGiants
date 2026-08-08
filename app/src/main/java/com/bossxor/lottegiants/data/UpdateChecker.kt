@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.core.content.FileProvider
 import com.bossxor.lottegiants.BuildConfig
 import kotlinx.coroutines.Dispatchers
@@ -35,11 +36,12 @@ sealed class UpdateCheckResult {
  * GitHub Releases 최신 APK 검사·다운로드·설치.
  * Release body에 `versionCode: N` 이 있어야 비교한다.
  *
- * private 저장소는 local.properties / env 의 `GITHUB_TOKEN` 이
- * BuildConfig 로 주입되어야 API·다운로드가 동작한다.
+ * public 저장소는 토큰 없이 동작한다.
+ * private 이면 local.properties / env 의 `GITHUB_TOKEN` 을 BuildConfig 로 주입한다.
  */
 object UpdateChecker {
 
+    private const val TAG = "SajikUpdate"
     private const val OWNER = "bossxor"
     private const val REPO = "INV_LotteGiants"
     private const val LATEST_URL =
@@ -92,34 +94,45 @@ object UpdateChecker {
         }
 
     suspend fun check(currentVersionCode: Int): UpdateCheckResult = withContext(Dispatchers.IO) {
-        if (BuildConfig.GITHUB_TOKEN.isBlank()) {
-            // public 저장소면 토큰 없이도 동작. private 면 404 가 난다.
-            // 아래에서 응답 코드로 구분한다.
-        }
         try {
             val latest = fetchRelease(LATEST_URL)
             val release = latest.getOrElse { err ->
                 val errMsg = err.message ?: "릴리즈 조회 실패"
+                Log.w(TAG, "latest failed: $errMsg")
                 // latest 실패 시 목록에서 최신 non-draft 탐색
                 val listed = fetchReleaseList(LIST_URL).getOrElse {
-                    return@withContext UpdateCheckResult.Failed(errMsg)
+                    Log.w(TAG, "list failed: $errMsg")
+                    return@withContext UpdateCheckResult.Failed(errMsg).also {
+                        Log.i(TAG, "result=Failed current=$currentVersionCode msg=$errMsg")
+                    }
                 }
                 listed.maxByOrNull { parseVersionCode(it.body) }
-                    ?: return@withContext UpdateCheckResult.Failed(errMsg)
+                    ?: return@withContext UpdateCheckResult.Failed(errMsg).also {
+                        Log.i(TAG, "result=Failed current=$currentVersionCode msg=$errMsg")
+                    }
             }
             val remoteCode = parseVersionCode(release.body)
             if (remoteCode <= 0) {
-                return@withContext UpdateCheckResult.Failed(
-                    "릴리즈 본문에 versionCode: N 이 없습니다.",
-                )
+                val msg = "릴리즈 본문에 versionCode: N 이 없습니다."
+                Log.i(TAG, "result=Failed current=$currentVersionCode msg=$msg")
+                return@withContext UpdateCheckResult.Failed(msg)
             }
             if (remoteCode <= currentVersionCode) {
+                Log.i(TAG, "result=UpToDate current=$currentVersionCode remote=$remoteCode")
                 return@withContext UpdateCheckResult.UpToDate
             }
             val apk = release.assets.firstOrNull {
                 it.name.endsWith(".apk", ignoreCase = true) &&
                     it.browserDownloadUrl.isNotBlank()
-            } ?: return@withContext UpdateCheckResult.Failed("릴리즈에 APK가 없습니다.")
+            } ?: run {
+                val msg = "릴리즈에 APK가 없습니다."
+                Log.i(TAG, "result=Failed current=$currentVersionCode msg=$msg")
+                return@withContext UpdateCheckResult.Failed(msg)
+            }
+            Log.i(
+                TAG,
+                "result=Available current=$currentVersionCode remote=$remoteCode tag=${release.tagName}",
+            )
             UpdateCheckResult.Available(
                 UpdateInfo(
                     versionCode = remoteCode,
@@ -129,6 +142,7 @@ object UpdateChecker {
                 ),
             )
         } catch (e: Exception) {
+            Log.e(TAG, "check failed", e)
             UpdateCheckResult.Failed(e.message ?: "업데이트 확인 실패")
         }
     }
