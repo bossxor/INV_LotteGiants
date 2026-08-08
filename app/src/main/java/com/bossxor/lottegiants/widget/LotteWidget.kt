@@ -43,6 +43,7 @@ import com.bossxor.lottegiants.domain.LOTTE_LOGO_URL
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.LotteGameInfo
+import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.teamLogoUrl
@@ -139,8 +140,7 @@ private fun WidgetRoot(
                 if (compact) CompactScore(game, "종료") else EndedWide(game, lotteLogo, oppLogo, snap)
             }
             game != null && game.status == GameStatus.CANCELED -> {
-                val reason = game.cancelReason.ifBlank { "취소" }
-                if (compact) CompactScore(game, if (reason == "취소") "취소" else "취소 $reason")
+                if (compact) CompactScore(game, game.cancelLabel)
                 else CanceledWide(game, lotteLogo, oppLogo)
             }
             game != null && game.status == GameStatus.BEFORE -> {
@@ -207,9 +207,8 @@ private fun CanceledWide(
     val white = ColorProvider(Color.White, Color.White)
     val red = ColorProvider(Red, Red)
     val muted = ColorProvider(Muted, Muted)
-    val reason = g.cancelReason.ifBlank { "취소" }
     Text(
-        if (reason == "취소") "경기 취소" else "취소 · $reason",
+        g.cancelLabel,
         style = TextStyle(color = red, fontSize = 12.sp, fontWeight = FontWeight.Bold),
     )
     Spacer(GlanceModifier.height(6.dp))

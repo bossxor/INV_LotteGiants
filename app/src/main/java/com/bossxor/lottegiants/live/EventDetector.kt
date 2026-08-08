@@ -6,6 +6,7 @@ import com.bossxor.lottegiants.data.SnapshotStore
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.PitcherLine
+import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.inningLabel
 
 /**
@@ -301,20 +302,14 @@ class EventDetector(private val store: SnapshotStore) {
     private suspend fun notifyCanceled(context: Context, game: LotteGameInfo) {
         val already = store.notifiedCancelGameId()
         if (already == game.gameId) return
-        val reason = game.cancelReason.ifBlank { game.statusText }.trim()
-        val title = if (reason.isNotBlank() && reason != "취소") {
-            "경기 취소 ($reason)"
-        } else {
-            "경기 취소"
-        }
+        val title = game.cancelLabel
         val text = buildString {
             append(game.opponentName)
-            append("전 취소")
-            if (reason.isNotBlank() && reason != "취소") {
+            append("전 · ")
+            append(title)
+            if (game.stadium.isNotBlank()) {
                 append(" · ")
-                append(reason)
-            } else {
-                append("/순연")
+                append(game.stadium)
             }
         }
         maybeNotify(context, NotificationType.CANCELED, 2003, title, text)

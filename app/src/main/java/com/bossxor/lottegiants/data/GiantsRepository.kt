@@ -24,6 +24,8 @@ import com.bossxor.lottegiants.domain.RosterMove
 import com.bossxor.lottegiants.domain.StadiumWeather
 import com.bossxor.lottegiants.domain.TeamStanding
 import com.bossxor.lottegiants.domain.WinProbPoint
+import com.bossxor.lottegiants.domain.cancelDisplayLabel
+import com.bossxor.lottegiants.domain.normalizeCancelReason
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.resolveStadiumCoord
 import com.bossxor.lottegiants.domain.teamLogoUrl
@@ -731,9 +733,15 @@ class GiantsRepository private constructor(context: Context) {
         homeScore = homeTeamScore,
         awayScore = awayTeamScore,
         status = status(),
-        statusText = statusInfo?.takeIf { it.isNotBlank() } ?: when (status()) {
+        statusText = statusInfo?.takeIf { it.isNotBlank() }?.let { raw ->
+            if (status() == GameStatus.CANCELED) {
+                cancelDisplayLabel(normalizeCancelReason(raw))
+            } else {
+                raw
+            }
+        } ?: when (status()) {
             GameStatus.BEFORE -> startTimeText()
-            GameStatus.CANCELED -> "취소"
+            GameStatus.CANCELED -> cancelDisplayLabel(normalizeCancelReason(statusInfo))
             GameStatus.ENDED -> "종료"
             GameStatus.LIVE -> "진행 중"
         },
@@ -767,9 +775,12 @@ class GiantsRepository private constructor(context: Context) {
             lotteScore = if (isHome) homeTeamScore else awayTeamScore,
             opponentScore = if (isHome) awayTeamScore else homeTeamScore,
             status = status(),
-            statusText = statusInfo.orEmpty(),
+            statusText = when (status()) {
+                GameStatus.CANCELED -> cancelDisplayLabel(normalizeCancelReason(statusInfo))
+                else -> statusInfo.orEmpty()
+            },
             cancelReason = if (status() == GameStatus.CANCELED) {
-                statusInfo?.trim().orEmpty()
+                normalizeCancelReason(statusInfo)
             } else {
                 ""
             },

@@ -454,12 +454,67 @@ data class TeamStanding(
     val lastFive: String = "",
 )
 
+/** API statusInfo → 짧은 취소 사유 (폭염, 우천…). 일반 '경기취소'만 있으면 빈 문자열 */
+fun normalizeCancelReason(raw: String?): String {
+    val s = raw?.trim().orEmpty()
+    if (s.isBlank()) return ""
+    // 알려진 구체 사유 우선
+    val known = listOf(
+        "폭염" to "폭염",
+        "우천" to "우천",
+        "강우" to "우천",
+        "비" to "우천",
+        "안개" to "안개",
+        "강설" to "강설",
+        "적설" to "강설",
+        "눈" to "강설",
+        "태풍" to "태풍",
+        "미세먼지" to "미세먼지",
+        "황사" to "황사",
+        "순연" to "순연",
+        "기타" to "기타",
+        "구장" to "구장 사정",
+        "조명" to "조명",
+        "정전" to "정전",
+        "한파" to "한파",
+        "폭풍" to "폭풍",
+        "천둥" to "천둥번개",
+        "낙뢰" to "천둥번개",
+        "바람" to "강풍",
+        "강풍" to "강풍",
+        "지진" to "지진",
+        "안전" to "안전 사유",
+        "코로나" to "코로나",
+    )
+    for ((key, label) in known) {
+        if (s.contains(key)) return label
+    }
+    // "경기취소" / "취소" / "CANCEL" 등 일반 표기만 있는 경우
+    val generic = s
+        .replace(Regex("""(?i)cancel(ed|lation)?"""), "")
+        .replace("경기", "")
+        .replace("취소", "")
+        .replace("순연", "")
+        .replace(Regex("""[\s·\-_/():（）\[\]]+"""), "")
+        .trim()
+    if (generic.isBlank()) return "" // UI에서 '경기 취소'만
+    // 남은 문자열을 짧고 읽기 좋게
+    return generic.take(12)
+}
+
+/** 표시용: "경기 취소" 또는 "경기 취소 (폭염)" */
+fun cancelDisplayLabel(reason: String?): String {
+    val r = reason?.trim().orEmpty()
+    return if (r.isBlank()) "경기 취소" else "경기 취소 ($r)"
+}
+
+val LotteGameInfo.cancelLabel: String
+    get() = cancelDisplayLabel(cancelReason)
+
 val LotteGameInfo.inningLabel: String
     get() = when {
         status == GameStatus.BEFORE -> startTime
-        status == GameStatus.CANCELED -> cancelReason.ifBlank { "취소" }.let {
-            if (it == "취소") "취소" else "취소 ($it)"
-        }
+        status == GameStatus.CANCELED -> cancelLabel
         status == GameStatus.ENDED -> "종료"
         inning <= 0 -> statusText
         else -> "${inning}회${if (isTopInning) "초" else "말"}"

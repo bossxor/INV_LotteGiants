@@ -1,5 +1,13 @@
 package com.bossxor.lottegiants.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -42,7 +50,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import kotlin.math.abs
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -91,23 +101,36 @@ fun ResultsScreen(
     val dateListState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var swipeLock by remember { mutableStateOf(false) }
+    val modeLatest by rememberUpdatedState(mode)
+    val calendarMonthLatest by rememberUpdatedState(calendarMonth)
+    var dateNavDirection by remember { mutableIntStateOf(1) }
+    var lastSyncedMonth by remember { mutableStateOf(listMonth) }
 
     LaunchedEffect(selectedDate, mode) {
-        if (mode != 0) return@LaunchedEffect
+        if (mode != 0 || monthDates.isEmpty()) return@LaunchedEffect
         val index = (selectedDate.dayOfMonth - 1).coerceIn(0, monthDates.lastIndex)
-        dateListState.scrollToItem(index)
-        val viewport = dateListState.layoutInfo.viewportEndOffset - dateListState.layoutInfo.viewportStartOffset
-        val item = dateListState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
-        if (item != null && viewport > 0) {
-            val centered = item.offset - (viewport - item.size) / 2
-            dateListState.animateScrollToItem(index, scrollOffset = centered)
+        val monthNow = YearMonth.from(selectedDate)
+        val monthChanged = monthNow != lastSyncedMonth
+        lastSyncedMonth = monthNow
+        if (monthChanged) {
+            dateListState.scrollToItem(index)
+            delay(16)
+            centerDateChip(dateListState, index, animate = false)
+        } else {
+            val onScreen = dateListState.layoutInfo.visibleItemsInfo.any { it.index == index }
+            if (onScreen) {
+                centerDateChip(dateListState, index, animate = true, thresholdPx = 28)
+            } else {
+                dateListState.animateScrollToItem(index)
+                delay(16)
+                centerDateChip(dateListState, index, animate = true, thresholdPx = 12)
+            }
         }
     }
 
-    fun shiftMonth(delta: Long) {
-        val targetMonth = listMonth.plusMonths(delta)
-        val day = selectedDate.dayOfMonth.coerceAtMost(targetMonth.lengthOfMonth())
-        onSelectDate(targetMonth.atDay(day))
+    fun shiftDay(delta: Long) {
+        dateNavDirection = if (delta >= 0) 1 else -1
+        onSelectDate(selectedDate.plusDays(delta))
     }
 
     fun withSwipeLock(block: () -> Unit) {
@@ -115,7 +138,7 @@ fun ResultsScreen(
         swipeLock = true
         block()
         scope.launch {
-            delay(280)
+            delay(220)
             swipeLock = false
         }
     }
@@ -130,18 +153,18 @@ fun ResultsScreen(
                 .fillMaxSize()
                 .padding(horizontal = 14.dp)
                 .padding(top = 8.dp)
-                .pointerInput(mode, selectedDate, calendarMonth) {
+                .pointerInput(Unit) {
                     var total = 0f
                     detectHorizontalDragGestures(
                         onDragEnd = {
                             when {
                                 total > 80f -> withSwipeLock {
-                                    if (mode == 0) onSelectDate(selectedDate.minusDays(1))
-                                    else onSelectMonth(calendarMonth.minusMonths(1))
+                                    if (modeLatest == 0) shiftDay(-1)
+                                    else onSelectMonth(calendarMonthLatest.minusMonths(1))
                                 }
                                 total < -80f -> withSwipeLock {
-                                    if (mode == 0) onSelectDate(selectedDate.plusDays(1))
-                                    else onSelectMonth(calendarMonth.plusMonths(1))
+                                    if (modeLatest == 0) shiftDay(1)
+                                    else onSelectMonth(calendarMonthLatest.plusMonths(1))
                                 }
                             }
                             total = 0f
@@ -174,16 +197,32 @@ fun ResultsScreen(
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { shiftMonth(-1) }) {
+                    IconButton(onClick = { shiftDay(-1) }) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "이전 달")
                     }
-                    Text(
-                        selectedDate.format(DateTimeFormatter.ofPattern("yyyy.MM.dd (E)", Locale.KOREAN)),
+                    AnimatedContent(
+                        targetState = selectedDate,
                         modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Center,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    IconButton(onClick = { shiftMonth(1) }) {
+                        transitionSpec = {
+                            val dir = dateNavDirection
+                            (
+                                fadeIn(tween(180)) +
+                                    slideInHorizontally(tween(200)) { full -> dir * full / 4 }
+                                ) togetherWith (
+                                fadeOut(tween(140)) +
+                                    slideOutHorizontally(tween(180)) { full -> -dir * full / 4 }
+                                )
+                        },
+                        label = "result_date_title",
+                    ) { date ->
+                        Text(
+                            date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd (E)", Locale.KOREAN)),
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    IconButton(onClick = { shiftDay(1) }) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "다음 달")
                     }
                 }
@@ -197,7 +236,10 @@ fun ResultsScreen(
                             date = date,
                             selected = date == selectedDate,
                             isToday = date == today,
-                            onClick = { onSelectDate(date) },
+                            onClick = {
+                                dateNavDirection = if (date.isAfter(selectedDate)) 1 else -1
+                                onSelectDate(date)
+                            },
                         )
                     }
                 }
@@ -261,6 +303,25 @@ fun ResultsScreen(
     }
 }
 
+private suspend fun centerDateChip(
+    state: androidx.compose.foundation.lazy.LazyListState,
+    index: Int,
+    animate: Boolean,
+    thresholdPx: Int = 8,
+) {
+    val layout = state.layoutInfo
+    val viewport = layout.viewportEndOffset - layout.viewportStartOffset
+    if (viewport <= 0) return
+    val item = layout.visibleItemsInfo.firstOrNull { it.index == index } ?: return
+    val centered = item.offset - (viewport - item.size) / 2
+    if (abs(centered) <= thresholdPx) return
+    if (animate) {
+        state.animateScrollToItem(index, scrollOffset = centered)
+    } else {
+        state.scrollToItem(index, scrollOffset = centered)
+    }
+}
+
 @Composable
 fun EmptyRetry(message: String, onRetry: (() -> Unit)? = null) {
     Column(
@@ -311,15 +372,17 @@ private fun DateChip(
     isToday: Boolean,
     onClick: () -> Unit,
 ) {
-    val bg = when {
+    val targetBg = when {
         selected -> MaterialTheme.colorScheme.primary
         isToday -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
-    val fg = when {
+    val targetFg = when {
         selected -> MaterialTheme.colorScheme.onPrimary
         else -> MaterialTheme.colorScheme.onSurface
     }
+    val bg by animateColorAsState(targetBg, animationSpec = tween(180), label = "date_chip_bg")
+    val fg by animateColorAsState(targetFg, animationSpec = tween(180), label = "date_chip_fg")
     Column(
         Modifier
             .width(52.dp)

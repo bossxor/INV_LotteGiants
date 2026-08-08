@@ -15,9 +15,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -29,11 +30,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.style.TextOverflow
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LeaderPlayer
 import com.bossxor.lottegiants.domain.LotteTeamCard
@@ -77,19 +79,33 @@ fun StandingsScreen(
     ) {
         LazyColumn(
             Modifier.fillMaxSize().padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
                 Text("순위", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
             }
 
+            // ── 섹션 1: 롯데 시즌 트렌드 ──
             if (teamCard != null) {
+                item {
+                    SectionHeader(
+                        title = "롯데 시즌 트렌드",
+                        subtitle = "순위 변동 · 주간 타율 · 주간 방어율",
+                    )
+                }
                 item {
                     KeuboStyleCharts(teamCard)
                 }
             }
 
+            // ── 섹션 2: 선수 타이틀 ──
+            item {
+                SectionHeader(
+                    title = "선수 타이틀",
+                    subtitle = "리그 타자 · 투수 순위",
+                )
+            }
             item {
                 SectionCard(modifier = Modifier.clickable(onClick = onOpenLeaders)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -101,42 +117,93 @@ fun StandingsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        Text("전체 보기 ›", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                        Text(
+                            "전체 보기 ›",
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
                     }
                 }
             }
 
+            // ── 섹션 3: KBO 순위표 ──
             stickyHeader {
-                Column(
-                    Modifier
+                Surface(
+                    modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.background)
-                        .padding(vertical = 4.dp),
+                        .shadow(2.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 2.dp,
                 ) {
-                    if (lotteStanding != null) {
-                        StandingRow(
-                            t = lotteStanding,
-                            base = baseTeam,
-                            isBase = true,
-                            compact = true,
-                            onClick = { baseTeamId = lotteStanding.teamId },
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp, bottom = 6.dp),
+                    ) {
+                        SectionHeader(
+                            title = "KBO 순위표",
+                            subtitle = "게임차 = ${baseTeam?.teamName ?: "롯데"} 기준 · 탭으로 기준팀 변경",
                         )
+                        if (lotteStanding != null) {
+                            Spacer(Modifier.height(6.dp))
+                            StandingRow(
+                                t = lotteStanding,
+                                base = baseTeam,
+                                isBase = lotteStanding.teamId == baseTeamId,
+                                isLotte = true,
+                                compact = true,
+                                onClick = { baseTeamId = lotteStanding.teamId },
+                            )
+                        }
                         Spacer(Modifier.height(6.dp))
-                    }
-                    Text("KBO 순위표", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "게임차 = ${baseTeam?.teamName ?: "롯데"} 기준",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp)) {
-                        Text("", Modifier.weight(0.07f))
-                        Text("", Modifier.weight(0.30f))
-                        Text("경기", Modifier.weight(0.11f), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
-                        Text("승-무-패", Modifier.weight(0.20f), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
-                        Text("승률", Modifier.weight(0.14f), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
-                        Text("게임차", Modifier.weight(0.18f), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp)) {
+                            Text(
+                                "순위",
+                                Modifier.weight(0.10f),
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                "팀",
+                                Modifier.weight(0.27f),
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                "경기",
+                                Modifier.weight(0.11f),
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                "승-무-패",
+                                Modifier.weight(0.20f),
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                "승률",
+                                Modifier.weight(0.14f),
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                "게임차",
+                                Modifier.weight(0.18f),
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                        HorizontalDivider(
+                            thickness = 1.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant,
+                        )
                     }
                 }
             }
@@ -146,17 +213,71 @@ fun StandingsScreen(
                     EmptyRetry(message = "순위 데이터를 불러오지 못했습니다.", onRetry = onRefresh)
                 }
             } else {
-                items(standings, key = { it.teamId }) { t ->
-                    StandingRow(
-                        t = t,
-                        base = baseTeam,
-                        isBase = t.teamId == baseTeamId,
-                        onClick = { baseTeamId = t.teamId },
-                    )
+                itemsIndexed(standings, key = { _, t -> t.teamId }) { index, t ->
+                    Column {
+                        // 5–6위 사이 포스트시즌 컷
+                        if (index == 5) {
+                            PostseasonCutLine()
+                            Spacer(Modifier.height(6.dp))
+                        }
+                        StandingRow(
+                            t = t,
+                            base = baseTeam,
+                            isBase = t.teamId == baseTeamId,
+                            isLotte = t.teamId == LOTTE_TEAM_CODE,
+                            onClick = { baseTeamId = t.teamId },
+                        )
+                    }
                 }
             }
-            item { Spacer(Modifier.height(16.dp)) }
+            item { Spacer(Modifier.height(20.dp)) }
         }
+    }
+}
+
+@Composable
+private fun SectionHeader(title: String, subtitle: String) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            subtitle,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 12.sp,
+        )
+    }
+}
+
+@Composable
+private fun PostseasonCutLine() {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
+        )
+        Text(
+            "포스트시즌 컷",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            thickness = 1.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
+        )
     }
 }
 
@@ -298,35 +419,86 @@ private fun StandingRow(
     base: TeamStanding?,
     isBase: Boolean,
     onClick: () -> Unit,
+    isLotte: Boolean = false,
     compact: Boolean = false,
 ) {
     val gb = gamesBehindVsBase(t, base)
     val accent = MaterialTheme.colorScheme.primary
+    val isLight = MaterialTheme.colorScheme.background.luminance() > 0.5f
+
+    // 배경 틴트 없이 surface 고정, 구분 효과는 테두리만
+    val border = when {
+        isBase -> BorderStroke(1.5.dp, accent.copy(alpha = if (isLight) 0.65f else 0.55f))
+        else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = if (isLight) 0.55f else 0.40f))
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(if (compact) 12.dp else 16.dp),
-        color = if (isBase) accent.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface,
-        border = if (isBase) BorderStroke(1.dp, accent.copy(alpha = 0.35f)) else null,
-        tonalElevation = 1.dp,
+        shape = RoundedCornerShape(if (compact) 12.dp else 14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = border,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = if (compact) 8.dp else 10.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = if (compact) 8.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val color = if (isBase) accent else MaterialTheme.colorScheme.onSurface
-            val weight = if (isBase) FontWeight.Bold else FontWeight.Medium
-            Text("${t.ranking}", Modifier.weight(0.07f), color = color, fontWeight = FontWeight.Black, fontSize = 14.sp)
-            Row(Modifier.weight(0.30f), verticalAlignment = Alignment.CenterVertically) {
+            val textColor = if (isBase) accent else MaterialTheme.colorScheme.onSurface
+            val weight = when {
+                isBase || isLotte -> FontWeight.Bold
+                else -> FontWeight.Medium
+            }
+            Text(
+                "${t.ranking}",
+                Modifier.weight(0.10f),
+                color = textColor,
+                fontWeight = FontWeight.Black,
+                fontSize = 14.sp,
+            )
+            Row(Modifier.weight(0.27f), verticalAlignment = Alignment.CenterVertically) {
                 TeamLogo(teamLogoUrl(t.teamId), size = if (compact) 22 else 26)
                 Spacer(Modifier.width(6.dp))
-                Text(t.teamName, color = color, fontWeight = weight, fontSize = 13.sp, maxLines = 1)
+                Text(
+                    t.teamName,
+                    color = textColor,
+                    fontWeight = weight,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                )
             }
-            Text("${t.gameCount}", Modifier.weight(0.11f), color = color, fontWeight = weight, fontSize = 12.sp)
-            Text("${t.win}-${t.draw}-${t.lose}", Modifier.weight(0.20f), color = color, fontWeight = weight, fontSize = 12.sp)
-            Text(String.format(Locale.US, "%.3f", t.wra), Modifier.weight(0.14f), color = color, fontWeight = weight, fontSize = 12.sp)
-            Text(formatGb(gb), Modifier.weight(0.18f), color = color, fontWeight = weight, fontSize = 12.sp)
+            Text(
+                "${t.gameCount}",
+                Modifier.weight(0.11f),
+                color = textColor,
+                fontWeight = weight,
+                fontSize = 12.sp,
+            )
+            Text(
+                "${t.win}-${t.draw}-${t.lose}",
+                Modifier.weight(0.20f),
+                color = textColor,
+                fontWeight = weight,
+                fontSize = 12.sp,
+            )
+            Text(
+                String.format(Locale.US, "%.3f", t.wra),
+                Modifier.weight(0.14f),
+                color = textColor,
+                fontWeight = weight,
+                fontSize = 12.sp,
+            )
+            Text(
+                formatGb(gb),
+                Modifier.weight(0.18f),
+                color = textColor,
+                fontWeight = weight,
+                fontSize = 12.sp,
+            )
         }
     }
 }

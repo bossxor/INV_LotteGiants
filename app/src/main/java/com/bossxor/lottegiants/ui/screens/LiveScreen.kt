@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
@@ -57,6 +60,7 @@ import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.StadiumWeather
+import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.ui.LoseRed
 import com.bossxor.lottegiants.ui.LotteGold
@@ -90,7 +94,8 @@ fun LiveScreen(
     onKeyPlayerClick: (String, String) -> Unit = { _, _ -> },
     onShare: (LotteGameInfo) -> Unit = {},
 ) {
-    var detailTab by remember { mutableIntStateOf(0) }
+    val pagerState = rememberPagerState(pageCount = { DETAIL_TABS.size })
+    val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
     val store = remember { com.bossxor.lottegiants.data.GiantsRepository.get(context).store }
     var showPermBanner by remember { mutableStateOf(true) }
@@ -127,115 +132,160 @@ fun LiveScreen(
             }
             Spacer(Modifier.height(12.dp))
 
-            Column(
-                Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(bottom = 16.dp),
-            ) {
-            if (showPermBanner && (needNotif || needBattery)) {
-                PermissionBanner(
-                    needNotif = needNotif,
-                    needBattery = needBattery,
-                    onOpenSettings = {
-                        if (needNotif) {
-                            context.startActivity(
-                                android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                    putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                },
-                            )
-                        } else {
-                            context.startActivity(
-                                android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                                    data = android.net.Uri.parse("package:${context.packageName}")
-                                },
-                            )
-                        }
-                    },
-                    onDismiss = {
-                        showPermBanner = false
-                        kotlinx.coroutines.MainScope().launch { store.setBannerDismissedDay(today) }
-                    },
-                )
-                Spacer(Modifier.height(10.dp))
-            }
-
             val game = snapshot?.lotteGame ?: snapshot?.nextLotteGame
             when {
                 loading && snapshot == null -> {
-                    Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
                 }
                 game != null -> {
+                    if (showPermBanner && (needNotif || needBattery)) {
+                        PermissionBanner(
+                            needNotif = needNotif,
+                            needBattery = needBattery,
+                            onOpenSettings = {
+                                if (needNotif) {
+                                    context.startActivity(
+                                        android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                        },
+                                    )
+                                } else {
+                                    context.startActivity(
+                                        android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                            data = android.net.Uri.parse("package:${context.packageName}")
+                                        },
+                                    )
+                                }
+                            },
+                            onDismiss = {
+                                showPermBanner = false
+                                kotlinx.coroutines.MainScope().launch { store.setBannerDismissedDay(today) }
+                            },
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    }
                     if (snapshot?.lotteGame != null) {
                         HeroCard(game, onShare = { onShare(game) })
                     } else {
                         NextGameContent(game)
                     }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(4.dp))
                     ScrollableTabRow(
-                        selectedTabIndex = detailTab,
+                        selectedTabIndex = pagerState.currentPage,
                         edgePadding = 0.dp,
                         containerColor = Color.Transparent,
                     ) {
                         DETAIL_TABS.forEachIndexed { i, label ->
+                            val selected = pagerState.currentPage == i
                             Tab(
-                                selected = detailTab == i,
-                                onClick = { detailTab = i },
+                                selected = selected,
+                                onClick = { scope.launch { pagerState.animateScrollToPage(i) } },
                                 text = {
                                     Text(
                                         label,
-                                        fontWeight = if (detailTab == i) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (detailTab == i) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (selected) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
                                     )
                                 },
                             )
                         }
                     }
-                    Spacer(Modifier.height(12.dp))
-                    when (detailTab) {
-                        0 -> PreviewTab(
-                            g = game,
-                            snapshot = snapshot,
-                            weather = weather ?: snapshot?.weather ?: game.preview?.weather,
-                        )
-                        1 -> LineupTab(game, onPlayerClick, onPitcherClick)
-                        2 -> SummaryTab(
-                            g = game,
-                            snapshot = snapshot,
-                            weather = weather,
-                            batterLeaders = batterLeaders,
-                            onKeyPlayerClick = onKeyPlayerClick,
-                            onOpenTeamHistory = onOpenTeamHistory,
-                            onOpenEntryBoard = onOpenEntryBoard,
-                            onOpenLeaders = onOpenLeaders,
-                        )
-                        3 -> RelayTab(game, snapshot)
-                        4 -> RecordTab(game, onPlayerClick, onPitcherClick)
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        beyondViewportPageCount = 1,
+                        verticalAlignment = Alignment.Top,
+                    ) { page ->
+                        Column(
+                            Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(top = 12.dp, bottom = 16.dp),
+                        ) {
+                            when (page) {
+                                0 -> PreviewTab(
+                                    g = game,
+                                    snapshot = snapshot,
+                                    weather = weather ?: snapshot?.weather ?: game.preview?.weather,
+                                )
+                                1 -> LineupTab(game, onPlayerClick, onPitcherClick)
+                                2 -> SummaryTab(
+                                    g = game,
+                                    snapshot = snapshot,
+                                    weather = weather,
+                                    batterLeaders = batterLeaders,
+                                    onKeyPlayerClick = onKeyPlayerClick,
+                                    onOpenTeamHistory = onOpenTeamHistory,
+                                    onOpenEntryBoard = onOpenEntryBoard,
+                                    onOpenLeaders = onOpenLeaders,
+                                )
+                                3 -> RelayTab(game, snapshot)
+                                4 -> RecordTab(game, onPlayerClick, onPitcherClick)
+                            }
+                        }
                     }
                 }
                 else -> {
-                    snapshot?.recentLotteGames?.takeIf { it.isNotEmpty() }?.let {
-                        RecentFiveCard(it)
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(bottom = 16.dp),
+                    ) {
+                        if (showPermBanner && (needNotif || needBattery)) {
+                            PermissionBanner(
+                                needNotif = needNotif,
+                                needBattery = needBattery,
+                                onOpenSettings = {
+                                    if (needNotif) {
+                                        context.startActivity(
+                                            android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                                putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                            },
+                                        )
+                                    } else {
+                                        context.startActivity(
+                                            android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                                data = android.net.Uri.parse("package:${context.packageName}")
+                                            },
+                                        )
+                                    }
+                                },
+                                onDismiss = {
+                                    showPermBanner = false
+                                    kotlinx.coroutines.MainScope().launch { store.setBannerDismissedDay(today) }
+                                },
+                            )
+                            Spacer(Modifier.height(10.dp))
+                        }
+                        snapshot?.recentLotteGames?.takeIf { it.isNotEmpty() }?.let {
+                            RecentFiveCard(it)
+                            Spacer(Modifier.height(12.dp))
+                        } ?: snapshot?.lastLotteGame?.let {
+                            RecentResultCard(it)
+                            Spacer(Modifier.height(12.dp))
+                        }
+                        ScoreTicker(snapshot)
                         Spacer(Modifier.height(12.dp))
-                    } ?: snapshot?.lastLotteGame?.let {
-                        RecentResultCard(it)
-                        Spacer(Modifier.height(12.dp))
-                    }
-                    ScoreTicker(snapshot)
-                    Spacer(Modifier.height(12.dp))
-                    weather?.let {
-                        WeatherLine(it)
-                        Spacer(Modifier.height(12.dp))
-                    }
-                    QuickLinks(onOpenTeamHistory, onOpenEntryBoard, onOpenLeaders)
-                    if (error != null) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        weather?.let {
+                            WeatherLine(it)
+                            Spacer(Modifier.height(12.dp))
+                        }
+                        QuickLinks(onOpenTeamHistory, onOpenEntryBoard, onOpenLeaders)
+                        if (error != null) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
-            }
             }
         }
     }
@@ -311,7 +361,7 @@ private fun ScoreTicker(snapshot: LiveSnapshot?, excludeLotte: Boolean = false) 
                             GameStatus.LIVE -> g.statusText.ifBlank { "LIVE" }
                             GameStatus.ENDED -> "종료"
                             GameStatus.BEFORE -> g.startTime.ifBlank { "예정" }
-                            GameStatus.CANCELED -> "취소"
+                            GameStatus.CANCELED -> g.statusText.ifBlank { "경기 취소" }
                         },
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
@@ -507,12 +557,6 @@ private fun PreviewTab(
             }
         }
     }
-    Spacer(Modifier.height(10.dp))
-    Phase2PlaceholderCard(
-        title = "핫콜드존 · 구종 분석",
-        connected = snapshot?.rutaConnected == true && (p?.hotColdAvailable == true || p?.pitchAnalysisAvailable == true),
-        hint = "루타 API 연결 후 선발 핫콜드존·구종 분석을 표시합니다.",
-    )
 }
 
 @Composable
@@ -532,20 +576,6 @@ private fun PreviewPitcherCol(team: String, pitcher: com.bossxor.lottegiants.dom
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-    }
-}
-
-@Composable
-private fun Phase2PlaceholderCard(title: String, connected: Boolean, hint: String) {
-    SectionCard {
-        Column {
-            SectionHeader(title)
-            Text(
-                if (connected) "고급 데이터가 아직 없습니다." else hint,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
     }
 }
 
@@ -696,20 +726,25 @@ private fun SummaryTab(
                     yMax = 100.0,
                 )
                 Text(
-                    if (snapshot?.rutaConnected == true) "루타 · 타석별 변화"
-                    else "네이버 metric · 타석별 변화",
+                    "타석별 변화",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-    } else {
-        Phase2PlaceholderCard(
-            title = "승리 확률 (WPA)",
-            connected = snapshot?.rutaConnected == true,
-            hint = "경기 중·종료 후 승리확률 그래프가 표시됩니다.",
-        )
+    } else if (g.status == GameStatus.LIVE || g.status == GameStatus.ENDED) {
+        SectionCard {
+            Column {
+                SectionHeader("롯데 승리 확률")
+                Text(
+                    "아직 충분한 데이터가 없습니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
+    // 경기 전(BEFORE)에는 WPA 플레이스홀더 숨김
     Spacer(Modifier.height(10.dp))
 
     KeyPlayerChip(batterLeaders, g) { code, name -> onKeyPlayerClick(code, name) }
@@ -1388,10 +1423,7 @@ private fun HeroCard(g: LotteGameInfo, onShare: () -> Unit = {}) {
                         Spacer(Modifier.height(6.dp))
                         Text("VS", fontWeight = FontWeight.Black, fontSize = 20.sp, color = Color.White.copy(alpha = 0.85f))
                     }
-                    GameStatus.CANCELED -> StatusChip(
-                        if (g.cancelReason.isNotBlank()) "취소 · ${g.cancelReason}" else "경기 취소",
-                        LoseRed,
-                    )
+                    GameStatus.CANCELED -> StatusChip(g.cancelLabel, LoseRed)
                 }
                 if (g.stadium.isNotBlank()) {
                     Spacer(Modifier.height(6.dp))
