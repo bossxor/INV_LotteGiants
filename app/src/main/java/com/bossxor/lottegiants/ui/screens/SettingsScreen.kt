@@ -60,6 +60,7 @@ import coil.compose.AsyncImage
 import com.bossxor.lottegiants.BuildConfig
 import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.data.NotificationType
+import com.bossxor.lottegiants.data.UpdateCheckResult
 import com.bossxor.lottegiants.data.UpdateChecker
 import com.bossxor.lottegiants.data.UpdateInfo
 import com.bossxor.lottegiants.domain.LiveDisplayMode
@@ -395,14 +396,20 @@ fun SettingsScreen(
                     onClick = {
                         scope.launch {
                             checkingUpdate = true
-                            val info = withContext(Dispatchers.IO) {
-                                UpdateChecker.checkForUpdate(BuildConfig.VERSION_CODE)
+                            val result = withContext(Dispatchers.IO) {
+                                UpdateChecker.check(BuildConfig.VERSION_CODE)
                             }
                             checkingUpdate = false
-                            if (info == null) {
-                                Toast.makeText(context, "최신 버전입니다.", Toast.LENGTH_SHORT).show()
-                            } else {
-                                updateInfo = info
+                            when (result) {
+                                is UpdateCheckResult.Available -> updateInfo = result.info
+                                is UpdateCheckResult.UpToDate ->
+                                    Toast.makeText(context, "최신 버전입니다.", Toast.LENGTH_SHORT).show()
+                                is UpdateCheckResult.Failed ->
+                                    Toast.makeText(
+                                        context,
+                                        "확인 실패: ${result.message}",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
                             }
                         }
                     },

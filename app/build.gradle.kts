@@ -15,8 +15,20 @@ android {
         applicationId = "com.bossxor.lottegiants"
         minSdk = 31
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.1.1"
+        versionCode = 4
+        versionName = "1.1.2"
+
+        // private GitHub 저장소 업데이트용 (local.properties 또는 env GITHUB_TOKEN)
+        val localProps = Properties().apply {
+            val f = rootProject.file("local.properties")
+            if (f.exists()) f.inputStream().use { load(it) }
+        }
+        val ghToken = (
+            localProps.getProperty("GITHUB_TOKEN")
+                ?: System.getenv("GITHUB_TOKEN")
+                ?: ""
+            ).replace("\\", "\\\\").replace("\"", "\\\"")
+        buildConfigField("String", "GITHUB_TOKEN", "\"$ghToken\"")
     }
 
     signingConfigs {
