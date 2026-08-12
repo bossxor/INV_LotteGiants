@@ -42,7 +42,7 @@ jobs:
       - name: Build release APK
         run: |
           CODE=$((1000 + ${{ github.run_number }}))
-          NAME="1.2.${{ github.run_number }}"
+          NAME="1.3.${{ github.run_number }}"
           echo "VERSION_CODE=$CODE" >> "$GITHUB_ENV"
           echo "VERSION_NAME=$NAME" >> "$GITHUB_ENV"
           chmod +x gradlew
