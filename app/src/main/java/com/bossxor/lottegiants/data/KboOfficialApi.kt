@@ -8,8 +8,18 @@ import com.bossxor.lottegiants.domain.cancelDisplayLabel
 import com.bossxor.lottegiants.domain.kboCancelReasonById
 import com.bossxor.lottegiants.domain.resolveCancelReason
 import com.bossxor.lottegiants.domain.resolveTeamLogoUrl
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonEncoder
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
@@ -121,19 +131,38 @@ data class KboOfficialGame(
     @SerialName("W_PIT_P_NM") val winPitcher: String = "",
     @SerialName("L_PIT_P_NM") val losePitcher: String = "",
     @SerialName("SV_PIT_P_NM") val savePitcher: String = "",
-    @SerialName("GAME_STATE_SC") val gameStateCn: String? = null,
-    @SerialName("CANCEL_SC_ID") val cancelScIdCn: String? = null,
+    /** KBO는 숫자/문자열이 섞여 내려오므로 FlexibleString 으로 받는다. */
+    @SerialName("GAME_STATE_SC")
+    @Serializable(with = KboFlexibleStringSerializer::class)
+    val gameStateCn: String? = null,
+    @SerialName("CANCEL_SC_ID")
+    @Serializable(with = KboFlexibleStringSerializer::class)
+    val cancelScIdCn: String? = null,
     @SerialName("CANCEL_SC_NM") val cancelScNm: String = "",
-    @SerialName("GAME_INN_NO") val inningCn: String? = null,
+    @SerialName("GAME_INN_NO")
+    @Serializable(with = KboFlexibleStringSerializer::class)
+    val inningCn: String? = null,
     @SerialName("GAME_TB_SC") val topBottom: String = "",
     @SerialName("T_SCORE_CN") val awayScore: String = "",
     @SerialName("B_SCORE_CN") val homeScore: String = "",
-    @SerialName("STRIKE_CN") val strikeCn: String? = null,
-    @SerialName("BALL_CN") val ballCn: String? = null,
-    @SerialName("OUT_CN") val outCn: String? = null,
-    @SerialName("B1_BAT_ORDER_NO") val base1OrderCn: String? = null,
-    @SerialName("B2_BAT_ORDER_NO") val base2OrderCn: String? = null,
-    @SerialName("B3_BAT_ORDER_NO") val base3OrderCn: String? = null,
+    @SerialName("STRIKE_CN")
+    @Serializable(with = KboFlexibleStringSerializer::class)
+    val strikeCn: String? = null,
+    @SerialName("BALL_CN")
+    @Serializable(with = KboFlexibleStringSerializer::class)
+    val ballCn: String? = null,
+    @SerialName("OUT_CN")
+    @Serializable(with = KboFlexibleStringSerializer::class)
+    val outCn: String? = null,
+    @SerialName("B1_BAT_ORDER_NO")
+    @Serializable(with = KboFlexibleStringSerializer::class)
+    val base1OrderCn: String? = null,
+    @SerialName("B2_BAT_ORDER_NO")
+    @Serializable(with = KboFlexibleStringSerializer::class)
+    val base2OrderCn: String? = null,
+    @SerialName("B3_BAT_ORDER_NO")
+    @Serializable(with = KboFlexibleStringSerializer::class)
+    val base3OrderCn: String? = null,
     @SerialName("T_P_NM") val awaySidePlayer: String = "",
     @SerialName("B_P_NM") val homeSidePlayer: String = "",
     @SerialName("TV_IF") val broadChannel: String = "",
@@ -353,3 +382,32 @@ data class KboBoxScoreResponse(
 private fun String?.kboInt(): Int =
     this?.trim()?.takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
         ?.toIntOrNull() ?: 0
+
+/**
+ * KBO GetKboGameList 는 같은 필드를 문자열(`"4"`)과 숫자(`4`)로 번갈아 보낸다.
+ * 숫자→String 역직렬화 실패 시 전체 일정이 비어 Naver 폴백만 타며 취소 사유가 사라진다.
+ */
+object KboFlexibleStringSerializer : KSerializer<String?> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("KboFlexibleString", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): String? {
+        val json = decoder as? JsonDecoder ?: return runCatching { decoder.decodeString() }.getOrNull()
+        return when (val el = json.decodeJsonElement()) {
+            is JsonNull -> null
+            is JsonPrimitive -> el.content.takeIf {
+                it.isNotBlank() && !it.equals("null", ignoreCase = true)
+            }
+            else -> null
+        }
+    }
+
+    override fun serialize(encoder: Encoder, value: String?) {
+        val json = encoder as? JsonEncoder
+        if (value == null) {
+            if (json != null) json.encodeJsonElement(JsonNull) else encoder.encodeNull()
+        } else {
+            if (json != null) json.encodeJsonElement(JsonPrimitive(value)) else encoder.encodeString(value)
+        }
+    }
+}

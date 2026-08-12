@@ -14,6 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -104,25 +105,26 @@ fun ResultsScreen(
     var dateNavDirection by remember { mutableIntStateOf(1) }
     var lastSyncedMonth by remember { mutableStateOf(listMonth) }
 
-    LaunchedEffect(selectedDate, mode) {
+    LaunchedEffect(selectedDate, mode, listMonth) {
         if (mode != 0 || monthDates.isEmpty()) return@LaunchedEffect
         val index = (selectedDate.dayOfMonth - 1).coerceIn(0, monthDates.lastIndex)
         val monthNow = YearMonth.from(selectedDate)
         val monthChanged = monthNow != lastSyncedMonth
         lastSyncedMonth = monthNow
-        if (monthChanged) {
-            dateListState.scrollToItem(index)
-            delay(16)
-            centerDateChip(dateListState, index, animate = false)
-        } else {
-            val onScreen = dateListState.layoutInfo.visibleItemsInfo.any { it.index == index }
-            if (onScreen) {
-                centerDateChip(dateListState, index, animate = true, thresholdPx = 28)
-            } else {
-                dateListState.animateScrollToItem(index)
-                delay(16)
-                centerDateChip(dateListState, index, animate = true, thresholdPx = 12)
+        // LazyRow 레이아웃이 잡힐 때까지 잠깐 대기 후, 선택일을 상단 중앙에 맞춤
+        repeat(6) { attempt ->
+            delay(if (attempt == 0) 32L else 48L)
+            val viewport = dateListState.layoutInfo.viewportEndOffset -
+                dateListState.layoutInfo.viewportStartOffset
+            if (viewport <= 0) return@repeat
+            val animate = !monthChanged && attempt > 0
+            if (dateListState.layoutInfo.visibleItemsInfo.none { it.index == index }) {
+                if (animate) dateListState.animateScrollToItem(index)
+                else dateListState.scrollToItem(index)
+                return@repeat
             }
+            val moved = centerDateChip(dateListState, index, animate = animate, thresholdPx = 12)
+            if (!moved) return@LaunchedEffect
         }
     }
 
@@ -205,21 +207,25 @@ fun ResultsScreen(
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "다음 달")
                     }
                 }
-                LazyRow(
-                    state = dateListState,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
-                ) {
-                    items(monthDates, key = { it.toString() }) { date ->
-                        DateChip(
-                            date = date,
-                            selected = date == selectedDate,
-                            isToday = date == today,
-                            onClick = {
-                                dateNavDirection = if (date.isAfter(selectedDate)) 1 else -1
-                                onSelectDate(date)
-                            },
-                        )
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val chipWidth = 52.dp
+                    val sidePad = ((maxWidth - chipWidth) / 2).coerceAtLeast(2.dp)
+                    LazyRow(
+                        state = dateListState,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(horizontal = sidePad, vertical = 4.dp),
+                    ) {
+                        items(monthDates, key = { it.toString() }) { date ->
+                            DateChip(
+                                date = date,
+                                selected = date == selectedDate,
+                                isToday = date == today,
+                                onClick = {
+                                    dateNavDirection = if (date.isAfter(selectedDate)) 1 else -1
+                                    onSelectDate(date)
+                                },
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -297,23 +303,27 @@ fun ResultsScreen(
     }
 }
 
+/** @return true if scroll was requested (caller may retry), false if already centered or layout not ready */
 private suspend fun centerDateChip(
     state: androidx.compose.foundation.lazy.LazyListState,
     index: Int,
     animate: Boolean,
     thresholdPx: Int = 8,
-) {
+): Boolean {
     val layout = state.layoutInfo
     val viewport = layout.viewportEndOffset - layout.viewportStartOffset
-    if (viewport <= 0) return
-    val item = layout.visibleItemsInfo.firstOrNull { it.index == index } ?: return
-    val centered = item.offset - (viewport - item.size) / 2
-    if (abs(centered) <= thresholdPx) return
+    if (viewport <= 0) return true
+    val item = layout.visibleItemsInfo.firstOrNull { it.index == index } ?: return true
+    val delta = item.offset - (viewport - item.size) / 2
+    if (abs(delta) <= thresholdPx) return false
+    // scrollOffset: 아이템 leading edge가 viewport start에서 얼마나 떨어져야 하는지 (중앙 = 음수)
+    val targetOffset = -((viewport - item.size) / 2)
     if (animate) {
-        state.animateScrollToItem(index, scrollOffset = centered)
+        state.animateScrollToItem(index, scrollOffset = targetOffset)
     } else {
-        state.scrollToItem(index, scrollOffset = centered)
+        state.scrollToItem(index, scrollOffset = targetOffset)
     }
+    return true
 }
 
 @Composable
