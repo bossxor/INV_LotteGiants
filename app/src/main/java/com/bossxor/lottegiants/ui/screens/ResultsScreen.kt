@@ -50,7 +50,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import kotlin.math.abs
 import androidx.compose.ui.Alignment
@@ -101,8 +100,6 @@ fun ResultsScreen(
     val dateListState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var swipeLock by remember { mutableStateOf(false) }
-    val modeLatest by rememberUpdatedState(mode)
-    val calendarMonthLatest by rememberUpdatedState(calendarMonth)
     var dateNavDirection by remember { mutableIntStateOf(1) }
     var lastSyncedMonth by remember { mutableStateOf(listMonth) }
 
@@ -152,26 +149,7 @@ fun ResultsScreen(
             Modifier
                 .fillMaxSize()
                 .padding(horizontal = 14.dp)
-                .padding(top = 8.dp)
-                .pointerInput(Unit) {
-                    var total = 0f
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            when {
-                                total > 80f -> withSwipeLock {
-                                    if (modeLatest == 0) shiftDay(-1)
-                                    else onSelectMonth(calendarMonthLatest.minusMonths(1))
-                                }
-                                total < -80f -> withSwipeLock {
-                                    if (modeLatest == 0) shiftDay(1)
-                                    else onSelectMonth(calendarMonthLatest.plusMonths(1))
-                                }
-                            }
-                            total = 0f
-                        },
-                        onHorizontalDrag = { _, dragAmount -> total += dragAmount },
-                    )
-                },
+                .padding(top = 8.dp),
         ) {
             Row(
                 Modifier.fillMaxWidth(),
@@ -270,7 +248,19 @@ fun ResultsScreen(
                         )
                     }
                     else -> {
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val swipeModifier = Modifier.swipeChangeDay(
+                            enabled = !swipeLock,
+                            onSwipe = { delta ->
+                                withSwipeLock { shiftDay(delta) }
+                            },
+                        )
+                        LazyColumn(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .then(swipeModifier),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
                             if (lotteGames.size >= 2) {
                                 item {
                                     Text("더블헤더 · 롯데 ${lotteGames.size}경기", fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -297,6 +287,8 @@ fun ResultsScreen(
                     onSelectDate = onSelectDate,
                     onSelectMonth = onSelectMonth,
                     onRetry = onRefresh,
+                    onSwipeDay = { delta -> withSwipeLock { shiftDay(delta) } },
+                    swipeEnabled = !swipeLock,
                 )
             }
         }
@@ -416,6 +408,8 @@ private fun CalendarMonthView(
     onSelectDate: (LocalDate) -> Unit,
     onSelectMonth: (YearMonth) -> Unit,
     onRetry: () -> Unit,
+    onSwipeDay: (Long) -> Unit = {},
+    swipeEnabled: Boolean = true,
 ) {
     val byDate = remember(monthGames) {
         monthGames.groupBy { it.gameDate.takeIf { d -> d.isNotBlank() } ?: "" }
@@ -435,7 +429,8 @@ private fun CalendarMonthView(
     Column(
         Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
+            .verticalScroll(rememberScrollState())
+            .swipeChangeDay(enabled = swipeEnabled, onSwipe = onSwipeDay),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { onSelectMonth(month.minusMonths(1)) }) {
@@ -728,4 +723,28 @@ private fun koreanDow(d: DayOfWeek): String = when (d) {
     DayOfWeek.FRIDAY -> "금"
     DayOfWeek.SATURDAY -> "토"
     DayOfWeek.SUNDAY -> "일"
+}
+
+/** 경기 목록·캘린더 하단에서 좌우 스와이프로 날짜 이동 */
+private fun Modifier.swipeChangeDay(
+    enabled: Boolean,
+    onSwipe: (Long) -> Unit,
+): Modifier = if (!enabled) {
+    this
+} else {
+    then(
+        pointerInput(Unit) {
+            var total = 0f
+            detectHorizontalDragGestures(
+                onHorizontalDrag = { _, dragAmount -> total += dragAmount },
+                onDragEnd = {
+                    when {
+                        total > 80f -> onSwipe(-1)
+                        total < -80f -> onSwipe(1)
+                    }
+                    total = 0f
+                },
+            )
+        },
+    )
 }

@@ -77,7 +77,7 @@ class GiantsRepository private constructor(context: Context) {
         }
 
         val otherGames = if (kboToday.isNotEmpty()) {
-            kboToday.filter { !it.involvesLotte() }.map { it.toMiniGame() }
+            kboToMiniGames(today, kboToday.filter { !it.involvesLotte() })
         } else {
             val naverToday = runCatching {
                 api.getGames(fromDate = todayStr, toDate = todayStr)
@@ -88,7 +88,7 @@ class GiantsRepository private constructor(context: Context) {
                 .map { it.toMiniGame(kboCancelLabel = reasons[it.matchKey()]) }
         }
         val yesterdayGames = if (kboYesterday.isNotEmpty()) {
-            kboYesterday.map { it.toMiniGame() }
+            kboToMiniGames(today.minusDays(1), kboYesterday)
         } else {
             val yesterdayStr = today.minusDays(1).format(fmt)
             val naverYesterday = runCatching {
@@ -554,13 +554,14 @@ class GiantsRepository private constructor(context: Context) {
 
     suspend fun fetchGamesForDate(date: LocalDate): List<MiniGame> {
         fetchKboGames(date).takeIf { it.isNotEmpty() }?.let { kbo ->
-            return kbo.map { it.toMiniGame() }
+            return kboToMiniGames(date, kbo)
         }
         val day = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-        return api.getGames(fromDate = day, toDate = day)
+        val naver = api.getGames(fromDate = day, toDate = day)
             .result?.games.orEmpty()
             .filter { it.categoryId == "kbo" && it.gameDate == day }
-            .map { it.toMiniGame() }
+        val reasons = cancelReasonsFor(naver, date)
+        return naver.map { it.toMiniGame(kboCancelLabel = reasons[it.matchKey()]) }
     }
 
     suspend fun fetchGamesForMonth(month: YearMonth): List<MiniGame> {
@@ -568,7 +569,16 @@ class GiantsRepository private constructor(context: Context) {
         val kbo = coroutineScope {
             days.map { d -> async { fetchKboGames(d) } }.flatMap { it.await() }
         }
-        if (kbo.isNotEmpty()) return kbo.map { it.toMiniGame() }
+        if (kbo.isNotEmpty()) {
+            return coroutineScope {
+                kbo.groupBy { it.isoDate() }.map { (dayStr, dayGames) ->
+                    async {
+                        val date = runCatching { LocalDate.parse(dayStr) }.getOrDefault(month.atDay(1))
+                        kboToMiniGames(date, dayGames)
+                    }
+                }.flatMap { it.await() }
+            }
+        }
 
         val from = month.atDay(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
         val to = month.atEndOfMonth().format(DateTimeFormatter.ISO_LOCAL_DATE)
@@ -576,6 +586,31 @@ class GiantsRepository private constructor(context: Context) {
             .result?.games.orEmpty()
             .filter { it.categoryId == "kbo" }
             .map { it.toMiniGame() }
+    }
+
+    private suspend fun kboToMiniGames(date: LocalDate, games: List<KboOfficialGame>): List<MiniGame> {
+        val reasons = if (games.any { it.status() == GameStatus.CANCELED }) {
+            val day = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+            val naver = runCatching {
+                api.getGames(fromDate = day, toDate = day)
+                    .result?.games.orEmpty()
+                    .filter { it.categoryId == "kbo" }
+            }.getOrDefault(emptyList())
+            cancelReasonsFor(naver, date)
+        } else {
+            emptyMap()
+        }
+        return games.map { g ->
+            val mini = g.toMiniGame()
+            if (mini.status != GameStatus.CANCELED) return@map mini
+            val reason = g.cancelReasonLabel()
+                ?: reasons[g.matchKey()]?.let { normalizeCancelReason(it) }
+            if (!reason.isNullOrBlank()) {
+                mini.copy(statusText = cancelDisplayLabel(reason))
+            } else {
+                mini
+            }
+        }
     }
 
     suspend fun fetchStandings(): List<TeamStanding> {

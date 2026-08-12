@@ -161,10 +161,26 @@ data class KboOfficialGame(
     /** 취소·순연 등 정상경기가 아닌 경우의 사유 라벨 */
     fun cancelReasonLabel(): String? {
         val name = cancelScNm.trim()
-        if (name.isBlank() || name == "정상경기") return null
-        if (cancelScId != 0 || gameState == 4) return name
+        if (name.isNotBlank() && name != "정상경기") {
+            val normalized = normalizeCancelReason(name)
+            if (normalized.isNotBlank()) return normalized
+            val stripped = name
+                .replace("경기", "")
+                .replace("취소", "")
+                .replace("순연", "")
+                .trim()
+            if (stripped.isNotBlank()) return stripped.take(12)
+            if (!name.equals("경기취소", ignoreCase = true) &&
+                !name.equals("취소", ignoreCase = true)
+            ) {
+                return name.take(12)
+            }
+        }
+        if (gameState == 4 || cancelScId >= 1) return null
         return null
     }
+
+    fun cancelStatusText(): String = cancelDisplayLabel(cancelReasonLabel())
 
     /** 네이버 스포츠 gameId는 KBO G_ID 뒤에 시즌을 붙인 형태다. */
     fun naverGameId(): String = "$gameId$seasonId"
@@ -183,7 +199,7 @@ data class KboOfficialGame(
             "진행 중"
         }
         GameStatus.ENDED -> "종료"
-        GameStatus.CANCELED -> cancelDisplayLabel(normalizeCancelReason(cancelReasonLabel()))
+        GameStatus.CANCELED -> cancelStatusText()
     }
 
     private fun score(raw: String): Int = raw.trim().toIntOrNull() ?: 0
