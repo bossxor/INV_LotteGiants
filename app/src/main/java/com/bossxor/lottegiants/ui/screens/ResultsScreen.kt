@@ -11,7 +11,9 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -28,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -51,6 +54,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import kotlin.math.abs
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +69,7 @@ import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.cancelLabel
+import com.bossxor.lottegiants.domain.cancelShortLabel
 import com.bossxor.lottegiants.domain.isCanceledGame
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
@@ -78,6 +83,7 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -104,28 +110,17 @@ fun ResultsScreen(
     var swipeLock by remember { mutableStateOf(false) }
     var dateNavDirection by remember { mutableIntStateOf(1) }
     var lastSyncedMonth by remember { mutableStateOf(listMonth) }
+    var firstDateSync by remember { mutableStateOf(true) }
 
-    LaunchedEffect(selectedDate, mode, listMonth) {
+    LaunchedEffect(selectedDate, mode, monthDates) {
         if (mode != 0 || monthDates.isEmpty()) return@LaunchedEffect
         val index = (selectedDate.dayOfMonth - 1).coerceIn(0, monthDates.lastIndex)
         val monthNow = YearMonth.from(selectedDate)
-        val monthChanged = monthNow != lastSyncedMonth
+        // 첫 진입·월 이동은 애니메이션 없이 바로 중앙에 놓는다.
+        val instant = firstDateSync || monthNow != lastSyncedMonth
         lastSyncedMonth = monthNow
-        // LazyRow 레이아웃이 잡힐 때까지 잠깐 대기 후, 선택일을 상단 중앙에 맞춤
-        repeat(6) { attempt ->
-            delay(if (attempt == 0) 32L else 48L)
-            val viewport = dateListState.layoutInfo.viewportEndOffset -
-                dateListState.layoutInfo.viewportStartOffset
-            if (viewport <= 0) return@repeat
-            val animate = !monthChanged && attempt > 0
-            if (dateListState.layoutInfo.visibleItemsInfo.none { it.index == index }) {
-                if (animate) dateListState.animateScrollToItem(index)
-                else dateListState.scrollToItem(index)
-                return@repeat
-            }
-            val moved = centerDateChip(dateListState, index, animate = animate, thresholdPx = 12)
-            if (!moved) return@LaunchedEffect
-        }
+        firstDateSync = false
+        dateListState.centerItem(index, animate = !instant)
     }
 
     fun shiftDay(delta: Long) {
@@ -303,27 +298,27 @@ fun ResultsScreen(
     }
 }
 
-/** @return true if scroll was requested (caller may retry), false if already centered or layout not ready */
-private suspend fun centerDateChip(
-    state: androidx.compose.foundation.lazy.LazyListState,
-    index: Int,
-    animate: Boolean,
-    thresholdPx: Int = 8,
-): Boolean {
-    val layout = state.layoutInfo
-    val viewport = layout.viewportEndOffset - layout.viewportStartOffset
-    if (viewport <= 0) return true
-    val item = layout.visibleItemsInfo.firstOrNull { it.index == index } ?: return true
-    val delta = item.offset - (viewport - item.size) / 2
-    if (abs(delta) <= thresholdPx) return false
-    // scrollOffset: 아이템 leading edge가 viewport start에서 얼마나 떨어져야 하는지 (중앙 = 음수)
-    val targetOffset = -((viewport - item.size) / 2)
-    if (animate) {
-        state.animateScrollToItem(index, scrollOffset = targetOffset)
-    } else {
-        state.scrollToItem(index, scrollOffset = targetOffset)
+/**
+ * 해당 인덱스의 아이템을 가로 리스트의 정중앙에 놓는다.
+ * 첫 프레임에는 viewport 크기가 0이라 중앙 계산이 불가능하므로 레이아웃이 잡힐 때까지 기다린다.
+ */
+private suspend fun LazyListState.centerItem(index: Int, animate: Boolean) {
+    val ready = snapshotFlow { layoutInfo }
+        .first { it.viewportEndOffset - it.viewportStartOffset > 0 }
+    if (ready.visibleItemsInfo.none { it.index == index }) {
+        scrollToItem(index)
+        snapshotFlow { layoutInfo }
+            .first { info -> info.visibleItemsInfo.any { it.index == index } }
     }
-    return true
+    // 스크롤 후 아이템 크기가 확정되므로 남은 오차를 몇 번 더 보정한다.
+    repeat(3) {
+        val info = layoutInfo
+        val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return
+        val viewportCenter = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+        val delta = item.offset + item.size / 2f - viewportCenter
+        if (abs(delta) < 1f) return
+        if (animate) animateScrollBy(delta) else scrollBy(delta)
+    }
 }
 
 @Composable
@@ -546,7 +541,7 @@ private fun RowScope.CalendarDayCell(
             val lotteLost = lotte?.lotteResult() == false
             val draw = ended && lotte != null && lotte.homeScore == lotte.awayScore
             val cellLabel = when {
-                canceled -> lotte.cancelLabel
+                canceled -> lotte.cancelShortLabel
                 ended && lotteWon -> "승"
                 ended && lotteLost -> "패"
                 ended && draw -> "무"
@@ -711,14 +706,6 @@ private fun ResultGameCard(g: MiniGame) {
                         won == false -> LoseRed
                         else -> MaterialTheme.colorScheme.onSurface
                     },
-                )
-            } else if (canceled) {
-                Text(
-                    g.cancelLabel,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.End,
                 )
             }
         }

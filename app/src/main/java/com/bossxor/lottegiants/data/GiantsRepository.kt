@@ -422,8 +422,8 @@ class GiantsRepository private constructor(context: Context) {
         var l = 0
         matchups.forEach { m ->
             val lotteHome = m.homeId.equals(LOTTE_TEAM_CODE, true)
-            val ls = if (lotteHome) m.homeScore.toIntOrNull() ?: 0 else m.awayScore.toIntOrNull() ?: 0
-            val os = if (lotteHome) m.awayScore.toIntOrNull() ?: 0 else m.homeScore.toIntOrNull() ?: 0
+            val ls = if (lotteHome) m.homeScore else m.awayScore
+            val os = if (lotteHome) m.awayScore else m.homeScore
             when {
                 ls > os -> w++
                 ls < os -> l++

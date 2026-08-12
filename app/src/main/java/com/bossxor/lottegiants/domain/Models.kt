@@ -590,16 +590,26 @@ fun cancelDisplayLabel(reason: String?): String {
 val LotteGameInfo.cancelLabel: String
     get() = cancelDisplayLabel(cancelReason.ifBlank { null })
 
-/** 결과·일정 목록용 취소 표시 */
+/** 취소 사유만 (폭염, 우천… 알 수 없으면 빈 문자열) */
+val MiniGame.cancelReasonText: String
+    get() {
+        if (cancelReason.isNotBlank()) return cancelReason
+        Regex("""(?:경기\s*)?취소\s*\(([^)]+)\)""").find(statusText)?.groupValues?.get(1)?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { return it }
+        return resolveCancelReason(statusText).orEmpty()
+    }
+
+/** 결과·일정 목록용 취소 표시 ("취소(폭염)") */
 val MiniGame.cancelLabel: String
     get() {
         if (!isCanceledGame()) return statusText
-        if (cancelReason.isNotBlank()) return cancelDisplayLabel(cancelReason)
-        Regex("""(?:경기\s*)?취소\s*\(([^)]+)\)""").find(statusText)?.groupValues?.get(1)?.trim()
-            ?.takeIf { it.isNotBlank() }
-            ?.let { return cancelDisplayLabel(it) }
-        return cancelDisplayLabel(resolveCancelReason(statusText))
+        return cancelDisplayLabel(cancelReasonText.ifBlank { null })
     }
+
+/** 캘린더 셀처럼 폭이 좁은 곳용: 사유만, 사유를 모르면 "취소" */
+val MiniGame.cancelShortLabel: String
+    get() = cancelReasonText.ifBlank { "취소" }
 
 /** KBO·네이버 취소 경기 판별 (status 누락·폴백 데이터 보강) */
 fun MiniGame.isCanceledGame(): Boolean {
