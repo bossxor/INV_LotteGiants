@@ -128,7 +128,35 @@ class MainActivity : ComponentActivity() {
                 val favoritePlayers by vm.favoritePlayers.collectAsState()
                 val scope = rememberCoroutineScope()
                 var updateStatus by remember { mutableStateOf<String?>(null) }
-                var updateChecked by remember { mutableStateOf(false) }
+                var autoUpdateRan by remember { mutableStateOf(false) }
+                var pendingNeedsResume by remember { mutableStateOf(false) }
+
+                fun handleInstallResult(result: InstallResult) {
+                    when (result) {
+                        is InstallResult.Launched -> {
+                            pendingNeedsResume = false
+                            updateStatus = "설치 화면에서 「설치」를 눌러주세요."
+                        }
+                        is InstallResult.NeedsPermission -> {
+                            pendingNeedsResume = true
+                            updateStatus = null
+                            Toast.makeText(
+                                this@MainActivity,
+                                "「출처를 알 수 없는 앱 설치」를 허용한 뒤 앱으로 돌아오면 이어서 설치합니다.",
+                                Toast.LENGTH_LONG,
+                            ).show()
+                        }
+                        is InstallResult.DownloadFailed -> {
+                            pendingNeedsResume = false
+                            updateStatus = null
+                            Toast.makeText(
+                                this@MainActivity,
+                                result.message,
+                                Toast.LENGTH_LONG,
+                            ).show()
+                        }
+                    }
+                }
 
                 DisposableEffect(Unit) {
                     val observer = LifecycleEventObserver { _, event ->
@@ -138,39 +166,14 @@ class MainActivity : ComponentActivity() {
                                 if (snapshot?.lotteGame?.status == GameStatus.LIVE) {
                                     LiveScoreService.start(this@MainActivity)
                                 }
-                                scope.launch {
-                                    val store = GiantsRepository.get(this@MainActivity).store
-                                    val pendingPath = withContext(Dispatchers.IO) {
-                                        store.pendingUpdateApkPath()
-                                    }
-                                    if (pendingPath.isNotBlank() &&
-                                        UpdateChecker.canInstallPackages(this@MainActivity)
-                                    ) {
-                                        updateStatus = "업데이트를 이어서 설치합니다…"
+                                if (!autoUpdateRan) {
+                                    autoUpdateRan = true
+                                    scope.launch {
+                                        val store = GiantsRepository.get(this@MainActivity).store
+                                        updateStatus = "업데이트 확인 중…"
                                         val result = withContext(Dispatchers.IO) {
-                                            UpdateChecker.resumePendingInstall(
+                                            UpdateChecker.runAutoUpdate(
                                                 this@MainActivity,
-                                                store,
-                                            )
-                                        }
-                                        updateStatus = null
-                                        if (result is InstallResult.Launched) {
-                                            return@launch
-                                        }
-                                    }
-                                    if (!updateChecked) {
-                                        updateChecked = true
-                                        val result = withContext(Dispatchers.IO) {
-                                            UpdateChecker.check(BuildConfig.VERSION_CODE)
-                                        }
-                                        if (result !is UpdateCheckResult.Available) return@launch
-                                        val info = result.info
-                                        updateStatus =
-                                            "새 버전 ${info.tagName.ifBlank { info.versionCode.toString() }} 다운로드 중…"
-                                        val install = withContext(Dispatchers.IO) {
-                                            UpdateChecker.downloadAndInstall(
-                                                this@MainActivity,
-                                                info,
                                                 store,
                                             ) { downloaded, total ->
                                                 if (total > 0L) {
@@ -179,27 +182,46 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             }
                                         }
-                                        when (install) {
-                                            is InstallResult.Launched ->
-                                                updateStatus = "설치 화면으로 이동합니다…"
-                                            is InstallResult.NeedsPermission -> {
-                                                updateStatus = null
-                                                Toast.makeText(
-                                                    this@MainActivity,
-                                                    "설치 권한을 허용하면 자동으로 설치가 진행됩니다.",
-                                                    Toast.LENGTH_LONG,
-                                                ).show()
-                                            }
-                                            is InstallResult.DownloadFailed -> {
-                                                updateStatus = null
-                                                Toast.makeText(
-                                                    this@MainActivity,
-                                                    install.message,
-                                                    Toast.LENGTH_LONG,
-                                                ).show()
-                                            }
+                                        if (result == null) {
+                                            updateStatus = null
+                                            return@launch
                                         }
+                                        handleInstallResult(result)
                                     }
+                                }
+                            }
+                            Lifecycle.Event.ON_RESUME -> {
+                                if (!pendingNeedsResume) return@LifecycleEventObserver
+                                scope.launch {
+                                    val store = GiantsRepository.get(this@MainActivity).store
+                                    withContext(Dispatchers.IO) {
+                                        UpdateChecker.syncPendingUpdateState(
+                                            this@MainActivity,
+                                            store,
+                                        )
+                                    }
+                                    val pendingPath = withContext(Dispatchers.IO) {
+                                        store.pendingUpdateApkPath()
+                                    }
+                                    val pendingCode = withContext(Dispatchers.IO) {
+                                        store.pendingUpdateVersionCode()
+                                    }
+                                    if (pendingPath.isBlank() ||
+                                        pendingCode <= BuildConfig.VERSION_CODE ||
+                                        !UpdateChecker.canInstallPackages(this@MainActivity)
+                                    ) {
+                                        pendingNeedsResume = false
+                                        return@launch
+                                    }
+                                    pendingNeedsResume = false
+                                    updateStatus = "업데이트를 이어서 설치합니다…"
+                                    val result = withContext(Dispatchers.IO) {
+                                        UpdateChecker.resumePendingInstall(
+                                            this@MainActivity,
+                                            store,
+                                        )
+                                    }
+                                    handleInstallResult(result)
                                 }
                             }
                             Lifecycle.Event.ON_STOP -> vm.stopPolling()

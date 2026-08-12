@@ -2,6 +2,7 @@ package com.bossxor.lottegiants.data
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -92,14 +93,21 @@ object UpdateChecker {
         return b.build()
     }
 
+    private fun needsAuth(url: String): Boolean =
+        url.contains("api.github.com", ignoreCase = true)
+
     private fun downloadRequest(url: String): Request {
         val b = Request.Builder()
             .url(url)
-            .header("Accept", "application/octet-stream")
             .header("User-Agent", "sajik-score-android/${BuildConfig.VERSION_NAME}")
-        val token = BuildConfig.GITHUB_TOKEN.trim()
-        if (token.isNotEmpty()) {
-            b.header("Authorization", "Bearer $token")
+        if (needsAuth(url)) {
+            b.header("Accept", "application/vnd.github+json")
+            val token = BuildConfig.GITHUB_TOKEN.trim()
+            if (token.isNotEmpty()) {
+                b.header("Authorization", "Bearer $token")
+            }
+        } else {
+            b.header("Accept", "application/octet-stream")
         }
         return b.build()
     }
@@ -270,6 +278,89 @@ object UpdateChecker {
         return if (m.find()) m.group(1)?.toIntOrNull() ?: 0 else 0
     }
 
+    /** 설치 완료·APK 손상 시 pending 상태 정리 */
+    suspend fun syncPendingUpdateState(context: Context, store: SnapshotStore) {
+        val pendingCode = store.pendingUpdateVersionCode()
+        if (pendingCode > 0 && BuildConfig.VERSION_CODE >= pendingCode) {
+            store.clearPendingUpdate()
+            updateFile(context).delete()
+            return
+        }
+        val path = store.pendingUpdateApkPath()
+        if (path.isBlank()) return
+        val file = File(path)
+        if (!file.exists() || file.length() < 1024L) {
+            store.clearPendingUpdate()
+        }
+    }
+
+    /**
+     * 자동 업데이트: pending APK가 있으면 재설치 시도, 없으면 latest 확인 후 다운로드.
+     */
+    suspend fun runAutoUpdate(
+        context: Context,
+        store: SnapshotStore,
+        onProgress: ((downloaded: Long, total: Long) -> Unit)? = null,
+    ): InstallResult? = withContext(Dispatchers.IO) {
+        syncPendingUpdateState(context, store)
+        val pendingPath = store.pendingUpdateApkPath()
+        val pendingCode = store.pendingUpdateVersionCode()
+        if (pendingPath.isNotBlank() &&
+            pendingCode > BuildConfig.VERSION_CODE &&
+            File(pendingPath).exists()
+        ) {
+            Log.i(TAG, "resume pending update code=$pendingCode")
+            return@withContext resumePendingInstall(context, store)
+        }
+        when (val check = check(BuildConfig.VERSION_CODE)) {
+            is UpdateCheckResult.Available -> downloadAndInstall(context, check.info, store, onProgress)
+            else -> null
+        }
+    }
+
+    private fun signingMismatchMessage(): String =
+        "업데이트 APK 서명이 설치된 앱과 달라 덮어쓸 수 없습니다. 앱을 삭제한 뒤 다시 설치하세요."
+
+    private fun canInstallOver(context: Context, apk: File): Boolean {
+        if (!apk.exists() || apk.length() < 1024L) return false
+        val pm = context.packageManager
+        val archiveFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION")
+            PackageManager.GET_SIGNATURES
+        }
+        val archive = pm.getPackageArchiveInfo(apk.absolutePath, archiveFlags) ?: return false
+        archive.applicationInfo?.let { appInfo ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                appInfo.sourceDir = apk.absolutePath
+                appInfo.publicSourceDir = apk.absolutePath
+            } else {
+                @Suppress("DEPRECATION")
+                appInfo.sourceDir = apk.absolutePath
+                @Suppress("DEPRECATION")
+                appInfo.publicSourceDir = apk.absolutePath
+            }
+        }
+        val installed = runCatching {
+            pm.getPackageInfo(context.packageName, archiveFlags)
+        }.getOrNull() ?: return true
+        val installedSigs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            installed.signingInfo?.apkContentsSigners?.map { it.toCharsString() }.orEmpty()
+        } else {
+            @Suppress("DEPRECATION")
+            installed.signatures?.map { it.toCharsString() }.orEmpty()
+        }
+        val archiveSigs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            archive.signingInfo?.apkContentsSigners?.map { it.toCharsString() }.orEmpty()
+        } else {
+            @Suppress("DEPRECATION")
+            archive.signatures?.map { it.toCharsString() }.orEmpty()
+        }
+        if (installedSigs.isEmpty() || archiveSigs.isEmpty()) return true
+        return installedSigs.any { it in archiveSigs }
+    }
+
     fun canInstallPackages(context: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
             context.packageManager.canRequestPackageInstalls()
@@ -301,6 +392,11 @@ object UpdateChecker {
             val out = downloadApk(context, info.apkUrl, onProgress)
                 ?: return@withContext InstallResult.DownloadFailed("APK 다운로드에 실패했습니다.")
             store?.setPendingUpdate(out.absolutePath, info.versionCode)
+            if (!canInstallOver(context, out)) {
+                store?.clearPendingUpdate()
+                out.delete()
+                return@withContext InstallResult.DownloadFailed(signingMismatchMessage())
+            }
             if (!canInstallPackages(context)) {
                 withContext(Dispatchers.Main) {
                     openInstallPermissionSettings(context)
@@ -308,7 +404,6 @@ object UpdateChecker {
                 return@withContext InstallResult.NeedsPermission
             }
             launchInstall(context, out)
-            store?.clearPendingUpdate()
             InstallResult.Launched
         } catch (e: Exception) {
             Log.e(TAG, "downloadAndInstall failed", e)
@@ -330,6 +425,11 @@ object UpdateChecker {
             store.clearPendingUpdate()
             return@withContext InstallResult.DownloadFailed("다운로드된 APK를 찾을 수 없습니다.")
         }
+        if (!canInstallOver(context, file)) {
+            store.clearPendingUpdate()
+            file.delete()
+            return@withContext InstallResult.DownloadFailed(signingMismatchMessage())
+        }
         if (!canInstallPackages(context)) {
             withContext(Dispatchers.Main) {
                 openInstallPermissionSettings(context)
@@ -337,7 +437,6 @@ object UpdateChecker {
             return@withContext InstallResult.NeedsPermission
         }
         launchInstall(context, file)
-        store.clearPendingUpdate()
         InstallResult.Launched
     }
 
@@ -395,6 +494,30 @@ object UpdateChecker {
                 setDataAndType(uri, "application/vnd.android.package-archive")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val pm = context.packageManager
+            val handlers = pm.queryIntentActivities(
+                intent,
+                PackageManager.MATCH_DEFAULT_ONLY,
+            )
+            if (handlers.isEmpty()) {
+                throw IllegalStateException("설치 화면을 열 수 없습니다.")
+            }
+            for (resolve in handlers) {
+                context.grantUriPermission(
+                    resolve.activityInfo.packageName,
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            val preferred = handlers.firstOrNull { resolve ->
+                val pkg = resolve.activityInfo.packageName
+                pkg.contains("packageinstaller", ignoreCase = true) ||
+                    pkg == "com.google.android.packageinstaller" ||
+                    pkg == "com.samsung.android.packageinstaller"
+            }?.activityInfo?.packageName
+            if (preferred != null) {
+                intent.setPackage(preferred)
             }
             context.startActivity(intent)
         }
