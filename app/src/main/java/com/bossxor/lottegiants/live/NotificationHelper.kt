@@ -90,13 +90,15 @@ object NotificationHelper {
         val chipText = if (game == null) {
             "대기"
         } else {
-            buildString {
-                append("롯데 ${game.lotteScore}:${game.opponentScore}")
-                append(" · ${game.inningLabel}")
-                if (game.status == GameStatus.LIVE) {
-                    append(" · B${game.ball}S${game.strike}O${game.out}")
-                }
-            }
+            "롯데 ${game.lotteScore}:${game.opponentScore} · ${game.inningLabel}"
+        }
+        val headerLine = if (game != null && game.status == GameStatus.LIVE) {
+            game.inningLabel
+        } else {
+            compactLine
+        }
+        val countBmp = game?.takeIf { it.status == GameStatus.LIVE }?.let {
+            WidgetAssets.ballCountBitmap(context, it.ball, it.strike, it.out)
         }
 
         val (title, text) = when (mode) {
@@ -105,7 +107,7 @@ object NotificationHelper {
                 else "롯데 ${game.lotteScore}:${game.opponentScore}"
                 shortTitle to (game?.inningLabel ?: "")
             }
-            LiveDisplayMode.FULL, LiveDisplayMode.LOCK_NOW -> scoreTitle to compactLine
+            LiveDisplayMode.FULL, LiveDisplayMode.LOCK_NOW -> scoreTitle to headerLine
         }
 
         val builder = NotificationCompat.Builder(context, CHANNEL_LIVE)
@@ -129,6 +131,9 @@ object NotificationHelper {
         val useCustom = mode == LiveDisplayMode.FULL &&
             game != null &&
             game.status == GameStatus.LIVE
+        if (countBmp != null && !useCustom) {
+            builder.setLargeIcon(countBmp)
+        }
         when {
             useCustom -> builder
                 .setCustomContentView(buildLiveRemoteViews(context, game!!, big = false))
@@ -137,7 +142,7 @@ object NotificationHelper {
 
             // 진행 중 경기는 이닝 진행 바로 — Now Bar에서 구글/네이버 스포츠처럼 크게 뜬다
             game != null && game.status == GameStatus.LIVE && mode != LiveDisplayMode.STATUS_SCORE ->
-                builder.setStyle(liveProgressStyle(context, game))
+                builder.setStyle(liveProgressStyle(context, game, countBmp))
 
             mode != LiveDisplayMode.STATUS_SCORE -> builder.setStyle(
                 NotificationCompat.BigTextStyle()
@@ -160,6 +165,7 @@ object NotificationHelper {
     private fun liveProgressStyle(
         context: Context,
         game: LotteGameInfo,
+        countBmp: Bitmap? = null,
     ): NotificationCompat.ProgressStyle {
         val innings = maxOf(REGULATION_INNINGS, game.inning)
         val total = innings * 2
@@ -173,7 +179,7 @@ object NotificationHelper {
                 if (pos > total) null else NotificationCompat.ProgressStyle.Point(pos).setColor(color)
             }
 
-        return NotificationCompat.ProgressStyle()
+        val style = NotificationCompat.ProgressStyle()
             .setProgressSegments(
                 List(innings) { NotificationCompat.ProgressStyle.Segment(2).setColor(COLOR_TRACK) },
             )
@@ -184,6 +190,10 @@ object NotificationHelper {
             .setProgress(current)
             .setStyledByProgress(false)
             .setProgressTrackerIcon(IconCompat.createWithResource(context, R.drawable.ic_notification))
+        if (countBmp != null) {
+            style.setProgressStartIcon(IconCompat.createWithBitmap(countBmp))
+        }
+        return style
     }
 
     /** 알림 접힘 상태용 한 줄 */
@@ -194,7 +204,6 @@ object NotificationHelper {
         }
         return buildString {
             append(game.inningLabel)
-            append("  B${game.ball}-S${game.strike}-O${game.out}")
             append("  ${basesLabel(game)}")
             if (game.currentPitcherName.isNotBlank()) {
                 append("  투 ${game.currentPitcherName}")
@@ -224,7 +233,6 @@ object NotificationHelper {
         return buildString {
             append(game.inningLabel)
             if (game.isLotteBatting) append("  ·  롯데 공격") else append("  ·  상대 공격")
-            append("\n볼카운트  B${game.ball}  S${game.strike}  O${game.out}")
             append("\n루상  ${basesLabel(game)}")
             append("\n투수  ${game.currentPitcherName.ifBlank { "-" }}")
             if (game.currentPitcherPitchCount > 0) append(" (${game.currentPitcherPitchCount}구)")
@@ -269,10 +277,7 @@ object NotificationHelper {
                 if (game.isLotteBatting) append(" · 롯데 공격") else append(" · 상대 공격")
             },
         )
-        rv.setTextViewText(
-            R.id.notif_count_text,
-            "B${game.ball}  S${game.strike}  O${game.out}  ·  ${basesLabel(game)}",
-        )
+        rv.setTextViewText(R.id.notif_count_text, basesLabel(game))
         val batterLabel = buildString {
             if (game.currentBatterOrder > 0) append("${game.currentBatterOrder}번 ")
             append(game.currentBatterName.ifBlank { "-" })

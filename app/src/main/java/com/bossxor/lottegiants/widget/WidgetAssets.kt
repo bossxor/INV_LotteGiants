@@ -3,6 +3,9 @@ package com.bossxor.lottegiants.widget
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Typeface
 import androidx.annotation.DrawableRes
 import androidx.glance.ImageProvider
 import com.bossxor.lottegiants.R
@@ -35,6 +38,55 @@ object WidgetAssets {
         kind == 'B' -> R.drawable.ic_dot_ball
         kind == 'S' -> R.drawable.ic_dot_strike
         else -> R.drawable.ic_dot_out
+    }
+
+    /** 알림 largeIcon / Now Bar용 B·S·O 점 이미지. 원형 크롭에도 안쪽이 보이게 그린다. */
+    fun ballCountBitmap(context: Context, ball: Int, strike: Int, out: Int): Bitmap {
+        val d = context.resources.displayMetrics.density
+        val size = (72f * d).toInt().coerceAtLeast(144)
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val cx = size / 2f
+        val cy = size / 2f
+
+        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xF21A1C1E.toInt() }
+        canvas.drawCircle(cx, cy, size / 2f, bg)
+
+        val letter = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = Typeface.DEFAULT_BOLD
+            textSize = size * 0.12f
+            textAlign = Paint.Align.LEFT
+        }
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+        val emptyFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x33FFFFFF }
+        val emptyStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = size * 0.012f
+            color = 0x66FFFFFF
+        }
+
+        fun row(y: Float, label: String, color: Int, filled: Int, total: Int) {
+            letter.color = color
+            canvas.drawText(label, size * 0.18f, y + letter.textSize * 0.35f, letter)
+            val r = size * 0.055f
+            val startX = size * 0.40f
+            val gap = size * 0.125f
+            fill.color = color
+            repeat(total) { i ->
+                val x = startX + i * gap
+                if (i < filled) {
+                    canvas.drawCircle(x, y, r, fill)
+                } else {
+                    canvas.drawCircle(x, y, r, emptyFill)
+                    canvas.drawCircle(x, y, r, emptyStroke)
+                }
+            }
+        }
+
+        row(size * 0.30f, "B", 0xFF2EA35C.toInt(), ball.coerceIn(0, 4), 4)
+        row(size * 0.50f, "S", 0xFFC9A227.toInt(), strike.coerceIn(0, 3), 3)
+        row(size * 0.70f, "O", 0xFFC8102E.toInt(), out.coerceIn(0, 3), 3)
+        return bmp
     }
 
     suspend fun logoProvider(context: Context, teamCode: String, url: String): ImageProvider {
