@@ -240,9 +240,15 @@ object NotificationHelper {
 
     private fun basesLabel(game: LotteGameInfo): String {
         val parts = buildList {
-            if (game.onBase1) add("1루")
-            if (game.onBase2) add("2루")
-            if (game.onBase3) add("3루")
+            if (game.onBase1) {
+                add(if (game.runnerOn1Order > 0) "1루(${game.runnerOn1Order}번)" else "1루")
+            }
+            if (game.onBase2) {
+                add(if (game.runnerOn2Order > 0) "2루(${game.runnerOn2Order}번)" else "2루")
+            }
+            if (game.onBase3) {
+                add(if (game.runnerOn3Order > 0) "3루(${game.runnerOn3Order}번)" else "3루")
+            }
         }
         return if (parts.isEmpty()) "주자 없음" else parts.joinToString("·")
     }

@@ -8,6 +8,29 @@ const val LOTTE_TEAM_CODE = "LT"
 fun teamLogoUrl(teamCode: String): String =
     "https://sports-phinf.pstatic.net/team/kbo/default/$teamCode.png"
 
+/** KBO 공식 엠블럼 CDN (regular 시즌) */
+fun kboTeamEmblemUrl(teamCode: String, season: Int = java.time.LocalDate.now().year): String {
+    val code = teamCode.trim().uppercase()
+    if (code.isBlank()) return ""
+    return "https://6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/emblem/regular/$season/emblem_$code.png"
+}
+
+/** KBO API `//` 프로토콜 상대 URL → https */
+fun normalizeKboImageUrl(url: String): String = when {
+    url.startsWith("//") -> "https:$url"
+    url.isNotBlank() -> url
+    else -> ""
+}
+
+/** KBO 엠블럼 우선, 없으면 네이버 폴백 */
+fun resolveTeamLogoUrl(
+    teamCode: String,
+    kboUrl: String = "",
+    season: Int = java.time.LocalDate.now().year,
+): String = normalizeKboImageUrl(kboUrl)
+    .ifBlank { kboTeamEmblemUrl(teamCode, season) }
+    .ifBlank { teamLogoUrl(teamCode) }
+
 val LOTTE_LOGO_URL = teamLogoUrl(LOTTE_TEAM_CODE)
 
 @Serializable
@@ -35,6 +58,12 @@ data class MiniGame(
     val gameDate: String = "",
     val homeTeamCode: String = "",
     val awayTeamCode: String = "",
+    val homeRank: Int = 0,
+    val awayRank: Int = 0,
+    /** 0=없음, 1·2=더블헤더 차전 */
+    val doubleHeaderNo: Int = 0,
+    val seasonSeriesNo: Int = 0,
+    val lineupAnnounced: Boolean = false,
 )
 
 @Serializable
@@ -252,6 +281,19 @@ data class LotteGameInfo(
     val opponentCode: String,
     val opponentName: String,
     val opponentLogoUrl: String = "",
+    val lotteLogoUrl: String = "",
+    val lotteRank: Int = 0,
+    val opponentRank: Int = 0,
+    val doubleHeaderNo: Int = 0,
+    val seasonSeriesNo: Int = 0,
+    val lineupAnnounced: Boolean = false,
+    val runnerOn1Order: Int = 0,
+    val runnerOn2Order: Int = 0,
+    val runnerOn3Order: Int = 0,
+    val crowdCount: String = "",
+    val gameDuration: String = "",
+    /** 포스트시즌·특수경기 라벨 (GAME_SC_NM) */
+    val gameScLabel: String = "",
     val lotteScore: Int = 0,
     val opponentScore: Int = 0,
     val status: GameStatus = GameStatus.BEFORE,

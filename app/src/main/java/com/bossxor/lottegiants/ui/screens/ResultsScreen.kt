@@ -622,6 +622,20 @@ private fun ResultGameCard(g: MiniGame) {
                             if (lotteHome) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    if (g.doubleHeaderNo > 0) {
+                        StatusPill("DH${g.doubleHeaderNo}", LotteGold)
+                    }
+                    val lotteRank = if (g.homeTeamCode == com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE) {
+                        g.homeRank
+                    } else {
+                        g.awayRank
+                    }
+                    if (lotteRank > 0) {
+                        StatusPill("${lotteRank}위", MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (g.lineupAnnounced && g.status == GameStatus.BEFORE) {
+                        StatusPill("라인업", WinGreen)
+                    }
                     when (g.status) {
                         GameStatus.LIVE -> StatusPill("LIVE", LotteRed)
                         GameStatus.ENDED -> {

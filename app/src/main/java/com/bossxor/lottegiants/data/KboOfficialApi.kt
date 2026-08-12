@@ -6,14 +6,17 @@ import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.cancelDisplayLabel
 import com.bossxor.lottegiants.domain.normalizeCancelReason
-import com.bossxor.lottegiants.domain.teamLogoUrl
+import com.bossxor.lottegiants.domain.resolveTeamLogoUrl
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import retrofit2.http.Field
+import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Query
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -32,6 +35,30 @@ interface KboOfficialApi {
         @Query("srId") srId: String = "0,1,3,4,5,6,7,8,9",
         @Query("date") date: String,
     ): KboGameListResponse
+
+    @GET("ws/Main.asmx/GetTeamRank")
+    suspend fun getTeamRank(
+        @Query("leId") leId: Int = 1,
+        @Query("srId") srId: Int = 0,
+    ): KboGridTableResponse
+
+    @FormUrlEncoded
+    @POST("ws/Schedule.asmx/GetScoreBoardScroll")
+    suspend fun getScoreBoardScroll(
+        @Field("leId") leId: Int = 1,
+        @Field("srId") srId: Int = 0,
+        @Field("seasonId") seasonId: Int,
+        @Field("gameId") gameId: String,
+    ): KboScoreBoardResponse
+
+    @FormUrlEncoded
+    @POST("ws/Schedule.asmx/GetBoxScoreScroll")
+    suspend fun getBoxScoreScroll(
+        @Field("leId") leId: Int = 1,
+        @Field("srId") srId: Int = 0,
+        @Field("seasonId") seasonId: Int,
+        @Field("gameId") gameId: String,
+    ): KboBoxScoreResponse
 
     companion object {
         private val DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd")
@@ -110,6 +137,16 @@ data class KboOfficialGame(
     @SerialName("B_P_NM") val homeSidePlayer: String = "",
     @SerialName("TV_IF") val broadChannel: String = "",
     @SerialName("HEADER_NO") val headerNo: Int = 0,
+    @SerialName("T_RANK_NO") val awayRank: Int = 0,
+    @SerialName("B_RANK_NO") val homeRank: Int = 0,
+    @SerialName("LINEUP_CK") val lineupCk: Int = 0,
+    @SerialName("VS_GAME_CN") val vsGameCn: Int = 0,
+    @SerialName("T_P_ID") val awayPlayerId: Int = 0,
+    @SerialName("B_P_ID") val homePlayerId: Int = 0,
+    @SerialName("GAME_SC_ID") val gameScId: Int = 0,
+    @SerialName("GAME_SC_NM") val gameScNm: String = "",
+    @SerialName("SR_ID") val srId: Int = 0,
+    @SerialName("CHECK_SWING_CK") val checkSwingCk: Int = 0,
 ) {
     val isTopInning: Boolean get() = !topBottom.equals("B", ignoreCase = true)
 
@@ -151,7 +188,10 @@ data class KboOfficialGame(
 
     private fun score(raw: String): Int = raw.trim().toIntOrNull() ?: 0
 
-    fun toMiniGame(): MiniGame = MiniGame(
+    fun toMiniGame(
+        homeEmblem: String = "",
+        awayEmblem: String = "",
+    ): MiniGame = MiniGame(
         gameId = naverGameId(),
         homeName = homeName.trim(),
         awayName = awayName.trim(),
@@ -161,8 +201,8 @@ data class KboOfficialGame(
         statusText = statusText(),
         stadium = stadium.trim(),
         startTime = startTime.trim(),
-        homeLogoUrl = teamLogoUrl(homeId.trim().uppercase()),
-        awayLogoUrl = teamLogoUrl(awayId.trim().uppercase()),
+        homeLogoUrl = resolveTeamLogoUrl(homeId.trim().uppercase(), homeEmblem, seasonId),
+        awayLogoUrl = resolveTeamLogoUrl(awayId.trim().uppercase(), awayEmblem, seasonId),
         homeStarter = homeStarter.trim(),
         awayStarter = awayStarter.trim(),
         broadChannel = broadChannel.trim(),
@@ -171,6 +211,11 @@ data class KboOfficialGame(
         gameDate = isoDate(),
         homeTeamCode = homeId.trim().uppercase(),
         awayTeamCode = awayId.trim().uppercase(),
+        homeRank = homeRank,
+        awayRank = awayRank,
+        doubleHeaderNo = headerNo,
+        seasonSeriesNo = vsGameCn,
+        lineupAnnounced = lineupCk > 0,
     )
 
     /** G_DT(yyyyMMdd) → yyyy-MM-dd */
@@ -204,7 +249,17 @@ data class KboOfficialGame(
             isHome = isHome,
             opponentCode = oppCode,
             opponentName = (if (isHome) awayName else homeName).trim(),
-            opponentLogoUrl = teamLogoUrl(oppCode),
+            opponentLogoUrl = resolveTeamLogoUrl(oppCode, season = seasonId),
+            lotteLogoUrl = resolveTeamLogoUrl(LOTTE_TEAM_CODE, season = seasonId),
+            lotteRank = if (isHome) homeRank else awayRank,
+            opponentRank = if (isHome) awayRank else homeRank,
+            doubleHeaderNo = headerNo,
+            seasonSeriesNo = vsGameCn,
+            lineupAnnounced = lineupCk > 0,
+            runnerOn1Order = if (live) base1Order else 0,
+            runnerOn2Order = if (live) base2Order else 0,
+            runnerOn3Order = if (live) base3Order else 0,
+            gameScLabel = gameScNm.trim(),
             lotteScore = score(if (isHome) homeScore else awayScore),
             opponentScore = score(if (isHome) awayScore else homeScore),
             status = state,
@@ -230,3 +285,50 @@ data class KboOfficialGame(
         )
     }
 }
+
+@Serializable
+data class KboGridTableResponse(
+    val rows: List<KboGridRow> = emptyList(),
+)
+
+@Serializable
+data class KboGridRow(
+    val row: List<KboGridCell> = emptyList(),
+)
+
+@Serializable
+data class KboGridCell(
+    @SerialName("Text") val text: String = "",
+)
+
+@Serializable
+data class KboScoreBoardResponse(
+    @SerialName("G_ID") val gameId: String = "",
+    @SerialName("SEASON_ID") val seasonId: Int = 0,
+    @SerialName("SR_ID") val srId: Int = 0,
+    @SerialName("CROWD_CN") val crowd: String = "",
+    @SerialName("USE_TM") val duration: String = "",
+    @SerialName("H_W_CN") val homeWins: Int = 0,
+    @SerialName("H_L_CN") val homeLosses: Int = 0,
+    @SerialName("H_D_CN") val homeDraws: Int = 0,
+    @SerialName("A_W_CN") val awayWins: Int = 0,
+    @SerialName("A_L_CN") val awayLosses: Int = 0,
+    @SerialName("A_D_CN") val awayDraws: Int = 0,
+    @SerialName("H_INITIAL_LK") val homeEmblem: String = "",
+    @SerialName("A_INITIAL_LK") val awayEmblem: String = "",
+    val table1: String = "",
+    val table2: String = "",
+    val table3: String = "",
+    val maxInning: Int = 9,
+)
+
+@Serializable
+data class KboBoxScoreResponse(
+    @SerialName("G_ID") val gameId: String = "",
+    @SerialName("SEASON_ID") val seasonId: Int = 0,
+    @SerialName("SR_ID") val srId: Int = 0,
+    val tableEtc: String = "",
+    val table2: String = "",
+    val table3: String = "",
+    val realMaxInning: Int = 9,
+)

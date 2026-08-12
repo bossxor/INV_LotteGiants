@@ -28,6 +28,7 @@ import com.bossxor.lottegiants.domain.cancelDisplayLabel
 import com.bossxor.lottegiants.domain.normalizeCancelReason
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.resolveStadiumCoord
+import com.bossxor.lottegiants.domain.normalizeKboImageUrl
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.weatherSummaryKo
 import kotlinx.coroutines.async
@@ -54,79 +55,106 @@ class GiantsRepository private constructor(context: Context) {
     /** 종료된 이닝 문자중계 캐시 (gameId → inning → relays). 현재 이닝은 매번 재조회. */
     private val relayInningCache = ConcurrentHashMap<String, ConcurrentHashMap<Int, List<TextRelayDto>>>()
 
+    /** 날짜별 KBO 일정 캐시 (yyyy-MM-dd → fetchedAt, games) */
+    private val kboDateCache = ConcurrentHashMap<String, Pair<Long, List<KboOfficialGame>>>()
+
+    private var standingsCache: Pair<Long, List<TeamStanding>>? = null
+
     /**
-     * KBO 공식 일정을 1차 소스로 오늘·어제 경기를 읽고, 네이버 문자중계로 라인업·투구
-     * 위치 등 KBO에 없는 항목을 보완해 스냅샷을 만들어 저장한 뒤 반환한다.
-     * 과거 21일~향후 7일 일정은 한 번에 받아올 수 있는 네이버 범위 조회를 쓴다.
+     * KBO 공식 일정을 1차 소스로 오늘·어제·최근 21일·향후 14일을 읽고,
+     * 네이버 문자중계로 라인업·투구 위치 등 KBO에 없는 항목만 보완한다.
      */
     suspend fun refreshSnapshot(): LiveSnapshot {
         val today = LocalDate.now()
         val fmt = DateTimeFormatter.ISO_LOCAL_DATE
         val todayStr = today.format(fmt)
-        val yesterdayStr = today.minusDays(1).format(fmt)
 
-        val (kboToday, kboYesterday, games) = coroutineScope {
+        val (kboToday, kboYesterday, kboRange) = coroutineScope {
             val a = async { fetchKboGames(today) }
             val b = async { fetchKboGames(today.minusDays(1)) }
-            val c = async {
-                runCatching {
-                    api.getGames(
-                        fromDate = today.minusDays(21).format(fmt),
-                        toDate = today.plusDays(7).format(fmt),
-                    ).result?.games.orEmpty().filter { it.categoryId == "kbo" }
-                }.getOrDefault(emptyList())
-            }
+            val c = async { fetchKboGamesCached(today.minusDays(21), today.plusDays(14)) }
             Triple(a.await(), b.await(), c.await())
         }
-
-        val todayGames = games.filter { it.gameDate == todayStr }
-        val yesterdayDtos = games.filter { it.gameDate == yesterdayStr }
 
         val otherGames = if (kboToday.isNotEmpty()) {
             kboToday.filter { !it.involvesLotte() }.map { it.toMiniGame() }
         } else {
-            val reasons = cancelReasonsFor(todayGames, today)
-            todayGames.filter { !it.involvesLotte() }
+            val naverToday = runCatching {
+                api.getGames(fromDate = todayStr, toDate = todayStr)
+                    .result?.games.orEmpty().filter { it.categoryId == "kbo" }
+            }.getOrDefault(emptyList())
+            val reasons = cancelReasonsFor(naverToday, today)
+            naverToday.filter { !it.involvesLotte() }
                 .map { it.toMiniGame(kboCancelLabel = reasons[it.matchKey()]) }
         }
         val yesterdayGames = if (kboYesterday.isNotEmpty()) {
             kboYesterday.map { it.toMiniGame() }
         } else {
-            val reasons = cancelReasonsFor(yesterdayDtos, today.minusDays(1))
-            yesterdayDtos.map { it.toMiniGame(kboCancelLabel = reasons[it.matchKey()]) }
+            val yesterdayStr = today.minusDays(1).format(fmt)
+            val naverYesterday = runCatching {
+                api.getGames(fromDate = yesterdayStr, toDate = yesterdayStr)
+                    .result?.games.orEmpty().filter { it.categoryId == "kbo" }
+            }.getOrDefault(emptyList())
+            val reasons = cancelReasonsFor(naverYesterday, today.minusDays(1))
+            naverYesterday.map { it.toMiniGame(kboCancelLabel = reasons[it.matchKey()]) }
         }
 
         val rutaConnected = tryConnectRuta()
 
         val kboLotte = kboToday.firstOrNull { it.involvesLotte() }
-        val lotteToday = todayGames.firstOrNull { it.involvesLotte() }
+        val lotteTodayNaver = if (kboLotte == null) {
+            runCatching {
+                api.getGames(fromDate = todayStr, toDate = todayStr)
+                    .result?.games.orEmpty().filter { it.categoryId == "kbo" && it.involvesLotte() }
+                    .firstOrNull()
+            }.getOrNull()
+        } else {
+            null
+        }
         var lotteInfo = kboLotte?.toLotteBase()
-            ?: lotteToday?.toLotteBase(
-                kboCancelLabel = cancelReasonsFor(todayGames, today)[lotteToday.matchKey()],
+            ?: lotteTodayNaver?.toLotteBase(
+                kboCancelLabel = cancelReasonsFor(
+                    listOfNotNull(lotteTodayNaver),
+                    today,
+                )[lotteTodayNaver.matchKey()],
             )
-        val relayGameId = kboLotte?.naverGameId() ?: lotteToday?.gameId
+        val relayGameId = kboLotte?.naverGameId() ?: lotteTodayNaver?.gameId
         var relayData: TextRelayData? = null
         if (relayGameId != null && lotteInfo != null) {
-            relayData = runCatching { fetchFullRelay(relayGameId) }.getOrNull()
-            if (relayData != null) {
-                lotteInfo = mergeRelay(lotteInfo, relayData)
+            if (lotteInfo.status == GameStatus.LIVE) {
+                relayData = runCatching { fetchFullRelay(relayGameId) }.getOrNull()
+                if (relayData != null) {
+                    lotteInfo = mergeRelay(lotteInfo, relayData)
+                }
+            } else if (lotteInfo.status == GameStatus.ENDED) {
+                lotteInfo = enrichFromKboDetail(lotteInfo, kboLotte)
             }
-            lotteInfo = enrichGameSummary(lotteInfo, games)
+            lotteInfo = enrichGameSummary(lotteInfo, kboRange, kboLotte)
         }
 
-        // 다음 경기 날짜는 네이버 범위 조회로 찾고, 그 날짜만 KBO에서 다시 읽어
-        // 선발·구장·중계 정보를 공식 값으로 채운다.
-        val nextDto = games
-            .filter { it.gameDate > todayStr && it.involvesLotte() && !it.cancel }
-            .minByOrNull { it.gameDateTime }
-        val nextLotte = nextDto?.let { dto ->
-            val kboNext = runCatching { LocalDate.parse(dto.gameDate) }.getOrNull()
-                ?.let { fetchKboGames(it) }
-                ?.firstOrNull { it.involvesLotte() && it.naverGameId() == dto.gameId }
-            (kboNext?.toLotteBase() ?: dto.toLotteBase()).let { enrichGameSummary(it, games) }
+        val nextKbo = kboRange
+            .filter { it.involvesLotte() && it.status() == GameStatus.BEFORE && it.isoDate() > todayStr }
+            .minWithOrNull(compareBy({ it.isoDate() }, { it.startTime }))
+        val nextLotte = nextKbo?.let { kbo ->
+            enrichGameSummary(enrichFromKboDetail(kbo.toLotteBase(), kbo), kboRange, kbo)
+        } ?: run {
+            val nextDto = runCatching {
+                api.getGames(
+                    fromDate = today.plusDays(1).format(fmt),
+                    toDate = today.plusDays(14).format(fmt),
+                ).result?.games.orEmpty()
+                    .filter { it.categoryId == "kbo" && it.involvesLotte() && !it.cancel }
+                    .minByOrNull { it.gameDateTime }
+            }.getOrNull()
+            nextDto?.let { dto ->
+                val kboNext = runCatching { LocalDate.parse(dto.gameDate) }.getOrNull()
+                    ?.let { fetchKboGames(it) }
+                    ?.firstOrNull { it.involvesLotte() && it.naverGameId() == dto.gameId }
+                val base = kboNext?.toLotteBase() ?: dto.toLotteBase()
+                enrichGameSummary(base, kboRange, kboNext)
+            }
         }
 
-        // 1순위 루타 extras → 2순위 네이버 metricOption WPA
         val focusGame = lotteInfo ?: nextLotte
         val rutaExtras = if (focusGame != null && rutaConnected) {
             fetchRutaExtras(focusGame.gameId, focusGame.isHome)
@@ -136,11 +164,14 @@ class GiantsRepository private constructor(context: Context) {
         val naverWinProb = relayData?.let { buildWinProbFromRelay(it, lotteInfo?.isHome == true) }.orEmpty()
         val winProbSeries = rutaExtras.winProbSeries.ifEmpty { naverWinProb }
 
-        val recentLotte = games
-            .filter { it.involvesLotte() && it.gameDate <= todayStr && it.status() == GameStatus.ENDED }
-            .sortedByDescending { it.gameDateTime }
+        val recentLotte = kboRange
+            .filter { it.involvesLotte() && it.status() == GameStatus.ENDED && it.isoDate() <= todayStr }
+            .sortedByDescending { it.gameDate }
             .take(5)
-            .map { it.toLotteBase() }
+            .map { kbo ->
+                val base = enrichFromKboDetail(kbo.toLotteBase(), kbo)
+                enrichGameSummary(base, kboRange, kbo)
+            }
         val lastLotte = recentLotte.firstOrNull()
 
         val prev = store.loadSnapshot()
@@ -239,13 +270,75 @@ class GiantsRepository private constructor(context: Context) {
         return listOf(WinProbPoint(seq = 0, label = "현재", homeProb = last))
     }
 
-    /** 네이버 preview + 순위/맞대결로 GamePreview·주요장면·MVP 채움 */
-    private suspend fun enrichGameSummary(base: LotteGameInfo, seasonGames: List<GameDto>): LotteGameInfo {
-        val previewDto = runCatching { api.getPreview(base.gameId).result?.previewData }.getOrNull()
+    /** KBO 스코어보드·박스스코어로 이닝·RHE·관중·엠블럼·주요장면 보강 */
+    private suspend fun enrichFromKboDetail(base: LotteGameInfo, kbo: KboOfficialGame?): LotteGameInfo {
+        if (kbo == null || kbo.gameId.isBlank()) return base
+        val seasonId = kbo.seasonId.takeIf { it > 0 } ?: LocalDate.now().year
+        val sb = runCatching {
+            kboOfficialApi.getScoreBoardScroll(
+                seasonId = seasonId,
+                gameId = kbo.gameId,
+                srId = kbo.srId,
+            )
+        }.getOrNull() ?: return base
+
+        val board = KboTableParser.parseInningBoard(sb.table2, sb.table3, sb.maxInning)
+        val isHome = base.isHome
+        val lotteEmblem = normalizeKboImageUrl(if (isHome) sb.homeEmblem else sb.awayEmblem)
+        val oppEmblem = normalizeKboImageUrl(if (isHome) sb.awayEmblem else sb.homeEmblem)
+
+        var result = base.copy(
+            lotteLogoUrl = lotteEmblem.ifBlank { base.lotteLogoUrl },
+            opponentLogoUrl = oppEmblem.ifBlank { base.opponentLogoUrl },
+            lotteInningScores = if (isHome) board.homeScores else board.awayScores,
+            opponentInningScores = if (isHome) board.awayScores else board.homeScores,
+            lotteHits = if (isHome) board.homeHits else board.awayHits,
+            opponentHits = if (isHome) board.awayHits else board.homeHits,
+            lotteErrors = if (isHome) board.homeErrors else board.awayErrors,
+            opponentErrors = if (isHome) board.awayErrors else board.homeErrors,
+            lotteBb = if (isHome) board.homeWalks else board.awayWalks,
+            opponentBb = if (isHome) board.awayWalks else board.homeWalks,
+            crowdCount = sb.crowd.ifBlank { base.crowdCount },
+            gameDuration = sb.duration.ifBlank { base.gameDuration },
+        )
+
+        if (base.status == GameStatus.ENDED) {
+            val box = runCatching {
+                kboOfficialApi.getBoxScoreScroll(
+                    seasonId = seasonId,
+                    gameId = kbo.gameId,
+                    srId = kbo.srId,
+                )
+            }.getOrNull()
+            if (box != null) {
+                val keyPlays = KboTableParser.parseKeyPlays(box.tableEtc)
+                if (keyPlays.isNotEmpty()) {
+                    result = result.copy(keyPlays = keyPlays)
+                }
+            }
+        }
+        return result
+    }
+
+    /** 네이버 preview + KBO 순위/맞대결로 GamePreview·주요장면·MVP 채움 */
+    private suspend fun enrichGameSummary(
+        base: LotteGameInfo,
+        seasonGames: List<KboOfficialGame>,
+        kbo: KboOfficialGame? = null,
+    ): LotteGameInfo {
+        val previewDto = if (base.status != GameStatus.ENDED) {
+            runCatching { api.getPreview(base.gameId).result?.previewData }.getOrNull()
+        } else {
+            null
+        }
         val standings = runCatching { fetchStandings() }.getOrDefault(emptyList())
-        val preview = buildGamePreview(base, previewDto, standings, seasonGames)
+        val preview = buildGamePreview(base, previewDto, standings, seasonGames, kbo)
         val withSeason = fillMissingSeasonStats(base)
-        val keyPlays = extractKeyPlays(withSeason.recentTexts)
+        val keyPlays = if (withSeason.keyPlays.isNotEmpty()) {
+            withSeason.keyPlays
+        } else {
+            extractKeyPlays(withSeason.recentTexts)
+        }
         val pitchCount = (withSeason.lottePitchers + withSeason.opponentPitchers)
             .firstOrNull { it.playerCode == withSeason.currentPitcherCode && withSeason.currentPitcherCode.isNotBlank() }
             ?.pitchCount
@@ -304,7 +397,8 @@ class GiantsRepository private constructor(context: Context) {
         game: LotteGameInfo,
         dto: PreviewData?,
         standings: List<TeamStanding>,
-        seasonGames: List<GameDto>,
+        seasonGames: List<KboOfficialGame>,
+        kbo: KboOfficialGame? = null,
     ): GamePreview {
         val homeStarter = dto?.homeStarter
         val awayStarter = dto?.awayStarter
@@ -319,23 +413,26 @@ class GiantsRepository private constructor(context: Context) {
         val matchups = seasonGames
             .filter {
                 it.involvesLotte() &&
-                    (it.homeTeamCode == game.opponentCode || it.awayTeamCode == game.opponentCode) &&
+                    (it.homeId.equals(game.opponentCode, true) || it.awayId.equals(game.opponentCode, true)) &&
                     it.status() == GameStatus.ENDED
             }
-            .sortedByDescending { it.gameDateTime }
+            .sortedByDescending { it.gameDate }
         var w = 0
         var d = 0
         var l = 0
         matchups.forEach { m ->
-            val lotteHome = m.homeTeamCode == LOTTE_TEAM_CODE
-            val ls = if (lotteHome) m.homeTeamScore else m.awayTeamScore
-            val os = if (lotteHome) m.awayTeamScore else m.homeTeamScore
+            val lotteHome = m.homeId.equals(LOTTE_TEAM_CODE, true)
+            val ls = if (lotteHome) m.homeScore.toIntOrNull() ?: 0 else m.awayScore.toIntOrNull() ?: 0
+            val os = if (lotteHome) m.awayScore.toIntOrNull() ?: 0 else m.homeScore.toIntOrNull() ?: 0
             when {
                 ls > os -> w++
                 ls < os -> l++
                 else -> d++
             }
         }
+
+        val lotteRank = game.lotteRank.takeIf { it > 0 } ?: lotteSt?.ranking ?: 0
+        val oppRank = game.opponentRank.takeIf { it > 0 } ?: oppSt?.ranking ?: 0
 
         return GamePreview(
             gameDate = game.gameDate,
@@ -349,7 +446,7 @@ class GiantsRepository private constructor(context: Context) {
             lotteStanding = PreviewTeamLine(
                 teamCode = LOTTE_TEAM_CODE,
                 teamName = "롯데",
-                rank = lotteSt?.ranking ?: 0,
+                rank = lotteRank,
                 win = lotteSt?.win ?: 0,
                 draw = lotteSt?.draw ?: 0,
                 lose = lotteSt?.lose ?: 0,
@@ -358,7 +455,7 @@ class GiantsRepository private constructor(context: Context) {
             opponentStanding = PreviewTeamLine(
                 teamCode = game.opponentCode,
                 teamName = game.opponentName,
-                rank = oppSt?.ranking ?: 0,
+                rank = oppRank,
                 win = oppSt?.win ?: 0,
                 draw = oppSt?.draw ?: 0,
                 lose = oppSt?.lose ?: 0,
@@ -368,7 +465,12 @@ class GiantsRepository private constructor(context: Context) {
                 wins = w,
                 draws = d,
                 losses = l,
-                label = if (matchups.isEmpty()) "시즌 맞대결 없음" else "시즌 상대전 ${w}승 ${d}무 ${l}패",
+                label = when {
+                    matchups.isEmpty() -> "시즌 맞대결 없음"
+                    kbo != null && kbo.vsGameCn > 0 ->
+                        "시즌 ${kbo.vsGameCn}차전 · 상대전 ${w}승 ${d}무 ${l}패"
+                    else -> "시즌 상대전 ${w}승 ${d}무 ${l}패"
+                },
             ),
             recentMatchups = matchups.take(5).map { it.toMiniGame() },
         )
@@ -477,6 +579,17 @@ class GiantsRepository private constructor(context: Context) {
     }
 
     suspend fun fetchStandings(): List<TeamStanding> {
+        val now = System.currentTimeMillis()
+        standingsCache?.let { (t, list) ->
+            if (now - t < STANDINGS_TTL_MS) return list
+        }
+        val kbo = runCatching {
+            KboTableParser.parseStandings(kboOfficialApi.getTeamRank())
+        }.getOrNull()
+        if (!kbo.isNullOrEmpty()) {
+            standingsCache = now to kbo
+            return kbo
+        }
         val season = LocalDate.now().let { if (it.monthValue < 3) it.year - 1 else it.year }
         return api.getStandings(season.toString()).result?.seasonTeamStats.orEmpty()
             .map {
@@ -763,12 +876,33 @@ class GiantsRepository private constructor(context: Context) {
         "${awayTeamCode.trim().uppercase()}_${homeTeamCode.trim().uppercase()}"
 
     /** KBO 공식 일정 (1차 소스). 실패하면 빈 목록 → 호출부가 네이버로 폴백한다. */
-    private suspend fun fetchKboGames(date: LocalDate): List<KboOfficialGame> =
-        runCatching {
+    private suspend fun fetchKboGames(date: LocalDate): List<KboOfficialGame> {
+        val key = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val cached = kboDateCache[key]
+        val now = System.currentTimeMillis()
+        val ttl = if (date == LocalDate.now()) KBO_TODAY_TTL_MS else KBO_PAST_TTL_MS
+        if (cached != null && now - cached.first < ttl) return cached.second
+        val games = runCatching {
             kboOfficialApi.getGameList(date = KboOfficialApi.dateParam(date))
                 .game
                 .filter { it.gameId.isNotBlank() }
         }.getOrDefault(emptyList())
+        if (games.isNotEmpty()) kboDateCache[key] = now to games
+        return games
+    }
+
+    /** 날짜 범위 KBO 일정 (캐시·병렬 조회) */
+    private suspend fun fetchKboGamesCached(from: LocalDate, to: LocalDate): List<KboOfficialGame> =
+        coroutineScope {
+            var d = from
+            val jobs = mutableListOf<kotlinx.coroutines.Deferred<List<KboOfficialGame>>>()
+            while (!d.isAfter(to)) {
+                val day = d
+                jobs.add(async { fetchKboGames(day) })
+                d = d.plusDays(1)
+            }
+            jobs.flatMap { it.await() }
+        }
 
     /** 네이버 폴백 경로에서만 쓰는 취소 사유 보강 (키: AWAY_HOME) */
     private suspend fun cancelReasonsFor(
@@ -1160,6 +1294,10 @@ class GiantsRepository private constructor(context: Context) {
     }
 
     companion object {
+        private const val STANDINGS_TTL_MS = 5 * 60_000L
+        private const val KBO_TODAY_TTL_MS = 30_000L
+        private const val KBO_PAST_TTL_MS = 10 * 60_000L
+
         @Volatile
         private var instance: GiantsRepository? = null
 

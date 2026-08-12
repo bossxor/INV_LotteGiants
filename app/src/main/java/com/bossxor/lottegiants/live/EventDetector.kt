@@ -81,6 +81,14 @@ class EventDetector(private val store: SnapshotStore) {
                 "선발 라인업", "투수 ${game.lotteStartingPitcher.ifBlank { "미정" }} · $lineup"
             )
             lineupAnnouncedFor = game.gameId
+        } else if (game.lineupAnnounced && game.lotteLineup.isEmpty() && lineupAnnouncedFor != game.gameId) {
+            maybeNotify(
+                context, NotificationType.LINEUP, 2010,
+                "라인업 발표",
+                "선발 ${game.lotteStartingPitcher.ifBlank { "미정" }}" +
+                    if (game.opponentStartingPitcher.isNotBlank()) " vs ${game.opponentStartingPitcher}" else "",
+            )
+            lineupAnnouncedFor = game.gameId
         }
 
         if (game.status != GameStatus.LIVE && game.status != GameStatus.ENDED) {
@@ -375,9 +383,9 @@ class EventDetector(private val store: SnapshotStore) {
     }
 
     private fun basesLabel(g: LotteGameInfo): String = buildList {
-        if (g.onBase1) add("1루")
-        if (g.onBase2) add("2루")
-        if (g.onBase3) add("3루")
+        if (g.onBase1) add(if (g.runnerOn1Order > 0) "1루(${g.runnerOn1Order}번)" else "1루")
+        if (g.onBase2) add(if (g.runnerOn2Order > 0) "2루(${g.runnerOn2Order}번)" else "2루")
+        if (g.onBase3) add(if (g.runnerOn3Order > 0) "3루(${g.runnerOn3Order}번)" else "3루")
     }.joinToString("·").ifBlank { "주자 없음" }
 
     private suspend fun maybeNotify(

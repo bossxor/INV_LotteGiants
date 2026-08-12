@@ -48,3 +48,6 @@ Logo/
 
 # Downloads cache
 *.hprof
+
+# KBO API debug samples (local only)
+kbo_*_sample.json

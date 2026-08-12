@@ -305,8 +305,8 @@ private fun ScoreTicker(snapshot: LiveSnapshot?, excludeLotte: Boolean = false) 
                         awayScore = if (g.isHome) g.opponentScore else g.lotteScore,
                         status = g.status,
                         statusText = g.inningLabel,
-                        homeLogoUrl = if (g.isHome) LOTTE_LOGO_URL else g.opponentLogoUrl,
-                        awayLogoUrl = if (g.isHome) g.opponentLogoUrl else LOTTE_LOGO_URL,
+                        homeLogoUrl = if (g.isHome) g.lotteLogoUrl.ifBlank { LOTTE_LOGO_URL } else g.opponentLogoUrl,
+                        awayLogoUrl = if (g.isHome) g.opponentLogoUrl else g.lotteLogoUrl.ifBlank { LOTTE_LOGO_URL },
                         homeTeamCode = if (g.isHome) "LT" else g.opponentCode,
                         awayTeamCode = if (g.isHome) g.opponentCode else "LT",
                     )
@@ -458,6 +458,24 @@ private fun PreviewTab(
             InfoLine("구장", g.stadium.ifBlank { p?.stadium.orEmpty().ifBlank { "-" } })
             InfoLine("중계", g.broadChannel.ifBlank { "-" })
             InfoLine("장소", if (g.isHome) "홈" else "원정")
+            if (g.doubleHeaderNo > 0) {
+                InfoLine("더블헤더", "${g.doubleHeaderNo}차전")
+            }
+            if (g.seasonSeriesNo > 0) {
+                InfoLine("시즌 대결", "${g.seasonSeriesNo}차전")
+            }
+            if (g.gameScLabel.isNotBlank()) {
+                InfoLine("대회", g.gameScLabel)
+            }
+            if (g.lineupAnnounced && g.status == GameStatus.BEFORE) {
+                InfoLine("라인업", "발표 완료")
+            }
+            if (g.crowdCount.isNotBlank()) {
+                InfoLine("관중", "${g.crowdCount}명")
+            }
+            if (g.gameDuration.isNotBlank()) {
+                InfoLine("경기시간", g.gameDuration)
+            }
         }
     }
     Spacer(Modifier.height(10.dp))
@@ -1395,13 +1413,28 @@ private fun HeroCard(g: LotteGameInfo, onShare: () -> Unit = {}) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             HeroTeam(
                 name = if (g.isHome) g.opponentName else "롯데",
-                logoUrl = if (g.isHome) g.opponentLogoUrl else LOTTE_LOGO_URL,
+                logoUrl = if (g.isHome) g.opponentLogoUrl else g.lotteLogoUrl.ifBlank { LOTTE_LOGO_URL },
                 score = if (g.isHome) g.opponentScore else g.lotteScore,
                 showScore = showScore,
                 highlight = if (g.isHome) g.opponentScore > g.lotteScore else g.lotteScore > g.opponentScore,
                 modifier = Modifier.weight(1f),
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(0.8f)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (g.doubleHeaderNo > 0) {
+                        StatusChip("DH${g.doubleHeaderNo}", LotteGold)
+                    }
+                    if (g.lotteRank > 0 || g.opponentRank > 0) {
+                        StatusChip(
+                            "${if (g.isHome) g.opponentRank else g.lotteRank}위 vs ${if (g.isHome) g.lotteRank else g.opponentRank}위",
+                            Color.White.copy(alpha = 0.75f),
+                        )
+                    }
+                    if (g.lineupAnnounced && g.status == GameStatus.BEFORE) {
+                        StatusChip("라인업", WinGreen)
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
                 when (g.status) {
                     GameStatus.LIVE -> {
                         StatusChip("LIVE", LotteRed)
@@ -1432,7 +1465,7 @@ private fun HeroCard(g: LotteGameInfo, onShare: () -> Unit = {}) {
             }
             HeroTeam(
                 name = if (g.isHome) "롯데" else g.opponentName,
-                logoUrl = if (g.isHome) LOTTE_LOGO_URL else g.opponentLogoUrl,
+                logoUrl = if (g.isHome) g.lotteLogoUrl.ifBlank { LOTTE_LOGO_URL } else g.opponentLogoUrl,
                 score = if (g.isHome) g.lotteScore else g.opponentScore,
                 showScore = showScore,
                 highlight = if (g.isHome) g.lotteScore > g.opponentScore else g.opponentScore > g.lotteScore,
