@@ -164,6 +164,7 @@ data class KboOfficialGame(
     /** GAME_STATE_SC: 1 예정 / 2·5 진행 / 3 종료 / 4 취소·서스펜디드 */
     fun status(): GameStatus = when {
         gameState == 4 || cancelScId >= 1 -> GameStatus.CANCELED
+        cancelScNm.contains("취소") && !cancelScNm.contains("정상") -> GameStatus.CANCELED
         gameState == 3 -> GameStatus.ENDED
         gameState == 2 || gameState == 5 -> GameStatus.LIVE
         else -> GameStatus.BEFORE
@@ -171,11 +172,12 @@ data class KboOfficialGame(
 
     /** 취소·순연 등 정상경기가 아닌 경우의 사유 라벨 */
     fun cancelReasonLabel(): String? {
+        resolveCancelReason(cancelScNm, cancelScId)?.let { return it }
+        resolveCancelReason(gameScNm, cancelScId)?.let { return it }
         if (cancelScId >= 1) {
             kboCancelReasonById(cancelScId)?.let { return it }
         }
-        return resolveCancelReason(cancelScNm, cancelScId)
-            ?: resolveCancelReason(gameScNm, cancelScId)
+        return null
     }
 
     fun cancelStatusText(): String = cancelDisplayLabel(cancelReasonLabel())

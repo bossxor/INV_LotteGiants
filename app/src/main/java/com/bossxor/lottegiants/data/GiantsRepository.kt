@@ -596,10 +596,10 @@ class GiantsRepository private constructor(context: Context) {
 
     private suspend fun kboToMiniGames(date: LocalDate, games: List<KboOfficialGame>): List<MiniGame> =
         games.map { g ->
-            val reason = if (g.status() == GameStatus.CANCELED) g.cancelReasonLabel().orEmpty() else ""
-            val mini = g.toMiniGame()
-            if (mini.status != GameStatus.CANCELED) return@map mini
-            mini.copy(
+            if (g.status() != GameStatus.CANCELED) return@map g.toMiniGame()
+            val reason = g.cancelReasonLabel().orEmpty()
+            g.toMiniGame().copy(
+                status = GameStatus.CANCELED,
                 cancelReason = reason,
                 statusText = cancelDisplayLabel(reason.ifBlank { null }),
             )
@@ -945,7 +945,9 @@ class GiantsRepository private constructor(context: Context) {
     }
 
     private fun GameDto.status(): GameStatus = when {
-        cancel -> GameStatus.CANCELED
+        cancel || suspended -> GameStatus.CANCELED
+        statusInfo?.contains("취소") == true -> GameStatus.CANCELED
+        statusInfo?.contains("순연") == true -> GameStatus.CANCELED
         statusCode == "RESULT" || statusNum == 4 -> GameStatus.ENDED
         statusCode == "BEFORE" || statusNum == 1 -> GameStatus.BEFORE
         else -> GameStatus.LIVE

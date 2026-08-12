@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,10 +30,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -65,6 +64,7 @@ import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.cancelLabel
+import com.bossxor.lottegiants.domain.isCanceledGame
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.LoseRed
@@ -428,172 +428,192 @@ private fun CalendarMonthView(
     val selectedGames = dayGames.ifEmpty {
         monthGames.filter { it.gameDate == selectedDate.toString() }
     }
+    val weeks = remember(cells) { cells.chunked(7) }
 
-    Column(
+    LazyColumn(
         modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .swipeChangeDay(enabled = swipeEnabled, onSwipe = onSwipeDay),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { onSelectMonth(month.minusMonths(1)) }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "이전 달")
-            }
-            Text(
-                month.format(DateTimeFormatter.ofPattern("yyyy년 M월", Locale.KOREAN)),
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Center,
-                fontWeight = FontWeight.Bold,
-            )
-            IconButton(onClick = { onSelectMonth(month.plusMonths(1)) }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "다음 달")
-            }
-        }
-        Spacer(Modifier.height(6.dp))
-        Row(Modifier.fillMaxWidth()) {
-            listOf("일", "월", "화", "수", "목", "금", "토").forEachIndexed { i, w ->
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { onSelectMonth(month.minusMonths(1)) }) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "이전 달")
+                }
                 Text(
-                    w,
-                    Modifier.weight(1f),
+                    month.format(DateTimeFormatter.ofPattern("yyyy년 M월", Locale.KOREAN)),
+                    modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center,
-                    fontSize = 11.sp,
-                    color = when (i) {
-                        0 -> LoseRed
-                        6 -> MaterialTheme.colorScheme.primary
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
                     fontWeight = FontWeight.Bold,
                 )
+                IconButton(onClick = { onSelectMonth(month.plusMonths(1)) }) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "다음 달")
+                }
             }
+            Spacer(Modifier.height(6.dp))
         }
-        Spacer(Modifier.height(4.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            cells.chunked(7).forEach { week ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    week.forEach { date ->
-                        Box(Modifier.weight(1f).aspectRatio(0.85f)) {
-                            if (date != null) {
-                                val key = date.toString()
-                                val cellGames = byDate[key].orEmpty()
-                                val lotte = cellGames.firstOrNull { it.isLotteGame() }
-                                val lotteHome = lotte?.isLotteHome()
-                                val ended = lotte?.status == GameStatus.ENDED
-                                val canceled = lotte?.status == GameStatus.CANCELED
-                                val lotteWon = lotte?.lotteResult() == true
-                                val lotteLost = lotte?.lotteResult() == false
-                                val draw = ended && lotte != null && lotte.homeScore == lotte.awayScore
-                                val cellLabel = when {
-                                    canceled -> lotte.cancelLabel
-                                    ended && lotteWon -> "승"
-                                    ended && lotteLost -> "패"
-                                    ended && draw -> "무"
-                                    lotteHome == true -> "홈"
-                                    lotteHome == false -> "원정"
-                                    else -> null
-                                }
-                                val cellLabelColor = when {
-                                    canceled -> MaterialTheme.colorScheme.onSurfaceVariant
-                                    ended && lotteWon -> WinGreen
-                                    ended && lotteLost -> LoseRed
-                                    ended && draw -> LotteGold
-                                    lotteHome == true -> MaterialTheme.colorScheme.primary
-                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                                val border = when {
-                                    date == selectedDate -> MaterialTheme.colorScheme.primary
-                                    date == today -> MaterialTheme.colorScheme.outline
-                                    else -> Color.Transparent
-                                }
-                                val borderWidth = if (date == selectedDate) 2.dp else 1.dp
-                                val cellBg = when {
-                                    canceled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                                    ended && lotteWon -> WinGreen.copy(alpha = 0.10f)
-                                    ended && lotteLost -> LoseRed.copy(alpha = 0.10f)
-                                    ended && draw -> LotteGold.copy(alpha = 0.12f)
-                                    lotteHome == true -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                                    lotteHome == false -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
-                                    else -> Color.Transparent
-                                }
-                                Column(
-                                    Modifier
-                                        .fillMaxSize()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .border(borderWidth, border, RoundedCornerShape(8.dp))
-                                        .background(cellBg)
-                                        .clickable { onSelectDate(date) }
-                                        .padding(horizontal = 2.dp, vertical = 3.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                ) {
-                                    Text(
-                                        "${date.dayOfMonth}",
-                                        fontSize = 11.sp,
-                                        fontWeight = if (date == selectedDate) FontWeight.Bold else FontWeight.Medium,
-                                        color = when (date.dayOfWeek) {
-                                            DayOfWeek.SUNDAY -> LoseRed
-                                            DayOfWeek.SATURDAY -> MaterialTheme.colorScheme.primary
-                                            else -> MaterialTheme.colorScheme.onSurface
-                                        },
-                                    )
-                                    if (cellLabel != null) {
-                                        Text(
-                                            cellLabel,
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Black,
-                                            color = cellLabelColor,
-                                            maxLines = 1,
-                                        )
-                                    } else if (date == today) {
-                                        Spacer(Modifier.height(2.dp))
-                                        Box(
-                                            Modifier
-                                                .size(4.dp)
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.primary),
-                                        )
-                                    } else if (cellGames.isNotEmpty()) {
-                                        Spacer(Modifier.height(2.dp))
-                                        Box(
-                                            Modifier
-                                                .size(5.dp)
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)),
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
+        item {
+            Row(Modifier.fillMaxWidth()) {
+                listOf("일", "월", "화", "수", "목", "금", "토").forEachIndexed { i, w ->
+                    Text(
+                        w,
+                        Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        fontSize = 11.sp,
+                        color = when (i) {
+                            0 -> LoseRed
+                            6 -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+        }
+        items(weeks, key = { week -> week.firstOrNull()?.toString() ?: "pad" }) { week ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                week.forEach { date ->
+                    CalendarDayCell(
+                        date = date,
+                        cellGames = date?.let { byDate[it.toString()].orEmpty() }.orEmpty(),
+                        selectedDate = selectedDate,
+                        today = today,
+                        onSelectDate = onSelectDate,
+                    )
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("승", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = WinGreen)
-            Text("패", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LoseRed)
-            Text("무", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LotteGold)
-            Text("·", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("홈/원정 = 예정·진행", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        item {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("승", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = WinGreen)
+                Text("패", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LoseRed)
+                Text("무", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LotteGold)
+                Text("·", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("홈/원정 = 예정·진행", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                selectedDate.format(DateTimeFormatter.ofPattern("M월 d일 경기", Locale.KOREAN)),
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+            )
+            Spacer(Modifier.height(8.dp))
         }
-        Spacer(Modifier.height(10.dp))
-        Text(
-            selectedDate.format(DateTimeFormatter.ofPattern("M월 d일 경기", Locale.KOREAN)),
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp,
-        )
-        Spacer(Modifier.height(8.dp))
         if (selectedGames.isEmpty()) {
-            EmptyRetry(message = "경기가 없습니다.", onRetry = onRetry)
+            item { EmptyRetry(message = "경기가 없습니다.", onRetry = onRetry) }
         } else {
-            selectedGames.sortedWith(lotteFirstComparator()).forEach { g ->
+            items(selectedGames.sortedWith(lotteFirstComparator()), key = { it.gameId }) { g ->
                 ResultGameCard(g)
                 Spacer(Modifier.height(8.dp))
             }
         }
-        Spacer(Modifier.height(16.dp))
+        item { Spacer(Modifier.height(16.dp)) }
+    }
+}
+
+@Composable
+private fun RowScope.CalendarDayCell(
+    date: LocalDate?,
+    cellGames: List<MiniGame>,
+    selectedDate: LocalDate,
+    today: LocalDate,
+    onSelectDate: (LocalDate) -> Unit,
+) {
+    Box(Modifier.weight(1f).aspectRatio(0.85f)) {
+        if (date != null) {
+            val lotte = cellGames.firstOrNull { it.isLotteGame() }
+            val lotteHome = lotte?.isLotteHome()
+            val ended = lotte?.status == GameStatus.ENDED
+            val canceled = lotte?.isCanceledGame() == true
+            val lotteWon = lotte?.lotteResult() == true
+            val lotteLost = lotte?.lotteResult() == false
+            val draw = ended && lotte != null && lotte.homeScore == lotte.awayScore
+            val cellLabel = when {
+                canceled -> lotte.cancelLabel
+                ended && lotteWon -> "승"
+                ended && lotteLost -> "패"
+                ended && draw -> "무"
+                lotteHome == true -> "홈"
+                lotteHome == false -> "원정"
+                else -> null
+            }
+            val cellLabelColor = when {
+                canceled -> MaterialTheme.colorScheme.onSurfaceVariant
+                ended && lotteWon -> WinGreen
+                ended && lotteLost -> LoseRed
+                ended && draw -> LotteGold
+                lotteHome == true -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            val border = when {
+                date == selectedDate -> MaterialTheme.colorScheme.primary
+                date == today -> MaterialTheme.colorScheme.outline
+                else -> Color.Transparent
+            }
+            val borderWidth = if (date == selectedDate) 2.dp else 1.dp
+            val cellBg = when {
+                canceled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                ended && lotteWon -> WinGreen.copy(alpha = 0.10f)
+                ended && lotteLost -> LoseRed.copy(alpha = 0.10f)
+                ended && draw -> LotteGold.copy(alpha = 0.12f)
+                lotteHome == true -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                lotteHome == false -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                else -> Color.Transparent
+            }
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(borderWidth, border, RoundedCornerShape(8.dp))
+                    .background(cellBg)
+                    .clickable { onSelectDate(date) }
+                    .padding(horizontal = 2.dp, vertical = 3.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    "${date.dayOfMonth}",
+                    fontSize = 11.sp,
+                    fontWeight = if (date == selectedDate) FontWeight.Bold else FontWeight.Medium,
+                    color = when (date.dayOfWeek) {
+                        DayOfWeek.SUNDAY -> LoseRed
+                        DayOfWeek.SATURDAY -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.onSurface
+                    },
+                )
+                if (cellLabel != null) {
+                    Text(
+                        cellLabel,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black,
+                        color = cellLabelColor,
+                        maxLines = 1,
+                    )
+                } else if (date == today) {
+                    Spacer(Modifier.height(2.dp))
+                    Box(
+                        Modifier
+                            .size(4.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary),
+                    )
+                } else if (cellGames.isNotEmpty()) {
+                    Spacer(Modifier.height(2.dp))
+                    Box(
+                        Modifier
+                            .size(5.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)),
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -602,6 +622,7 @@ private fun ResultGameCard(g: MiniGame) {
     val lotte = g.isLotteGame()
     val won = g.lotteResult()
     val lotteHome = g.isLotteHome()
+    val canceled = g.isCanceledGame()
     SectionCard {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -638,9 +659,13 @@ private fun ResultGameCard(g: MiniGame) {
                     if (g.lineupAnnounced && g.status == GameStatus.BEFORE) {
                         StatusPill("라인업", WinGreen)
                     }
-                    when (g.status) {
-                        GameStatus.LIVE -> StatusPill("LIVE", LotteRed)
-                        GameStatus.ENDED -> {
+                    when {
+                        g.status == GameStatus.LIVE -> StatusPill("LIVE", LotteRed)
+                        canceled -> StatusPill(
+                            g.cancelLabel,
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        g.status == GameStatus.ENDED -> {
                             when {
                                 won == true -> StatusPill("롯데 승", WinGreen)
                                 won == false -> StatusPill("롯데 패", LoseRed)
@@ -648,11 +673,7 @@ private fun ResultGameCard(g: MiniGame) {
                                 else -> StatusPill("종료", MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
-                        GameStatus.BEFORE -> StatusPill(g.startTime.ifBlank { "예정" }, LotteGold)
-                        GameStatus.CANCELED -> StatusPill(
-                            g.cancelLabel,
-                            MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        g.status == GameStatus.BEFORE -> StatusPill(g.startTime.ifBlank { "예정" }, LotteGold)
                     }
                 }
                 if (g.stadium.isNotBlank() || g.broadChannel.isNotBlank()) {
@@ -670,7 +691,7 @@ private fun ResultGameCard(g: MiniGame) {
                     )
                 }
             }
-            if (g.status != GameStatus.BEFORE && g.status != GameStatus.CANCELED) {
+            if (!canceled && g.status != GameStatus.BEFORE) {
                 Text(
                     "${g.awayScore} : ${g.homeScore}",
                     fontSize = 20.sp,
@@ -681,7 +702,7 @@ private fun ResultGameCard(g: MiniGame) {
                         else -> MaterialTheme.colorScheme.onSurface
                     },
                 )
-            } else if (g.status == GameStatus.CANCELED) {
+            } else if (canceled) {
                 Text(
                     g.cancelLabel,
                     fontSize = 15.sp,

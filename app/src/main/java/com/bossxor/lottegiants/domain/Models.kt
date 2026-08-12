@@ -508,7 +508,8 @@ fun kboCancelReasonById(id: Int): String? = when (id) {
     6 -> "그라운드사정"
     7 -> "태풍"
     8 -> "미세먼지"
-    9 -> "황사"
+    9 -> "폭염"
+    10 -> "황사"
     99 -> "기타"
     else -> null
 }
@@ -592,13 +593,26 @@ val LotteGameInfo.cancelLabel: String
 /** 결과·일정 목록용 취소 표시 */
 val MiniGame.cancelLabel: String
     get() {
-        if (status != GameStatus.CANCELED) return statusText
+        if (!isCanceledGame()) return statusText
         if (cancelReason.isNotBlank()) return cancelDisplayLabel(cancelReason)
         Regex("""(?:경기\s*)?취소\s*\(([^)]+)\)""").find(statusText)?.groupValues?.get(1)?.trim()
             ?.takeIf { it.isNotBlank() }
             ?.let { return cancelDisplayLabel(it) }
         return cancelDisplayLabel(resolveCancelReason(statusText))
     }
+
+/** KBO·네이버 취소 경기 판별 (status 누락·폴백 데이터 보강) */
+fun MiniGame.isCanceledGame(): Boolean {
+    if (status == GameStatus.CANCELED) return true
+    if (cancelReason.isNotBlank()) return true
+    val text = statusText.trim()
+    if (text.isBlank()) return false
+    return text.contains("취소") ||
+        text.contains("순연") ||
+        text.contains("폭염") ||
+        text.contains("우천") ||
+        text.contains("취소됨", ignoreCase = true)
+}
 
 val LotteGameInfo.inningLabel: String
     get() = when {
