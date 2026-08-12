@@ -59,6 +59,7 @@ import androidx.core.app.NotificationManagerCompat
 import coil.compose.AsyncImage
 import com.bossxor.lottegiants.BuildConfig
 import com.bossxor.lottegiants.data.GiantsRepository
+import com.bossxor.lottegiants.data.InstallResult
 import com.bossxor.lottegiants.data.NotificationType
 import com.bossxor.lottegiants.data.UpdateCheckResult
 import com.bossxor.lottegiants.data.UpdateChecker
@@ -451,13 +452,28 @@ fun SettingsScreen(
                     onClick = {
                         scope.launch {
                             downloadProgress = true
-                            val ok = withContext(Dispatchers.IO) {
-                                UpdateChecker.downloadAndInstall(context, info.apkUrl)
+                            val store = GiantsRepository.get(context).store
+                            val result = withContext(Dispatchers.IO) {
+                                UpdateChecker.downloadAndInstall(context, info, store)
                             }
                             downloadProgress = false
-                            updateInfo = null
-                            if (!ok) {
-                                Toast.makeText(context, "다운로드에 실패했습니다.", Toast.LENGTH_SHORT).show()
+                            when (result) {
+                                is InstallResult.Launched -> updateInfo = null
+                                is InstallResult.NeedsPermission -> {
+                                    updateInfo = null
+                                    Toast.makeText(
+                                        context,
+                                        "설치 권한을 허용하면 자동으로 설치가 진행됩니다.",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                                is InstallResult.DownloadFailed -> {
+                                    Toast.makeText(
+                                        context,
+                                        result.message,
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
                             }
                         }
                     },

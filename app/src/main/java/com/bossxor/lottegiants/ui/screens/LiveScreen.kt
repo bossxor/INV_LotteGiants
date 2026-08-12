@@ -361,7 +361,7 @@ private fun ScoreTicker(snapshot: LiveSnapshot?, excludeLotte: Boolean = false) 
                             GameStatus.LIVE -> g.statusText.ifBlank { "LIVE" }
                             GameStatus.ENDED -> "종료"
                             GameStatus.BEFORE -> g.startTime.ifBlank { "예정" }
-                            GameStatus.CANCELED -> g.statusText.ifBlank { "경기 취소" }
+                            GameStatus.CANCELED -> g.statusText.ifBlank { "취소" }
                         },
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,

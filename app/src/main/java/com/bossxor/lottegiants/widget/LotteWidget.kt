@@ -196,6 +196,14 @@ private fun CompactBefore(g: LotteGameInfo) {
     Text("다음", style = TextStyle(color = gold, fontSize = 10.sp, fontWeight = FontWeight.Bold))
     Text(g.startTime.ifBlank { g.gameDate }, style = TextStyle(color = white, fontSize = 15.sp, fontWeight = FontWeight.Bold))
     Text("vs ${g.opponentName}", style = TextStyle(color = muted, fontSize = 11.sp))
+    if (g.stadium.isNotBlank()) {
+        Text(g.stadium, style = TextStyle(color = muted, fontSize = 10.sp), maxLines = 1)
+    }
+    Text(
+        "선발 ${g.lotteStartingPitcher.ifBlank { "미정" }}",
+        style = TextStyle(color = white, fontSize = 10.sp),
+        maxLines = 1,
+    )
 }
 
 @Composable

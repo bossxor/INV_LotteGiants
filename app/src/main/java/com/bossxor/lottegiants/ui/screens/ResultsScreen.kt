@@ -634,11 +634,7 @@ private fun ResultGameCard(g: MiniGame) {
                         }
                         GameStatus.BEFORE -> StatusPill(g.startTime.ifBlank { "예정" }, LotteGold)
                         GameStatus.CANCELED -> StatusPill(
-                            if (g.statusText.isNotBlank() && g.statusText != "취소") {
-                                "취소 · ${g.statusText}"
-                            } else {
-                                "취소"
-                            },
+                            g.statusText.ifBlank { "취소" },
                             MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }

@@ -189,6 +189,29 @@ class SnapshotStore(private val context: Context) {
         context.dataStore.edit { it[KEY_NOTIFIED_CANCEL] = gameId }
     }
 
+    /** 권한 대기 중인 업데이트 APK (절대 경로). 빈 문자열이면 없음. */
+    suspend fun pendingUpdateApkPath(): String =
+        context.dataStore.data.map { it[KEY_PENDING_UPDATE_APK].orEmpty() }.first()
+
+    suspend fun pendingUpdateVersionCode(): Int =
+        context.dataStore.data.map {
+            it[KEY_PENDING_UPDATE_CODE]?.toIntOrNull() ?: 0
+        }.first()
+
+    suspend fun setPendingUpdate(apkPath: String, versionCode: Int) {
+        context.dataStore.edit {
+            it[KEY_PENDING_UPDATE_APK] = apkPath
+            it[KEY_PENDING_UPDATE_CODE] = versionCode.toString()
+        }
+    }
+
+    suspend fun clearPendingUpdate() {
+        context.dataStore.edit {
+            it.remove(KEY_PENDING_UPDATE_APK)
+            it.remove(KEY_PENDING_UPDATE_CODE)
+        }
+    }
+
     companion object {
         private val KEY_SNAPSHOT = stringPreferencesKey("live_snapshot")
         private val KEY_THEME = stringPreferencesKey("theme_mode")
@@ -199,6 +222,8 @@ class SnapshotStore(private val context: Context) {
         private val KEY_FAVORITE_PLAYERS = stringPreferencesKey("favorite_players")
         private val KEY_BANNER_DAY = stringPreferencesKey("perm_banner_dismissed_day")
         private val KEY_NOTIFIED_CANCEL = stringPreferencesKey("notified_cancel_game_id")
+        private val KEY_PENDING_UPDATE_APK = stringPreferencesKey("pending_update_apk")
+        private val KEY_PENDING_UPDATE_CODE = stringPreferencesKey("pending_update_code")
     }
 }
 

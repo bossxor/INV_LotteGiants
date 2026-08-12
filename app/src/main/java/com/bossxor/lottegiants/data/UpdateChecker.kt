@@ -32,6 +32,12 @@ sealed class UpdateCheckResult {
     data class Failed(val message: String) : UpdateCheckResult()
 }
 
+sealed class InstallResult {
+    data object Launched : InstallResult()
+    data object NeedsPermission : InstallResult()
+    data class DownloadFailed(val message: String) : InstallResult()
+}
+
 /**
  * GitHub Releases 최신 APK 검사·다운로드·설치.
  * Release body에 `versionCode: N` 이 있어야 비교한다.
@@ -99,7 +105,6 @@ object UpdateChecker {
             val release = latest.getOrElse { err ->
                 val errMsg = err.message ?: "릴리즈 조회 실패"
                 Log.w(TAG, "latest failed: $errMsg")
-                // latest 실패 시 목록에서 최신 non-draft 탐색
                 val listed = fetchReleaseList(LIST_URL).getOrElse {
                     Log.w(TAG, "list failed: $errMsg")
                     return@withContext UpdateCheckResult.Failed(errMsg).also {
@@ -198,51 +203,122 @@ object UpdateChecker {
         return if (m.find()) m.group(1)?.toIntOrNull() ?: 0 else 0
     }
 
+    fun canInstallPackages(context: Context): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            context.packageManager.canRequestPackageInstalls()
+
+    fun openInstallPermissionSettings(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        context.startActivity(
+            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                data = Uri.parse("package:${context.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            },
+        )
+    }
+
+    private fun updateFile(context: Context): File =
+        File(File(context.cacheDir, "updates").apply { mkdirs() }, "update.apk")
+
     /**
-     * APK 다운로드 후 설치 인텐트. 성공 시 true.
-     * Android 8+ 는 REQUEST_INSTALL_PACKAGES 필요.
+     * APK 다운로드 후 설치 인텐트.
+     * 권한이 없으면 APK를 먼저 받은 뒤 설정 화면을 열고 [InstallResult.NeedsPermission]을 반환한다.
      */
+    suspend fun downloadAndInstall(
+        context: Context,
+        info: UpdateInfo,
+        store: SnapshotStore? = null,
+    ): InstallResult = withContext(Dispatchers.IO) {
+        try {
+            val out = downloadApk(context, info.apkUrl)
+                ?: return@withContext InstallResult.DownloadFailed("APK 다운로드에 실패했습니다.")
+            store?.setPendingUpdate(out.absolutePath, info.versionCode)
+            if (!canInstallPackages(context)) {
+                withContext(Dispatchers.Main) {
+                    openInstallPermissionSettings(context)
+                }
+                return@withContext InstallResult.NeedsPermission
+            }
+            launchInstall(context, out)
+            store?.clearPendingUpdate()
+            InstallResult.Launched
+        } catch (e: Exception) {
+            Log.e(TAG, "downloadAndInstall failed", e)
+            InstallResult.DownloadFailed(e.message ?: "설치 준비 실패")
+        }
+    }
+
+    /** 권한 승인 후 대기 중인 APK를 이어서 설치. */
+    suspend fun resumePendingInstall(
+        context: Context,
+        store: SnapshotStore,
+    ): InstallResult = withContext(Dispatchers.IO) {
+        val path = store.pendingUpdateApkPath()
+        if (path.isBlank()) {
+            return@withContext InstallResult.DownloadFailed("대기 중인 업데이트가 없습니다.")
+        }
+        val file = File(path)
+        if (!file.exists() || file.length() < 1024L) {
+            store.clearPendingUpdate()
+            return@withContext InstallResult.DownloadFailed("다운로드된 APK를 찾을 수 없습니다.")
+        }
+        if (!canInstallPackages(context)) {
+            withContext(Dispatchers.Main) {
+                openInstallPermissionSettings(context)
+            }
+            return@withContext InstallResult.NeedsPermission
+        }
+        launchInstall(context, file)
+        store.clearPendingUpdate()
+        InstallResult.Launched
+    }
+
+    private fun downloadApk(context: Context, apkUrl: String): File? {
+        client.newCall(downloadRequest(apkUrl)).execute().use { resp ->
+            if (!resp.isSuccessful) {
+                Log.w(TAG, "download failed http=${resp.code}")
+                return null
+            }
+            val out = updateFile(context)
+            if (out.exists()) out.delete()
+            resp.body?.byteStream()?.use { input ->
+                out.outputStream().use { output -> input.copyTo(output) }
+            } ?: return null
+            if (out.length() < 1024L) {
+                out.delete()
+                return null
+            }
+            return out
+        }
+    }
+
+    private suspend fun launchInstall(context: Context, apk: File) {
+        withContext(Dispatchers.Main) {
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                apk,
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }
+    }
+
+    /** 하위 호환: 성공 여부만 필요할 때 */
     suspend fun downloadAndInstall(context: Context, apkUrl: String): Boolean =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-                    !context.packageManager.canRequestPackageInstalls()
-                ) {
-                    withContext(Dispatchers.Main) {
-                        context.startActivity(
-                            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                                data = Uri.parse("package:${context.packageName}")
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            },
-                        )
-                    }
-                    return@runCatching false
-                }
-                client.newCall(downloadRequest(apkUrl)).execute().use { resp ->
-                    if (!resp.isSuccessful) return@runCatching false
-                    val dir = File(context.cacheDir, "updates").apply { mkdirs() }
-                    val out = File(dir, "update.apk")
-                    if (out.exists()) out.delete()
-                    resp.body?.byteStream()?.use { input ->
-                        out.outputStream().use { output -> input.copyTo(output) }
-                    } ?: return@runCatching false
-                    if (out.length() < 1024L) return@runCatching false
-                    withContext(Dispatchers.Main) {
-                        val uri = FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.fileprovider",
-                            out,
-                        )
-                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                            setDataAndType(uri, "application/vnd.android.package-archive")
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
-                    }
-                    true
-                }
-            }.getOrDefault(false)
+        when (
+            downloadAndInstall(
+                context,
+                UpdateInfo(versionCode = 0, tagName = "", apkUrl = apkUrl),
+                store = null,
+            )
+        ) {
+            is InstallResult.Launched -> true
+            else -> false
         }
 }
 

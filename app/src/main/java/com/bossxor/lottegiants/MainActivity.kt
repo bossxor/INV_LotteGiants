@@ -60,6 +60,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.bossxor.lottegiants.BuildConfig
 import com.bossxor.lottegiants.data.GiantsRepository
+import com.bossxor.lottegiants.data.InstallResult
 import com.bossxor.lottegiants.data.UpdateCheckResult
 import com.bossxor.lottegiants.data.UpdateChecker
 import com.bossxor.lottegiants.data.UpdateInfo
@@ -139,9 +140,31 @@ class MainActivity : ComponentActivity() {
                                 if (snapshot?.lotteGame?.status == GameStatus.LIVE) {
                                     LiveScoreService.start(this@MainActivity)
                                 }
-                                if (!updateChecked) {
-                                    updateChecked = true
-                                    scope.launch {
+                                scope.launch {
+                                    val store = GiantsRepository.get(this@MainActivity).store
+                                    val pendingPath = withContext(Dispatchers.IO) {
+                                        store.pendingUpdateApkPath()
+                                    }
+                                    if (pendingPath.isNotBlank() &&
+                                        UpdateChecker.canInstallPackages(this@MainActivity)
+                                    ) {
+                                        val result = withContext(Dispatchers.IO) {
+                                            UpdateChecker.resumePendingInstall(
+                                                this@MainActivity,
+                                                store,
+                                            )
+                                        }
+                                        if (result is InstallResult.Launched) {
+                                            Toast.makeText(
+                                                this@MainActivity,
+                                                "업데이트를 이어서 설치합니다.",
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                            return@launch
+                                        }
+                                    }
+                                    if (!updateChecked) {
+                                        updateChecked = true
                                         val result = withContext(Dispatchers.IO) {
                                             UpdateChecker.check(BuildConfig.VERSION_CODE)
                                         }
@@ -174,20 +197,32 @@ class MainActivity : ComponentActivity() {
                                 onClick = {
                                     scope.launch {
                                         updateDownloading = true
-                                        val ok = withContext(Dispatchers.IO) {
+                                        val store = GiantsRepository.get(this@MainActivity).store
+                                        val result = withContext(Dispatchers.IO) {
                                             UpdateChecker.downloadAndInstall(
                                                 this@MainActivity,
-                                                info.apkUrl,
+                                                info,
+                                                store,
                                             )
                                         }
                                         updateDownloading = false
-                                        updateInfo = null
-                                        if (!ok) {
-                                            Toast.makeText(
-                                                this@MainActivity,
-                                                "다운로드에 실패했습니다.",
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
+                                        when (result) {
+                                            is InstallResult.Launched -> updateInfo = null
+                                            is InstallResult.NeedsPermission -> {
+                                                updateInfo = null
+                                                Toast.makeText(
+                                                    this@MainActivity,
+                                                    "설치 권한을 허용하면 자동으로 설치가 진행됩니다.",
+                                                    Toast.LENGTH_LONG,
+                                                ).show()
+                                            }
+                                            is InstallResult.DownloadFailed -> {
+                                                Toast.makeText(
+                                                    this@MainActivity,
+                                                    result.message,
+                                                    Toast.LENGTH_LONG,
+                                                ).show()
+                                            }
                                         }
                                     }
                                 },

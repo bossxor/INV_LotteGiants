@@ -62,7 +62,7 @@ private fun MiniGameCard(g: MiniGame) {
                     GameStatus.LIVE -> g.statusText.ifBlank { "진행 중" }
                     GameStatus.BEFORE -> g.startTime
                     GameStatus.ENDED -> "종료"
-                    GameStatus.CANCELED -> g.statusText.ifBlank { "경기 취소" }
+                    GameStatus.CANCELED -> g.statusText.ifBlank { "취소" }
                 },
                 fontSize = 12.sp,
                 color = if (g.status == GameStatus.LIVE) LotteRed else MaterialTheme.colorScheme.onSurfaceVariant,

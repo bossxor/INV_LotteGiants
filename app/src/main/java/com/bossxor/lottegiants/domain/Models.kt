@@ -502,10 +502,10 @@ fun normalizeCancelReason(raw: String?): String {
     return generic.take(12)
 }
 
-/** 표시용: "경기 취소" 또는 "경기 취소 (폭염)" */
+/** 표시용: "취소" 또는 "취소 (폭염)" */
 fun cancelDisplayLabel(reason: String?): String {
     val r = reason?.trim().orEmpty()
-    return if (r.isBlank()) "경기 취소" else "경기 취소 ($r)"
+    return if (r.isBlank()) "취소" else "취소 ($r)"
 }
 
 val LotteGameInfo.cancelLabel: String
