@@ -280,6 +280,12 @@ fun SettingsScreen(
                 Text("표시 모드", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ModeChip("라이브 바", liveMode == LiveDisplayMode.LOCK_NOW) {
+                        scope.launch {
+                            store.setLiveDisplayMode(LiveDisplayMode.LOCK_NOW)
+                            if (store.isLiveScoreEnabled()) LiveScoreService.restart(context)
+                        }
+                    }
                     ModeChip("상세 알림", liveMode == LiveDisplayMode.FULL) {
                         scope.launch {
                             store.setLiveDisplayMode(LiveDisplayMode.FULL)
@@ -292,13 +298,20 @@ fun SettingsScreen(
                             if (store.isLiveScoreEnabled()) LiveScoreService.restart(context)
                         }
                     }
-                    ModeChip("잠금·공개", liveMode == LiveDisplayMode.LOCK_NOW) {
-                        scope.launch {
-                            store.setLiveDisplayMode(LiveDisplayMode.LOCK_NOW)
-                            if (store.isLiveScoreEnabled()) LiveScoreService.restart(context)
-                        }
-                    }
                 }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    when (liveMode) {
+                        LiveDisplayMode.LOCK_NOW ->
+                            "이닝 진행 바로 크게 표시합니다. Now Bar를 지원하는 기기에서는 잠금화면·상태바에도 함께 올라갑니다."
+                        LiveDisplayMode.FULL ->
+                            "선수 사진과 루상 다이아몬드까지 담은 상세 카드입니다. 대신 Now Bar에는 올라가지 않습니다."
+                        LiveDisplayMode.STATUS_SCORE ->
+                            "점수와 이닝만 한 줄로 간단히 표시합니다."
+                    },
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Spacer(Modifier.height(12.dp))
                 Button(
                     onClick = {

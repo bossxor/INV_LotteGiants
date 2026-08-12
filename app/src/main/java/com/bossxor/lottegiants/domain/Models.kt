@@ -155,11 +155,11 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
 /** 실시간 스코어 알림/Now Bar 표시 모드 */
 enum class LiveDisplayMode {
-    /** 알림창에 이닝·BSO 등 상세 */
+    /** 커스텀 뷰 상세 카드 (선수 사진·루상). Live Update 승격 불가 */
     FULL,
     /** 상태바·알림줄에 점수만 */
     STATUS_SCORE,
-    /** 잠금화면·Now Bar 공개 표시 */
+    /** 이닝 진행 바 기반 Live Update — 잠금화면·Now Bar에 크게 표시 */
     LOCK_NOW,
 }
 

@@ -10,6 +10,7 @@ import android.graphics.Bitmap
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import com.bossxor.lottegiants.MainActivity
 import com.bossxor.lottegiants.R
 import com.bossxor.lottegiants.data.NotificationType
@@ -40,6 +41,11 @@ object NotificationHelper {
     const val CHANNEL_FAVORITE = "event_favorite"
 
     const val LIVE_NOTIFICATION_ID = 1001
+
+    private const val REGULATION_INNINGS = 9
+    private const val COLOR_LOTTE = 0xFFD00F31.toInt()
+    private const val COLOR_OPPONENT = 0xFF9AA0A6.toInt()
+    private const val COLOR_TRACK = 0xFF4A4F55.toInt()
 
     fun createChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
@@ -115,51 +121,69 @@ object NotificationHelper {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setSubText(if (mode == LiveDisplayMode.STATUS_SCORE) chipText else null)
+            .setShortCriticalText(chipText)
+            .setColor(COLOR_LOTTE)
 
-        // 커스텀 뷰가 빠진 기기(Now Bar 승격 등)에서도 요약이 보이도록 BigText 항상 설정
-        if (mode != LiveDisplayMode.STATUS_SCORE) {
-            builder.setStyle(
+        // 커스텀 RemoteViews가 붙은 알림은 Live Update로 승격될 수 없다 (플랫폼 제약).
+        // 따라서 '상세' 모드에서만 커스텀 뷰를 쓰고, 나머지는 승격 가능한 표준 스타일을 쓴다.
+        val useCustom = mode == LiveDisplayMode.FULL &&
+            game != null &&
+            game.status == GameStatus.LIVE
+        when {
+            useCustom -> builder
+                .setCustomContentView(buildLiveRemoteViews(context, game!!, big = false))
+                .setCustomBigContentView(buildLiveRemoteViews(context, game, big = true))
+                .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+
+            // 진행 중 경기는 이닝 진행 바로 — Now Bar에서 구글/네이버 스포츠처럼 크게 뜬다
+            game != null && game.status == GameStatus.LIVE && mode != LiveDisplayMode.STATUS_SCORE ->
+                builder.setStyle(liveProgressStyle(context, game))
+
+            mode != LiveDisplayMode.STATUS_SCORE -> builder.setStyle(
                 NotificationCompat.BigTextStyle()
                     .setBigContentTitle(scoreTitle)
                     .bigText(summary),
             )
         }
 
-        val useCustom = game != null &&
-            game.status == GameStatus.LIVE &&
-            mode != LiveDisplayMode.STATUS_SCORE
-        if (useCustom) {
-            val content = buildLiveRemoteViews(context, game!!, big = false)
-            val big = buildLiveRemoteViews(context, game, big = true)
-            builder
-                .setCustomContentView(content)
-                .setCustomBigContentView(big)
-                .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-        }
-
-        // Now Bar용 짧은 텍스트 — 점수·이닝·카운트까지
-        @Suppress("NewApi")
-        try {
-            builder.javaClass.getMethod("setShortCriticalText", CharSequence::class.java)
-                .invoke(builder, chipText)
-        } catch (_: Exception) { }
-
-        // 커스텀 RemoteViews와 Live Update 승격은 충돌하므로,
-        // 상세 커스텀을 쓸 때는 승격 요청을 하지 않는다.
         if (!useCustom) {
-            try {
-                val extras = android.os.Bundle()
-                extras.putBoolean("android.requestPromotedOngoing", true)
-                builder.addExtras(extras)
-            } catch (_: Exception) { }
-            @Suppress("NewApi")
-            try {
-                builder.javaClass.getMethod("setRequestPromotedOngoing", Boolean::class.javaPrimitiveType)
-                    .invoke(builder, true)
-            } catch (_: Exception) { }
+            builder.setRequestPromotedOngoing(true)
         }
 
         return builder.build()
+    }
+
+    /**
+     * 이닝을 구간으로 나눈 진행 바. 각 이닝은 초·말 2칸이고 득점한 이닝은 점으로 찍는다.
+     * ProgressStyle은 Live Update로 승격 가능한 스타일이라 One UI Now Bar에도 그대로 실린다.
+     */
+    private fun liveProgressStyle(
+        context: Context,
+        game: LotteGameInfo,
+    ): NotificationCompat.ProgressStyle {
+        val innings = maxOf(REGULATION_INNINGS, game.inning)
+        val total = innings * 2
+        val current = ((game.inning - 1).coerceAtLeast(0) * 2 + if (game.isTopInning) 1 else 2)
+            .coerceIn(0, total)
+
+        fun scoringPoints(scores: List<String>, isBottomHalf: Boolean, color: Int) =
+            scores.mapIndexedNotNull { i, raw ->
+                if ((raw.trim().toIntOrNull() ?: 0) <= 0) return@mapIndexedNotNull null
+                val pos = i * 2 + if (isBottomHalf) 2 else 1
+                if (pos > total) null else NotificationCompat.ProgressStyle.Point(pos).setColor(color)
+            }
+
+        return NotificationCompat.ProgressStyle()
+            .setProgressSegments(
+                List(innings) { NotificationCompat.ProgressStyle.Segment(2).setColor(COLOR_TRACK) },
+            )
+            .setProgressPoints(
+                scoringPoints(game.lotteInningScores, game.isHome, COLOR_LOTTE) +
+                    scoringPoints(game.opponentInningScores, !game.isHome, COLOR_OPPONENT),
+            )
+            .setProgress(current)
+            .setStyledByProgress(false)
+            .setProgressTrackerIcon(IconCompat.createWithResource(context, R.drawable.ic_notification))
     }
 
     /** 알림 접힘 상태용 한 줄 */
