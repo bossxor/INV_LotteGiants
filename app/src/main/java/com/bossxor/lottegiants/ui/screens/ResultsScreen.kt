@@ -235,30 +235,30 @@ fun ResultsScreen(
                     it.homeTeamCode == LOTTE_TEAM_CODE || it.awayTeamCode == LOTTE_TEAM_CODE ||
                         it.homeName.contains("롯데") || it.awayName.contains("롯데")
                 }
+                val swipeModifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .swipeChangeDay(
+                        enabled = !swipeLock,
+                        onSwipe = { delta -> withSwipeLock { shiftDay(delta) } },
+                    )
                 when {
                     loading && games.isEmpty() -> {
-                        Box(Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
+                        Box(swipeModifier, contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                         }
                     }
                     visibleGames.isEmpty() -> {
-                        EmptyRetry(
-                            message = "해당 일자 KBO 경기가 없습니다.",
-                            onRetry = onRefresh,
-                        )
+                        Box(swipeModifier) {
+                            EmptyRetry(
+                                message = "해당 일자 KBO 경기가 없습니다.",
+                                onRetry = onRefresh,
+                            )
+                        }
                     }
                     else -> {
-                        val swipeModifier = Modifier.swipeChangeDay(
-                            enabled = !swipeLock,
-                            onSwipe = { delta ->
-                                withSwipeLock { shiftDay(delta) }
-                            },
-                        )
                         LazyColumn(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                                .then(swipeModifier),
+                            modifier = swipeModifier,
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             if (lotteGames.size >= 2) {
@@ -279,6 +279,7 @@ fun ResultsScreen(
                 }
             } else {
                 CalendarMonthView(
+                    modifier = Modifier.weight(1f),
                     month = calendarMonth,
                     selectedDate = selectedDate,
                     monthGames = monthGames,
@@ -400,6 +401,7 @@ private fun DateChip(
 
 @Composable
 private fun CalendarMonthView(
+    modifier: Modifier = Modifier,
     month: YearMonth,
     selectedDate: LocalDate,
     monthGames: List<MiniGame>,
@@ -427,7 +429,7 @@ private fun CalendarMonthView(
     }
 
     Column(
-        Modifier
+        modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .swipeChangeDay(enabled = swipeEnabled, onSwipe = onSwipeDay),

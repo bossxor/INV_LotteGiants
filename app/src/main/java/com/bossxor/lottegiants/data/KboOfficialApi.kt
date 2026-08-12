@@ -5,7 +5,8 @@ import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.cancelDisplayLabel
-import com.bossxor.lottegiants.domain.normalizeCancelReason
+import com.bossxor.lottegiants.domain.resolveCancelReason
+import com.bossxor.lottegiants.domain.resolveCancelReason
 import com.bossxor.lottegiants.domain.resolveTeamLogoUrl
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -120,19 +121,19 @@ data class KboOfficialGame(
     @SerialName("W_PIT_P_NM") val winPitcher: String = "",
     @SerialName("L_PIT_P_NM") val losePitcher: String = "",
     @SerialName("SV_PIT_P_NM") val savePitcher: String = "",
-    @SerialName("GAME_STATE_SC") val gameState: Int = 0,
-    @SerialName("CANCEL_SC_ID") val cancelScId: Int = 0,
+    @SerialName("GAME_STATE_SC") val gameStateCn: String? = null,
+    @SerialName("CANCEL_SC_ID") val cancelScIdCn: String? = null,
     @SerialName("CANCEL_SC_NM") val cancelScNm: String = "",
-    @SerialName("GAME_INN_NO") val inning: Int = 0,
+    @SerialName("GAME_INN_NO") val inningCn: String? = null,
     @SerialName("GAME_TB_SC") val topBottom: String = "",
     @SerialName("T_SCORE_CN") val awayScore: String = "",
     @SerialName("B_SCORE_CN") val homeScore: String = "",
-    @SerialName("STRIKE_CN") val strike: Int = 0,
-    @SerialName("BALL_CN") val ball: Int = 0,
-    @SerialName("OUT_CN") val out: Int = 0,
-    @SerialName("B1_BAT_ORDER_NO") val base1Order: Int = 0,
-    @SerialName("B2_BAT_ORDER_NO") val base2Order: Int = 0,
-    @SerialName("B3_BAT_ORDER_NO") val base3Order: Int = 0,
+    @SerialName("STRIKE_CN") val strikeCn: String? = null,
+    @SerialName("BALL_CN") val ballCn: String? = null,
+    @SerialName("OUT_CN") val outCn: String? = null,
+    @SerialName("B1_BAT_ORDER_NO") val base1OrderCn: String? = null,
+    @SerialName("B2_BAT_ORDER_NO") val base2OrderCn: String? = null,
+    @SerialName("B3_BAT_ORDER_NO") val base3OrderCn: String? = null,
     @SerialName("T_P_NM") val awaySidePlayer: String = "",
     @SerialName("B_P_NM") val homeSidePlayer: String = "",
     @SerialName("TV_IF") val broadChannel: String = "",
@@ -148,6 +149,16 @@ data class KboOfficialGame(
     @SerialName("SR_ID") val srId: Int = 0,
     @SerialName("CHECK_SWING_CK") val checkSwingCk: Int = 0,
 ) {
+    private val gameState: Int get() = gameStateCn.kboInt()
+    private val cancelScId: Int get() = cancelScIdCn.kboInt()
+    private val inning: Int get() = inningCn.kboInt()
+    private val strike: Int get() = strikeCn.kboInt()
+    private val ball: Int get() = ballCn.kboInt()
+    private val out: Int get() = outCn.kboInt()
+    private val base1Order: Int get() = base1OrderCn.kboInt()
+    private val base2Order: Int get() = base2OrderCn.kboInt()
+    private val base3Order: Int get() = base3OrderCn.kboInt()
+
     val isTopInning: Boolean get() = !topBottom.equals("B", ignoreCase = true)
 
     /** GAME_STATE_SC: 1 예정 / 2·5 진행 / 3 종료 / 4 취소·서스펜디드 */
@@ -159,26 +170,8 @@ data class KboOfficialGame(
     }
 
     /** 취소·순연 등 정상경기가 아닌 경우의 사유 라벨 */
-    fun cancelReasonLabel(): String? {
-        val name = cancelScNm.trim()
-        if (name.isNotBlank() && name != "정상경기") {
-            val normalized = normalizeCancelReason(name)
-            if (normalized.isNotBlank()) return normalized
-            val stripped = name
-                .replace("경기", "")
-                .replace("취소", "")
-                .replace("순연", "")
-                .trim()
-            if (stripped.isNotBlank()) return stripped.take(12)
-            if (!name.equals("경기취소", ignoreCase = true) &&
-                !name.equals("취소", ignoreCase = true)
-            ) {
-                return name.take(12)
-            }
-        }
-        if (gameState == 4 || cancelScId >= 1) return null
-        return null
-    }
+    fun cancelReasonLabel(): String? =
+        resolveCancelReason(cancelScNm, cancelScId)
 
     fun cancelStatusText(): String = cancelDisplayLabel(cancelReasonLabel())
 
@@ -248,7 +241,7 @@ data class KboOfficialGame(
         val state = status()
         val live = state == GameStatus.LIVE
         val reason = if (state == GameStatus.CANCELED) {
-            normalizeCancelReason(cancelReasonLabel())
+            cancelReasonLabel().orEmpty()
         } else {
             ""
         }
@@ -348,3 +341,7 @@ data class KboBoxScoreResponse(
     val table3: String = "",
     val realMaxInning: Int = 9,
 )
+
+private fun String?.kboInt(): Int =
+    this?.trim()?.takeIf { it.isNotBlank() && !it.equals("null", ignoreCase = true) }
+        ?.toIntOrNull() ?: 0

@@ -25,7 +25,7 @@ import com.bossxor.lottegiants.domain.StadiumWeather
 import com.bossxor.lottegiants.domain.TeamStanding
 import com.bossxor.lottegiants.domain.WinProbPoint
 import com.bossxor.lottegiants.domain.cancelDisplayLabel
-import com.bossxor.lottegiants.domain.normalizeCancelReason
+import com.bossxor.lottegiants.domain.resolveCancelReason
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.resolveStadiumCoord
 import com.bossxor.lottegiants.domain.normalizeKboImageUrl
@@ -588,30 +588,17 @@ class GiantsRepository private constructor(context: Context) {
             .map { it.toMiniGame() }
     }
 
-    private suspend fun kboToMiniGames(date: LocalDate, games: List<KboOfficialGame>): List<MiniGame> {
-        val reasons = if (games.any { it.status() == GameStatus.CANCELED }) {
-            val day = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-            val naver = runCatching {
-                api.getGames(fromDate = day, toDate = day)
-                    .result?.games.orEmpty()
-                    .filter { it.categoryId == "kbo" }
-            }.getOrDefault(emptyList())
-            cancelReasonsFor(naver, date)
-        } else {
-            emptyMap()
-        }
-        return games.map { g ->
+    private suspend fun kboToMiniGames(date: LocalDate, games: List<KboOfficialGame>): List<MiniGame> =
+        games.map { g ->
             val mini = g.toMiniGame()
             if (mini.status != GameStatus.CANCELED) return@map mini
             val reason = g.cancelReasonLabel()
-                ?: reasons[g.matchKey()]?.let { normalizeCancelReason(it) }
             if (!reason.isNullOrBlank()) {
                 mini.copy(statusText = cancelDisplayLabel(reason))
             } else {
                 mini
             }
         }
-    }
 
     suspend fun fetchStandings(): List<TeamStanding> {
         val now = System.currentTimeMillis()
@@ -939,14 +926,16 @@ class GiantsRepository private constructor(context: Context) {
             jobs.flatMap { it.await() }
         }
 
-    /** 네이버 폴백 경로에서만 쓰는 취소 사유 보강 (키: AWAY_HOME) */
+    /** 네이버 폴백 경로에서 KBO 취소 사유 보강 (키: AWAY_HOME) */
     private suspend fun cancelReasonsFor(
         dtos: List<GameDto>,
         date: LocalDate,
     ): Map<String, String> {
         if (dtos.none { it.cancel }) return emptyMap()
         return fetchKboGames(date)
-            .mapNotNull { g -> g.cancelReasonLabel()?.let { g.matchKey() to it } }
+            .mapNotNull { g ->
+                g.cancelReasonLabel()?.let { g.matchKey() to it }
+            }
             .toMap()
     }
 
@@ -971,7 +960,7 @@ class GiantsRepository private constructor(context: Context) {
         statusText = statusInfo?.takeIf { it.isNotBlank() }?.let { raw ->
             if (status() == GameStatus.CANCELED) {
                 cancelDisplayLabel(
-                    normalizeCancelReason(kboCancelLabel?.takeIf { it.isNotBlank() } ?: raw),
+                    resolveCancelReason(kboCancelLabel?.takeIf { it.isNotBlank() } ?: raw),
                 )
             } else {
                 raw
@@ -979,7 +968,7 @@ class GiantsRepository private constructor(context: Context) {
         } ?: when (status()) {
             GameStatus.BEFORE -> startTimeText()
             GameStatus.CANCELED -> cancelDisplayLabel(
-                normalizeCancelReason(kboCancelLabel ?: statusInfo),
+                resolveCancelReason(kboCancelLabel ?: statusInfo),
             )
             GameStatus.ENDED -> "종료"
             GameStatus.LIVE -> "진행 중"
@@ -1002,7 +991,7 @@ class GiantsRepository private constructor(context: Context) {
         val isHome = homeTeamCode == LOTTE_TEAM_CODE
         val oppCode = if (isHome) awayTeamCode else homeTeamCode
         val cancelReason = if (status() == GameStatus.CANCELED) {
-            normalizeCancelReason(kboCancelLabel?.takeIf { it.isNotBlank() } ?: statusInfo)
+            resolveCancelReason(kboCancelLabel?.takeIf { it.isNotBlank() } ?: statusInfo).orEmpty()
         } else {
             ""
         }

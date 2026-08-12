@@ -496,6 +496,34 @@ data class TeamStanding(
     val lastFive: String = "",
 )
 
+/** KBO CANCEL_SC_ID → 짧은 사유 */
+fun kboCancelReasonById(id: Int): String? = when (id) {
+    1 -> "우천"
+    2 -> "한파"
+    5 -> "강설"
+    6 -> "그라운드사정"
+    99 -> "기타"
+    else -> null
+}
+
+/** KBO/네이버 취소 문자열 → 짧은 사유 (없으면 null) */
+fun resolveCancelReason(raw: String?, cancelId: Int = 0): String? {
+    val name = raw?.trim().orEmpty()
+    if (name.isNotBlank() && name != "정상경기") {
+        normalizeCancelReason(name).takeIf { it.isNotBlank() }?.let { return it }
+        val stripped = name
+            .replace("경기", "")
+            .replace("취소", "")
+            .replace("순연", "")
+            .trim()
+        if (stripped.isNotBlank()) return stripped.take(12)
+        if (!name.equals("경기취소", ignoreCase = true) && !name.equals("취소", ignoreCase = true)) {
+            return name.take(12)
+        }
+    }
+    return kboCancelReasonById(cancelId)
+}
+
 /** API statusInfo → 짧은 취소 사유 (폭염, 우천…). 일반 '경기취소'만 있으면 빈 문자열 */
 fun normalizeCancelReason(raw: String?): String {
     val s = raw?.trim().orEmpty()
@@ -545,10 +573,10 @@ fun normalizeCancelReason(raw: String?): String {
     return generic.take(12)
 }
 
-/** 표시용: "취소" 또는 "취소 (폭염)" */
+/** 표시용: "취소" 또는 "취소(폭염)" */
 fun cancelDisplayLabel(reason: String?): String {
     val r = reason?.trim().orEmpty()
-    return if (r.isBlank()) "취소" else "취소 ($r)"
+    return if (r.isBlank()) "취소" else "취소($r)"
 }
 
 val LotteGameInfo.cancelLabel: String

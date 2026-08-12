@@ -7,6 +7,7 @@ import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.domain.DayEntryChanges
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.FavoritePlayer
+import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LeaderPlayer
 import com.bossxor.lottegiants.domain.LineupSlot
 import com.bossxor.lottegiants.domain.LiveSnapshot
@@ -18,6 +19,7 @@ import com.bossxor.lottegiants.domain.RosterMove
 import com.bossxor.lottegiants.domain.StadiumWeather
 import com.bossxor.lottegiants.domain.TeamStanding
 import com.bossxor.lottegiants.domain.ThemeMode
+import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.widget.WidgetUpdater
 import kotlinx.coroutines.Job
@@ -468,7 +470,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         homeScore = if (g.isHome) g.lotteScore else g.opponentScore,
                         awayScore = if (g.isHome) g.opponentScore else g.lotteScore,
                         status = g.status,
-                        statusText = g.statusText,
+                        statusText = if (g.status == GameStatus.CANCELED) g.cancelLabel else g.statusText,
                         stadium = g.stadium,
                         startTime = g.startTime,
                         homeLogoUrl = if (g.isHome) g.lotteLogoUrl.ifBlank { com.bossxor.lottegiants.domain.LOTTE_LOGO_URL } else g.opponentLogoUrl,
