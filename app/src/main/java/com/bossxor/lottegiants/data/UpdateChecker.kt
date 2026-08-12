@@ -39,23 +39,34 @@ sealed class InstallResult {
 }
 
 /**
- * GitHub Releases 최신 APK 검사·다운로드·설치.
- * Release body에 `versionCode: N` 이 있어야 비교한다.
+ * 앱 업데이트 검사·다운로드·설치.
+ *
+ * 우선순위:
+ * 1. 고정 채널 `latest` 릴리스의 `update.json` (+ APK)
+ *    → main 푸시마다 CI/스크립트가 덮어쓰므로 수동 버전 릴리스가 필요 없다.
+ * 2. GitHub `/releases/latest` (본문에 `versionCode: N`)
  *
  * public 저장소는 토큰 없이 동작한다.
  * private 이면 local.properties / env 의 `GITHUB_TOKEN` 을 BuildConfig 로 주입한다.
+ *
+ * Android는 일반 앱이 사용자 확인 없이 조용히 설치를 끝낼 수 없다.
+ * 대신 실행 시 자동으로 받아 시스템 설치 화면까지 연다.
  */
 object UpdateChecker {
 
     private const val TAG = "SajikUpdate"
     private const val OWNER = "bossxor"
     private const val REPO = "INV_LotteGiants"
+    private const val LATEST_CHANNEL_TAG = "latest"
+    private const val LATEST_CHANNEL_URL =
+        "https://api.github.com/repos/$OWNER/$REPO/releases/tags/$LATEST_CHANNEL_TAG"
     private const val LATEST_URL =
         "https://api.github.com/repos/$OWNER/$REPO/releases/latest"
     private const val LIST_URL =
         "https://api.github.com/repos/$OWNER/$REPO/releases?per_page=10"
+    private const val MANIFEST_NAME = "update.json"
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
@@ -101,54 +112,112 @@ object UpdateChecker {
 
     suspend fun check(currentVersionCode: Int): UpdateCheckResult = withContext(Dispatchers.IO) {
         try {
-            val latest = fetchRelease(LATEST_URL)
-            val release = latest.getOrElse { err ->
-                val errMsg = err.message ?: "릴리즈 조회 실패"
-                Log.w(TAG, "latest failed: $errMsg")
-                val listed = fetchReleaseList(LIST_URL).getOrElse {
-                    Log.w(TAG, "list failed: $errMsg")
-                    return@withContext UpdateCheckResult.Failed(errMsg).also {
-                        Log.i(TAG, "result=Failed current=$currentVersionCode msg=$errMsg")
-                    }
-                }
-                listed.maxByOrNull { parseVersionCode(it.body) }
-                    ?: return@withContext UpdateCheckResult.Failed(errMsg).also {
-                        Log.i(TAG, "result=Failed current=$currentVersionCode msg=$errMsg")
-                    }
+            val fromChannel = checkLatestChannel(currentVersionCode)
+            if (fromChannel !is UpdateCheckResult.Failed) {
+                return@withContext fromChannel
             }
-            val remoteCode = parseVersionCode(release.body)
-            if (remoteCode <= 0) {
-                val msg = "릴리즈 본문에 versionCode: N 이 없습니다."
-                Log.i(TAG, "result=Failed current=$currentVersionCode msg=$msg")
-                return@withContext UpdateCheckResult.Failed(msg)
-            }
-            if (remoteCode <= currentVersionCode) {
-                Log.i(TAG, "result=UpToDate current=$currentVersionCode remote=$remoteCode")
-                return@withContext UpdateCheckResult.UpToDate
-            }
-            val apk = release.assets.firstOrNull {
-                it.name.endsWith(".apk", ignoreCase = true) &&
-                    it.browserDownloadUrl.isNotBlank()
-            } ?: run {
-                val msg = "릴리즈에 APK가 없습니다."
-                Log.i(TAG, "result=Failed current=$currentVersionCode msg=$msg")
-                return@withContext UpdateCheckResult.Failed(msg)
-            }
-            Log.i(
-                TAG,
-                "result=Available current=$currentVersionCode remote=$remoteCode tag=${release.tagName}",
-            )
-            UpdateCheckResult.Available(
-                UpdateInfo(
-                    versionCode = remoteCode,
-                    tagName = release.tagName.orEmpty(),
-                    apkUrl = apk.browserDownloadUrl,
-                    releaseNotes = release.body.orEmpty().take(400),
-                ),
-            )
+            Log.i(TAG, "latest channel unavailable: ${(fromChannel as UpdateCheckResult.Failed).message}")
+            checkTaggedReleases(currentVersionCode)
         } catch (e: Exception) {
             Log.e(TAG, "check failed", e)
             UpdateCheckResult.Failed(e.message ?: "업데이트 확인 실패")
+        }
+    }
+
+    /** 고정 `latest` 채널 — update.json 우선, 없으면 릴리스 본문·APK로 판단 */
+    private fun checkLatestChannel(currentVersionCode: Int): UpdateCheckResult {
+        val release = fetchRelease(LATEST_CHANNEL_URL).getOrElse {
+            return UpdateCheckResult.Failed(it.message ?: "latest 채널 없음")
+        }
+        val manifestAsset = release.assets.firstOrNull {
+            it.name.equals(MANIFEST_NAME, ignoreCase = true) && it.browserDownloadUrl.isNotBlank()
+        }
+        if (manifestAsset != null) {
+            val manifest = downloadManifest(manifestAsset.browserDownloadUrl)
+                ?: return UpdateCheckResult.Failed("update.json을 읽지 못했습니다.")
+            if (manifest.versionCode <= 0) {
+                return UpdateCheckResult.Failed("update.json에 versionCode가 없습니다.")
+            }
+            if (manifest.versionCode <= currentVersionCode) {
+                Log.i(TAG, "result=UpToDate channel current=$currentVersionCode remote=${manifest.versionCode}")
+                return UpdateCheckResult.UpToDate
+            }
+            val apkName = manifest.apkFileName.ifBlank { "LotteGiants.apk" }
+            val apk = release.assets.firstOrNull {
+                it.name.equals(apkName, ignoreCase = true)
+            } ?: release.assets.firstOrNull {
+                it.name.endsWith(".apk", ignoreCase = true)
+            } ?: return UpdateCheckResult.Failed("latest 채널에 APK가 없습니다.")
+            Log.i(
+                TAG,
+                "result=Available channel current=$currentVersionCode remote=${manifest.versionCode}",
+            )
+            return UpdateCheckResult.Available(
+                UpdateInfo(
+                    versionCode = manifest.versionCode,
+                    tagName = manifest.versionName.ifBlank { LATEST_CHANNEL_TAG },
+                    apkUrl = apk.browserDownloadUrl,
+                    releaseNotes = manifest.notes.take(400),
+                ),
+            )
+        }
+        return releaseToResult(release, currentVersionCode)
+    }
+
+    private fun checkTaggedReleases(currentVersionCode: Int): UpdateCheckResult {
+        val latest = fetchRelease(LATEST_URL)
+        val release = latest.getOrElse { err ->
+            val errMsg = err.message ?: "릴리즈 조회 실패"
+            Log.w(TAG, "latest failed: $errMsg")
+            val listed = fetchReleaseList(LIST_URL).getOrElse {
+                return UpdateCheckResult.Failed(errMsg)
+            }
+            listed.maxByOrNull { parseVersionCode(it.body) }
+                ?: return UpdateCheckResult.Failed(errMsg)
+        }
+        return releaseToResult(release, currentVersionCode)
+    }
+
+    private fun releaseToResult(release: GithubRelease, currentVersionCode: Int): UpdateCheckResult {
+        val remoteCode = parseVersionCode(release.body)
+        if (remoteCode <= 0) {
+            val msg = "릴리즈 본문에 versionCode: N 이 없습니다."
+            Log.i(TAG, "result=Failed current=$currentVersionCode msg=$msg")
+            return UpdateCheckResult.Failed(msg)
+        }
+        if (remoteCode <= currentVersionCode) {
+            Log.i(TAG, "result=UpToDate current=$currentVersionCode remote=$remoteCode")
+            return UpdateCheckResult.UpToDate
+        }
+        val apk = release.assets.firstOrNull {
+            it.name.endsWith(".apk", ignoreCase = true) &&
+                it.browserDownloadUrl.isNotBlank()
+        } ?: return UpdateCheckResult.Failed("릴리즈에 APK가 없습니다.")
+        Log.i(
+            TAG,
+            "result=Available current=$currentVersionCode remote=$remoteCode tag=${release.tagName}",
+        )
+        return UpdateCheckResult.Available(
+            UpdateInfo(
+                versionCode = remoteCode,
+                tagName = release.tagName.orEmpty(),
+                apkUrl = apk.browserDownloadUrl,
+                releaseNotes = release.body.orEmpty().take(400),
+            ),
+        )
+    }
+
+    private fun downloadManifest(url: String): UpdateManifest? {
+        client.newCall(downloadRequest(url)).execute().use { resp ->
+            if (!resp.isSuccessful) {
+                Log.w(TAG, "manifest http=${resp.code}")
+                return null
+            }
+            val body = resp.body?.string().orEmpty()
+            if (body.isBlank()) return null
+            return runCatching {
+                json.decodeFromString(UpdateManifest.serializer(), body)
+            }.getOrNull()
         }
     }
 
@@ -172,9 +241,7 @@ object UpdateChecker {
                 )
             }
             if (!resp.isSuccessful) {
-                return Result.failure(
-                    IllegalStateException("GitHub API 오류 ${resp.code}"),
-                )
+                return Result.failure(IllegalStateException("GitHub API 오류 ${resp.code}"))
             }
             if (body.isBlank()) {
                 return Result.failure(IllegalStateException("빈 응답"))
@@ -192,7 +259,7 @@ object UpdateChecker {
             val list = json.decodeFromString(
                 kotlinx.serialization.builtins.ListSerializer(GithubRelease.serializer()),
                 body,
-            ).filter { it.draft != true && it.prerelease != true }
+            ).filter { it.draft != true && it.prerelease != true && it.tagName != LATEST_CHANNEL_TAG }
             return Result.success(list)
         }
     }
@@ -228,9 +295,10 @@ object UpdateChecker {
         context: Context,
         info: UpdateInfo,
         store: SnapshotStore? = null,
+        onProgress: ((downloaded: Long, total: Long) -> Unit)? = null,
     ): InstallResult = withContext(Dispatchers.IO) {
         try {
-            val out = downloadApk(context, info.apkUrl)
+            val out = downloadApk(context, info.apkUrl, onProgress)
                 ?: return@withContext InstallResult.DownloadFailed("APK 다운로드에 실패했습니다.")
             store?.setPendingUpdate(out.absolutePath, info.versionCode)
             if (!canInstallPackages(context)) {
@@ -273,17 +341,41 @@ object UpdateChecker {
         InstallResult.Launched
     }
 
-    private fun downloadApk(context: Context, apkUrl: String): File? {
+    private fun downloadApk(
+        context: Context,
+        apkUrl: String,
+        onProgress: ((downloaded: Long, total: Long) -> Unit)?,
+    ): File? {
         client.newCall(downloadRequest(apkUrl)).execute().use { resp ->
             if (!resp.isSuccessful) {
                 Log.w(TAG, "download failed http=${resp.code}")
                 return null
             }
+            val body = resp.body ?: return null
+            val total = body.contentLength()
             val out = updateFile(context)
             if (out.exists()) out.delete()
-            resp.body?.byteStream()?.use { input ->
-                out.outputStream().use { output -> input.copyTo(output) }
-            } ?: return null
+            val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+            body.byteStream().use { input ->
+                out.outputStream().use { output ->
+                    val buf = ByteArray(DEFAULT_BUFFER_SIZE)
+                    var read: Int
+                    var downloaded = 0L
+                    var lastPct = -1
+                    while (input.read(buf).also { read = it } != -1) {
+                        output.write(buf, 0, read)
+                        downloaded += read
+                        if (onProgress != null && total > 0L) {
+                            val pct = ((downloaded * 100) / total).toInt()
+                            if (pct != lastPct && (pct == 100 || pct - lastPct >= 2)) {
+                                lastPct = pct
+                                val d = downloaded
+                                mainHandler.post { onProgress(d, total) }
+                            }
+                        }
+                    }
+                }
+            }
             if (out.length() < 1024L) {
                 out.delete()
                 return null
@@ -321,6 +413,14 @@ object UpdateChecker {
             else -> false
         }
 }
+
+@Serializable
+data class UpdateManifest(
+    val versionCode: Int = 0,
+    val versionName: String = "",
+    val apkFileName: String = "LotteGiants.apk",
+    val notes: String = "",
+)
 
 @Serializable
 private data class GithubRelease(

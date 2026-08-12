@@ -1,0 +1,81 @@
+name: Publish latest channel
+
+# main에 푸시되면 릴리스 APK를 빌드해 고정 태그 `latest`에 덮어씁니다.
+# 앱은 시작 시 이 채널의 update.json을 보고 자동 업데이트합니다.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "SIGNING_KEYSTORE_BASE64 시크릿이 없습니다."
+            echo "로컬에서 scripts/setup-ci-signing.ps1 을 한 번 실행하세요."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > lotte-release.jks
+          printf 'storeFile=lotte-release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
+
+      - name: Build release APK
+        run: |
+          CODE=$((1000 + ${{ github.run_number }}))
+          NAME="1.2.${{ github.run_number }}"
+          echo "VERSION_CODE=$CODE" >> "$GITHUB_ENV"
+          echo "VERSION_NAME=$NAME" >> "$GITHUB_ENV"
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease \
+            -PversionCode="$CODE" \
+            -PversionName="$NAME" \
+            --stacktrace
+
+      - name: Prepare latest assets
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk dist/LotteGiants.apk
+          printf '{"versionCode":%s,"versionName":"%s","apkFileName":"LotteGiants.apk","notes":"main #%s %s"}\n' \
+            "${{ env.VERSION_CODE }}" "${{ env.VERSION_NAME }}" \
+            "${{ github.run_number }}" "${{ github.sha }}" > dist/update.json
+          {
+            echo "versionCode: ${{ env.VERSION_CODE }}"
+            echo ""
+            echo "## latest 채널"
+            echo "- versionName: ${{ env.VERSION_NAME }}"
+            echo "- commit: ${{ github.sha }}"
+            echo "- run: #${{ github.run_number }}"
+          } > dist/notes.md
+
+      - name: Publish / overwrite latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest dist/LotteGiants.apk dist/update.json --clobber
+            gh release edit latest --notes-file dist/notes.md --title "latest (${{ env.VERSION_NAME }})"
+          else
+            gh release create latest dist/LotteGiants.apk dist/update.json \
+              --notes-file dist/notes.md \
+              --title "latest (${{ env.VERSION_NAME }})"
+          fi

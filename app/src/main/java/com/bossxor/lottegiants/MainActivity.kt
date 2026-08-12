@@ -63,7 +63,6 @@ import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.data.InstallResult
 import com.bossxor.lottegiants.data.UpdateCheckResult
 import com.bossxor.lottegiants.data.UpdateChecker
-import com.bossxor.lottegiants.data.UpdateInfo
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LeaderPlayer
 import com.bossxor.lottegiants.domain.LineupSlot
@@ -128,8 +127,7 @@ class MainActivity : ComponentActivity() {
                 val favoriteCodes by vm.favoriteCodes.collectAsState()
                 val favoritePlayers by vm.favoritePlayers.collectAsState()
                 val scope = rememberCoroutineScope()
-                var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
-                var updateDownloading by remember { mutableStateOf(false) }
+                var updateStatus by remember { mutableStateOf<String?>(null) }
                 var updateChecked by remember { mutableStateOf(false) }
 
                 DisposableEffect(Unit) {
@@ -148,18 +146,15 @@ class MainActivity : ComponentActivity() {
                                     if (pendingPath.isNotBlank() &&
                                         UpdateChecker.canInstallPackages(this@MainActivity)
                                     ) {
+                                        updateStatus = "업데이트를 이어서 설치합니다…"
                                         val result = withContext(Dispatchers.IO) {
                                             UpdateChecker.resumePendingInstall(
                                                 this@MainActivity,
                                                 store,
                                             )
                                         }
+                                        updateStatus = null
                                         if (result is InstallResult.Launched) {
-                                            Toast.makeText(
-                                                this@MainActivity,
-                                                "업데이트를 이어서 설치합니다.",
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
                                             return@launch
                                         }
                                     }
@@ -168,8 +163,41 @@ class MainActivity : ComponentActivity() {
                                         val result = withContext(Dispatchers.IO) {
                                             UpdateChecker.check(BuildConfig.VERSION_CODE)
                                         }
-                                        if (result is UpdateCheckResult.Available) {
-                                            updateInfo = result.info
+                                        if (result !is UpdateCheckResult.Available) return@launch
+                                        val info = result.info
+                                        updateStatus =
+                                            "새 버전 ${info.tagName.ifBlank { info.versionCode.toString() }} 다운로드 중…"
+                                        val install = withContext(Dispatchers.IO) {
+                                            UpdateChecker.downloadAndInstall(
+                                                this@MainActivity,
+                                                info,
+                                                store,
+                                            ) { downloaded, total ->
+                                                if (total > 0L) {
+                                                    val pct = ((downloaded * 100) / total).toInt()
+                                                    updateStatus = "업데이트 다운로드 중… $pct%"
+                                                }
+                                            }
+                                        }
+                                        when (install) {
+                                            is InstallResult.Launched ->
+                                                updateStatus = "설치 화면으로 이동합니다…"
+                                            is InstallResult.NeedsPermission -> {
+                                                updateStatus = null
+                                                Toast.makeText(
+                                                    this@MainActivity,
+                                                    "설치 권한을 허용하면 자동으로 설치가 진행됩니다.",
+                                                    Toast.LENGTH_LONG,
+                                                ).show()
+                                            }
+                                            is InstallResult.DownloadFailed -> {
+                                                updateStatus = null
+                                                Toast.makeText(
+                                                    this@MainActivity,
+                                                    install.message,
+                                                    Toast.LENGTH_LONG,
+                                                ).show()
+                                            }
                                         }
                                     }
                                 }
@@ -182,59 +210,13 @@ class MainActivity : ComponentActivity() {
                     onDispose { lifecycle.removeObserver(observer) }
                 }
 
-                updateInfo?.let { info ->
+                updateStatus?.let { status ->
                     AlertDialog(
-                        onDismissRequest = { if (!updateDownloading) updateInfo = null },
-                        title = { Text("업데이트 가능") },
-                        text = {
-                            Text(
-                                "새 버전 ${info.tagName.ifBlank { info.versionCode.toString() }} " +
-                                    "(versionCode ${info.versionCode})을(를) 설치할까요?",
-                            )
-                        },
+                        onDismissRequest = {},
+                        title = { Text("업데이트") },
+                        text = { Text(status) },
                         confirmButton = {
-                            TextButton(
-                                onClick = {
-                                    scope.launch {
-                                        updateDownloading = true
-                                        val store = GiantsRepository.get(this@MainActivity).store
-                                        val result = withContext(Dispatchers.IO) {
-                                            UpdateChecker.downloadAndInstall(
-                                                this@MainActivity,
-                                                info,
-                                                store,
-                                            )
-                                        }
-                                        updateDownloading = false
-                                        when (result) {
-                                            is InstallResult.Launched -> updateInfo = null
-                                            is InstallResult.NeedsPermission -> {
-                                                updateInfo = null
-                                                Toast.makeText(
-                                                    this@MainActivity,
-                                                    "설치 권한을 허용하면 자동으로 설치가 진행됩니다.",
-                                                    Toast.LENGTH_LONG,
-                                                ).show()
-                                            }
-                                            is InstallResult.DownloadFailed -> {
-                                                Toast.makeText(
-                                                    this@MainActivity,
-                                                    result.message,
-                                                    Toast.LENGTH_LONG,
-                                                ).show()
-                                            }
-                                        }
-                                    }
-                                },
-                                enabled = !updateDownloading,
-                            ) {
-                                Text(if (updateDownloading) "받는 중…" else "설치")
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { if (!updateDownloading) updateInfo = null }) {
-                                Text("나중에")
-                            }
+                            Text("잠시만요…", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         },
                     )
                 }

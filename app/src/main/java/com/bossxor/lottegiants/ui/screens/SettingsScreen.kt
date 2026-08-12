@@ -37,7 +37,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -63,7 +62,6 @@ import com.bossxor.lottegiants.data.InstallResult
 import com.bossxor.lottegiants.data.NotificationType
 import com.bossxor.lottegiants.data.UpdateCheckResult
 import com.bossxor.lottegiants.data.UpdateChecker
-import com.bossxor.lottegiants.data.UpdateInfo
 import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.ThemeMode
 import com.bossxor.lottegiants.domain.playerPhotoUrl
@@ -86,8 +84,7 @@ fun SettingsScreen(
     val store = GiantsRepository.get(context).store
     val scope = rememberCoroutineScope()
     var checkingUpdate by remember { mutableStateOf(false) }
-    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
-    var downloadProgress by remember { mutableStateOf(false) }
+    var updateStatus by remember { mutableStateOf<String?>(null) }
 
     Column(
         Modifier
@@ -401,7 +398,7 @@ fun SettingsScreen(
                     fontSize = 15.sp,
                 )
                 Text(
-                    "GitHub Releases에서 최신 APK를 확인합니다.",
+                    "앱을 열면 최신 빌드를 자동으로 받아 설치 화면까지 진행합니다.",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -410,24 +407,64 @@ fun SettingsScreen(
                     onClick = {
                         scope.launch {
                             checkingUpdate = true
+                            updateStatus = "업데이트 확인 중…"
                             val result = withContext(Dispatchers.IO) {
                                 UpdateChecker.check(BuildConfig.VERSION_CODE)
                             }
-                            checkingUpdate = false
                             when (result) {
-                                is UpdateCheckResult.Available -> updateInfo = result.info
-                                is UpdateCheckResult.UpToDate ->
+                                is UpdateCheckResult.UpToDate -> {
+                                    checkingUpdate = false
+                                    updateStatus = null
                                     Toast.makeText(context, "최신 버전입니다.", Toast.LENGTH_SHORT).show()
-                                is UpdateCheckResult.Failed ->
+                                }
+                                is UpdateCheckResult.Failed -> {
+                                    checkingUpdate = false
+                                    updateStatus = null
                                     Toast.makeText(
                                         context,
                                         "확인 실패: ${result.message}",
                                         Toast.LENGTH_LONG,
                                     ).show()
+                                }
+                                is UpdateCheckResult.Available -> {
+                                    val info = result.info
+                                    updateStatus =
+                                        "새 버전 ${info.tagName.ifBlank { info.versionCode.toString() }} 다운로드 중…"
+                                    val storeRef = GiantsRepository.get(context).store
+                                    val install = withContext(Dispatchers.IO) {
+                                        UpdateChecker.downloadAndInstall(context, info, storeRef) { downloaded, total ->
+                                            if (total > 0L) {
+                                                val pct = ((downloaded * 100) / total).toInt()
+                                                updateStatus = "업데이트 다운로드 중… $pct%"
+                                            }
+                                        }
+                                    }
+                                    checkingUpdate = false
+                                    when (install) {
+                                        is InstallResult.Launched ->
+                                            updateStatus = "설치 화면으로 이동합니다…"
+                                        is InstallResult.NeedsPermission -> {
+                                            updateStatus = null
+                                            Toast.makeText(
+                                                context,
+                                                "설치 권한을 허용하면 자동으로 설치가 진행됩니다.",
+                                                Toast.LENGTH_LONG,
+                                            ).show()
+                                        }
+                                        is InstallResult.DownloadFailed -> {
+                                            updateStatus = null
+                                            Toast.makeText(
+                                                context,
+                                                install.message,
+                                                Toast.LENGTH_LONG,
+                                            ).show()
+                                        }
+                                    }
+                                }
                             }
                         }
                     },
-                    enabled = !checkingUpdate && !downloadProgress,
+                    enabled = !checkingUpdate,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth(),
@@ -441,7 +478,7 @@ fun SettingsScreen(
                         Spacer(Modifier.width(10.dp))
                     }
                     Text(
-                        if (checkingUpdate) "확인 중…" else "업데이트 확인",
+                        if (checkingUpdate) "업데이트 중…" else "지금 업데이트 확인",
                         fontWeight = FontWeight.Bold,
                     )
                 }
@@ -450,55 +487,13 @@ fun SettingsScreen(
         Spacer(Modifier.height(20.dp))
     }
 
-    updateInfo?.let { info ->
+    updateStatus?.let { status ->
         AlertDialog(
-            onDismissRequest = { if (!downloadProgress) updateInfo = null },
-            title = { Text("업데이트 가능") },
-            text = {
-                Text(
-                    "새 버전 ${info.tagName.ifBlank { info.versionCode.toString() }} " +
-                        "(versionCode ${info.versionCode})을(를) 설치할까요?",
-                )
-            },
+            onDismissRequest = {},
+            title = { Text("업데이트") },
+            text = { Text(status) },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            downloadProgress = true
-                            val store = GiantsRepository.get(context).store
-                            val result = withContext(Dispatchers.IO) {
-                                UpdateChecker.downloadAndInstall(context, info, store)
-                            }
-                            downloadProgress = false
-                            when (result) {
-                                is InstallResult.Launched -> updateInfo = null
-                                is InstallResult.NeedsPermission -> {
-                                    updateInfo = null
-                                    Toast.makeText(
-                                        context,
-                                        "설치 권한을 허용하면 자동으로 설치가 진행됩니다.",
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                                }
-                                is InstallResult.DownloadFailed -> {
-                                    Toast.makeText(
-                                        context,
-                                        result.message,
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                                }
-                            }
-                        }
-                    },
-                    enabled = !downloadProgress,
-                ) {
-                    Text(if (downloadProgress) "받는 중…" else "설치")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { if (!downloadProgress) updateInfo = null }) {
-                    Text("나중에")
-                }
+                Text("잠시만요…", color = MaterialTheme.colorScheme.onSurfaceVariant)
             },
         )
     }
