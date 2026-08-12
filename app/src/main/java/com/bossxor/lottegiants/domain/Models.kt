@@ -474,6 +474,7 @@ fun normalizeCancelReason(raw: String?): String {
         "순연" to "순연",
         "기타" to "기타",
         "구장" to "구장 사정",
+        "그라운드" to "그라운드사정",
         "조명" to "조명",
         "정전" to "정전",
         "한파" to "한파",

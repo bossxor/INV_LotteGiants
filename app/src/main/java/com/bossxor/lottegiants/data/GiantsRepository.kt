@@ -46,6 +46,7 @@ class GiantsRepository private constructor(context: Context) {
     private val api: NaverSportsApi = NaverSportsApi.create()
     private val weatherApi: WeatherApi = WeatherApi.create()
     private val kboApi: KboMobileApi = KboMobileApi.create()
+    private val kboOfficialApi: KboOfficialApi = KboOfficialApi.create()
     private val keuboApi: KeuboApi = KeuboApi.create()
     private val rutaApi: RutaApi = RutaApi.create()
     val store = SnapshotStore(appContext)
@@ -68,13 +69,26 @@ class GiantsRepository private constructor(context: Context) {
         val todayStr = today.format(fmt)
         val yesterdayStr = today.minusDays(1).format(fmt)
         val todayGames = games.filter { it.gameDate == todayStr }
+        val yesterdayDtos = games.filter { it.gameDate == yesterdayStr }
+        val todayReasons = if (todayGames.any { it.cancel }) {
+            fetchKboCancelReasons(today)
+        } else {
+            emptyMap()
+        }
+        val yesterdayReasons = if (yesterdayDtos.any { it.cancel }) {
+            fetchKboCancelReasons(today.minusDays(1))
+        } else {
+            emptyMap()
+        }
         val lotteToday = todayGames.firstOrNull { it.involvesLotte() }
-        val otherGames = todayGames.filter { !it.involvesLotte() }.map { it.toMiniGame() }
-        val yesterdayGames = games.filter { it.gameDate == yesterdayStr }.map { it.toMiniGame() }
+        val otherGames = todayGames.filter { !it.involvesLotte() }
+            .map { it.toMiniGame(kboCancelLabel = todayReasons[it.matchKey()]) }
+        val yesterdayGames = yesterdayDtos
+            .map { it.toMiniGame(kboCancelLabel = yesterdayReasons[it.matchKey()]) }
 
         val rutaConnected = tryConnectRuta()
 
-        var lotteInfo = lotteToday?.toLotteBase()
+        var lotteInfo = lotteToday?.toLotteBase(kboCancelLabel = todayReasons[lotteToday.matchKey()])
         var relayData: TextRelayData? = null
         if (lotteToday != null && lotteInfo != null) {
             relayData = runCatching { fetchFullRelay(lotteToday.gameId) }.getOrNull()
@@ -417,19 +431,33 @@ class GiantsRepository private constructor(context: Context) {
     suspend fun fetchGamesForDate(date: LocalDate): List<MiniGame> {
         val fmt = DateTimeFormatter.ISO_LOCAL_DATE
         val day = date.format(fmt)
+        val reasons = fetchKboCancelReasons(date)
         return api.getGames(fromDate = day, toDate = day)
             .result?.games.orEmpty()
             .filter { it.categoryId == "kbo" && it.gameDate == day }
-            .map { it.toMiniGame() }
+            .map { it.toMiniGame(kboCancelLabel = reasons[it.matchKey()]) }
     }
 
     suspend fun fetchGamesForMonth(month: YearMonth): List<MiniGame> {
         val from = month.atDay(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
         val to = month.atEndOfMonth().format(DateTimeFormatter.ISO_LOCAL_DATE)
-        return api.getGames(fromDate = from, toDate = to)
+        val raw = api.getGames(fromDate = from, toDate = to)
             .result?.games.orEmpty()
             .filter { it.categoryId == "kbo" }
-            .map { it.toMiniGame() }
+        val canceledDates = raw
+            .filter { it.cancel }
+            .mapNotNull { runCatching { LocalDate.parse(it.gameDate) }.getOrNull() }
+            .distinct()
+        val reasonsByDate = coroutineScope {
+            canceledDates.map { d ->
+                async { d to fetchKboCancelReasons(d) }
+            }.associate { it.await() }
+        }
+        return raw.map { dto ->
+            val date = runCatching { LocalDate.parse(dto.gameDate) }.getOrNull()
+            val reason = date?.let { reasonsByDate[it] }?.get(dto.matchKey())
+            dto.toMiniGame(kboCancelLabel = reason)
+        }
     }
 
     suspend fun fetchStandings(): List<TeamStanding> {
@@ -715,6 +743,21 @@ class GiantsRepository private constructor(context: Context) {
     private fun GameDto.involvesLotte() =
         homeTeamCode == LOTTE_TEAM_CODE || awayTeamCode == LOTTE_TEAM_CODE
 
+    private fun GameDto.matchKey(): String =
+        "${awayTeamCode.trim().uppercase()}_${homeTeamCode.trim().uppercase()}"
+
+    /** KBO 공식 API에서 날짜별 취소 사유 (키: AWAY_HOME) */
+    private suspend fun fetchKboCancelReasons(date: LocalDate): Map<String, String> =
+        runCatching {
+            kboOfficialApi.getGameList(date = KboOfficialApi.dateParam(date))
+                .game
+                .mapNotNull { g ->
+                    val reason = g.cancelReasonLabel() ?: return@mapNotNull null
+                    g.matchKey() to reason
+                }
+                .toMap()
+        }.getOrDefault(emptyMap())
+
     private fun GameDto.status(): GameStatus = when {
         cancel -> GameStatus.CANCELED
         statusCode == "RESULT" || statusNum == 4 -> GameStatus.ENDED
@@ -726,7 +769,7 @@ class GiantsRepository private constructor(context: Context) {
         LocalDateTime.parse(gameDateTime).format(DateTimeFormatter.ofPattern("HH:mm"))
     }.getOrDefault("")
 
-    private fun GameDto.toMiniGame() = MiniGame(
+    private fun GameDto.toMiniGame(kboCancelLabel: String? = null) = MiniGame(
         gameId = gameId,
         homeName = homeTeamName,
         awayName = awayTeamName,
@@ -735,13 +778,17 @@ class GiantsRepository private constructor(context: Context) {
         status = status(),
         statusText = statusInfo?.takeIf { it.isNotBlank() }?.let { raw ->
             if (status() == GameStatus.CANCELED) {
-                cancelDisplayLabel(normalizeCancelReason(raw))
+                cancelDisplayLabel(
+                    normalizeCancelReason(kboCancelLabel?.takeIf { it.isNotBlank() } ?: raw),
+                )
             } else {
                 raw
             }
         } ?: when (status()) {
             GameStatus.BEFORE -> startTimeText()
-            GameStatus.CANCELED -> cancelDisplayLabel(normalizeCancelReason(statusInfo))
+            GameStatus.CANCELED -> cancelDisplayLabel(
+                normalizeCancelReason(kboCancelLabel ?: statusInfo),
+            )
             GameStatus.ENDED -> "종료"
             GameStatus.LIVE -> "진행 중"
         },
@@ -759,9 +806,14 @@ class GiantsRepository private constructor(context: Context) {
         awayTeamCode = awayTeamCode,
     )
 
-    private fun GameDto.toLotteBase(): LotteGameInfo {
+    private fun GameDto.toLotteBase(kboCancelLabel: String? = null): LotteGameInfo {
         val isHome = homeTeamCode == LOTTE_TEAM_CODE
         val oppCode = if (isHome) awayTeamCode else homeTeamCode
+        val cancelReason = if (status() == GameStatus.CANCELED) {
+            normalizeCancelReason(kboCancelLabel?.takeIf { it.isNotBlank() } ?: statusInfo)
+        } else {
+            ""
+        }
         return LotteGameInfo(
             gameId = gameId,
             gameDate = gameDate,
@@ -776,14 +828,10 @@ class GiantsRepository private constructor(context: Context) {
             opponentScore = if (isHome) awayTeamScore else homeTeamScore,
             status = status(),
             statusText = when (status()) {
-                GameStatus.CANCELED -> cancelDisplayLabel(normalizeCancelReason(statusInfo))
+                GameStatus.CANCELED -> cancelDisplayLabel(cancelReason)
                 else -> statusInfo.orEmpty()
             },
-            cancelReason = if (status() == GameStatus.CANCELED) {
-                normalizeCancelReason(statusInfo)
-            } else {
-                ""
-            },
+            cancelReason = cancelReason,
             broadChannel = broadChannel.orEmpty(),
             lotteStartingPitcher = (if (isHome) homeStarterName else awayStarterName).orEmpty(),
             opponentStartingPitcher = (if (isHome) awayStarterName else homeStarterName).orEmpty(),
