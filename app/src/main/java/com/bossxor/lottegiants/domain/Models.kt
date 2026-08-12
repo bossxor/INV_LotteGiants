@@ -46,6 +46,8 @@ data class MiniGame(
     val awayScore: Int,
     val status: GameStatus,
     val statusText: String,
+    /** 취소·순연 사유 (폭염, 우천 등) */
+    val cancelReason: String = "",
     val stadium: String = "",
     val startTime: String = "",
     val homeLogoUrl: String = "",
@@ -500,8 +502,13 @@ data class TeamStanding(
 fun kboCancelReasonById(id: Int): String? = when (id) {
     1 -> "우천"
     2 -> "한파"
+    3 -> "폭염"
+    4 -> "안개"
     5 -> "강설"
     6 -> "그라운드사정"
+    7 -> "태풍"
+    8 -> "미세먼지"
+    9 -> "황사"
     99 -> "기타"
     else -> null
 }
@@ -580,7 +587,18 @@ fun cancelDisplayLabel(reason: String?): String {
 }
 
 val LotteGameInfo.cancelLabel: String
-    get() = cancelDisplayLabel(cancelReason)
+    get() = cancelDisplayLabel(cancelReason.ifBlank { null })
+
+/** 결과·일정 목록용 취소 표시 */
+val MiniGame.cancelLabel: String
+    get() {
+        if (status != GameStatus.CANCELED) return statusText
+        if (cancelReason.isNotBlank()) return cancelDisplayLabel(cancelReason)
+        Regex("""(?:경기\s*)?취소\s*\(([^)]+)\)""").find(statusText)?.groupValues?.get(1)?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { return cancelDisplayLabel(it) }
+        return cancelDisplayLabel(resolveCancelReason(statusText))
+    }
 
 val LotteGameInfo.inningLabel: String
     get() = when {

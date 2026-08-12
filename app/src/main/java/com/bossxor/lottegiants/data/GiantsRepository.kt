@@ -582,22 +582,27 @@ class GiantsRepository private constructor(context: Context) {
 
         val from = month.atDay(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
         val to = month.atEndOfMonth().format(DateTimeFormatter.ISO_LOCAL_DATE)
-        return api.getGames(fromDate = from, toDate = to)
+        val naver = api.getGames(fromDate = from, toDate = to)
             .result?.games.orEmpty()
             .filter { it.categoryId == "kbo" }
-            .map { it.toMiniGame() }
+        return coroutineScope {
+            naver.groupBy { it.gameDate }.flatMap { (dayStr, games) ->
+                val date = runCatching { LocalDate.parse(dayStr) }.getOrNull() ?: return@flatMap emptyList()
+                val reasons = cancelReasonsFor(games, date)
+                games.map { it.toMiniGame(kboCancelLabel = reasons[it.matchKey()]) }
+            }
+        }
     }
 
     private suspend fun kboToMiniGames(date: LocalDate, games: List<KboOfficialGame>): List<MiniGame> =
         games.map { g ->
+            val reason = if (g.status() == GameStatus.CANCELED) g.cancelReasonLabel().orEmpty() else ""
             val mini = g.toMiniGame()
             if (mini.status != GameStatus.CANCELED) return@map mini
-            val reason = g.cancelReasonLabel()
-            if (!reason.isNullOrBlank()) {
-                mini.copy(statusText = cancelDisplayLabel(reason))
-            } else {
-                mini
-            }
+            mini.copy(
+                cancelReason = reason,
+                statusText = cancelDisplayLabel(reason.ifBlank { null }),
+            )
         }
 
     suspend fun fetchStandings(): List<TeamStanding> {
@@ -950,42 +955,43 @@ class GiantsRepository private constructor(context: Context) {
         LocalDateTime.parse(gameDateTime).format(DateTimeFormatter.ofPattern("HH:mm"))
     }.getOrDefault("")
 
-    private fun GameDto.toMiniGame(kboCancelLabel: String? = null) = MiniGame(
-        gameId = gameId,
-        homeName = homeTeamName,
-        awayName = awayTeamName,
-        homeScore = homeTeamScore,
-        awayScore = awayTeamScore,
-        status = status(),
-        statusText = statusInfo?.takeIf { it.isNotBlank() }?.let { raw ->
-            if (status() == GameStatus.CANCELED) {
-                cancelDisplayLabel(
-                    resolveCancelReason(kboCancelLabel?.takeIf { it.isNotBlank() } ?: raw),
-                )
-            } else {
-                raw
-            }
-        } ?: when (status()) {
-            GameStatus.BEFORE -> startTimeText()
-            GameStatus.CANCELED -> cancelDisplayLabel(
-                resolveCancelReason(kboCancelLabel ?: statusInfo),
-            )
-            GameStatus.ENDED -> "종료"
-            GameStatus.LIVE -> "진행 중"
-        },
-        stadium = stadium.orEmpty(),
-        startTime = startTimeText(),
-        homeLogoUrl = homeTeamEmblemUrl ?: teamLogoUrl(homeTeamCode),
-        awayLogoUrl = awayTeamEmblemUrl ?: teamLogoUrl(awayTeamCode),
-        homeStarter = homeStarterName.orEmpty(),
-        awayStarter = awayStarterName.orEmpty(),
-        broadChannel = broadChannel.orEmpty(),
-        winPitcherName = winPitcherName.orEmpty(),
-        losePitcherName = losePitcherName.orEmpty(),
-        gameDate = gameDate,
-        homeTeamCode = homeTeamCode,
-        awayTeamCode = awayTeamCode,
-    )
+    private fun GameDto.toMiniGame(kboCancelLabel: String? = null): MiniGame {
+        val st = status()
+        val reason = if (st == GameStatus.CANCELED) {
+            resolveCancelReason(kboCancelLabel?.takeIf { it.isNotBlank() } ?: statusInfo).orEmpty()
+        } else {
+            ""
+        }
+        val label = if (st == GameStatus.CANCELED) cancelDisplayLabel(reason.ifBlank { null }) else ""
+        return MiniGame(
+            gameId = gameId,
+            homeName = homeTeamName,
+            awayName = awayTeamName,
+            homeScore = homeTeamScore,
+            awayScore = awayTeamScore,
+            status = st,
+            statusText = statusInfo?.takeIf { it.isNotBlank() && st != GameStatus.CANCELED }?.let { it }
+                ?: when (st) {
+                    GameStatus.BEFORE -> startTimeText()
+                    GameStatus.CANCELED -> label
+                    GameStatus.ENDED -> "종료"
+                    GameStatus.LIVE -> "진행 중"
+                },
+            cancelReason = reason,
+            stadium = stadium.orEmpty(),
+            startTime = startTimeText(),
+            homeLogoUrl = homeTeamEmblemUrl ?: teamLogoUrl(homeTeamCode),
+            awayLogoUrl = awayTeamEmblemUrl ?: teamLogoUrl(awayTeamCode),
+            homeStarter = homeStarterName.orEmpty(),
+            awayStarter = awayStarterName.orEmpty(),
+            broadChannel = broadChannel.orEmpty(),
+            winPitcherName = winPitcherName.orEmpty(),
+            losePitcherName = losePitcherName.orEmpty(),
+            gameDate = gameDate,
+            homeTeamCode = homeTeamCode,
+            awayTeamCode = awayTeamCode,
+        )
+    }
 
     private fun GameDto.toLotteBase(kboCancelLabel: String? = null): LotteGameInfo {
         val isHome = homeTeamCode == LOTTE_TEAM_CODE

@@ -471,6 +471,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         awayScore = if (g.isHome) g.opponentScore else g.lotteScore,
                         status = g.status,
                         statusText = if (g.status == GameStatus.CANCELED) g.cancelLabel else g.statusText,
+                        cancelReason = g.cancelReason,
                         stadium = g.stadium,
                         startTime = g.startTime,
                         homeLogoUrl = if (g.isHome) g.lotteLogoUrl.ifBlank { com.bossxor.lottegiants.domain.LOTTE_LOGO_URL } else g.opponentLogoUrl,
@@ -486,7 +487,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 )
             }
-            addAll(snap.otherGames)
+            addAll(
+                snap.otherGames.map { g ->
+                    if (g.status != GameStatus.CANCELED) g
+                    else g.copy(statusText = g.cancelLabel)
+                },
+            )
         }
         if (list.isNotEmpty()) _dayGames.value = sortLotteFirst(list)
     }

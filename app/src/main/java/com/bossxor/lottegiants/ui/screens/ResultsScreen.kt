@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.sp
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.MiniGame
+import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.LoseRed
@@ -477,10 +478,12 @@ private fun CalendarMonthView(
                                 val lotte = cellGames.firstOrNull { it.isLotteGame() }
                                 val lotteHome = lotte?.isLotteHome()
                                 val ended = lotte?.status == GameStatus.ENDED
+                                val canceled = lotte?.status == GameStatus.CANCELED
                                 val lotteWon = lotte?.lotteResult() == true
                                 val lotteLost = lotte?.lotteResult() == false
                                 val draw = ended && lotte != null && lotte.homeScore == lotte.awayScore
                                 val cellLabel = when {
+                                    canceled -> lotte.cancelLabel
                                     ended && lotteWon -> "승"
                                     ended && lotteLost -> "패"
                                     ended && draw -> "무"
@@ -489,6 +492,7 @@ private fun CalendarMonthView(
                                     else -> null
                                 }
                                 val cellLabelColor = when {
+                                    canceled -> MaterialTheme.colorScheme.onSurfaceVariant
                                     ended && lotteWon -> WinGreen
                                     ended && lotteLost -> LoseRed
                                     ended && draw -> LotteGold
@@ -502,6 +506,7 @@ private fun CalendarMonthView(
                                 }
                                 val borderWidth = if (date == selectedDate) 2.dp else 1.dp
                                 val cellBg = when {
+                                    canceled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                                     ended && lotteWon -> WinGreen.copy(alpha = 0.10f)
                                     ended && lotteLost -> LoseRed.copy(alpha = 0.10f)
                                     ended && draw -> LotteGold.copy(alpha = 0.12f)
@@ -645,7 +650,7 @@ private fun ResultGameCard(g: MiniGame) {
                         }
                         GameStatus.BEFORE -> StatusPill(g.startTime.ifBlank { "예정" }, LotteGold)
                         GameStatus.CANCELED -> StatusPill(
-                            g.statusText.ifBlank { "취소" },
+                            g.cancelLabel,
                             MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -675,6 +680,14 @@ private fun ResultGameCard(g: MiniGame) {
                         won == false -> LoseRed
                         else -> MaterialTheme.colorScheme.onSurface
                     },
+                )
+            } else if (g.status == GameStatus.CANCELED) {
+                Text(
+                    g.cancelLabel,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.End,
                 )
             }
         }

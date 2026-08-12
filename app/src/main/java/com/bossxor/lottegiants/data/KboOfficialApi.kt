@@ -5,7 +5,7 @@ import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.cancelDisplayLabel
-import com.bossxor.lottegiants.domain.resolveCancelReason
+import com.bossxor.lottegiants.domain.kboCancelReasonById
 import com.bossxor.lottegiants.domain.resolveCancelReason
 import com.bossxor.lottegiants.domain.resolveTeamLogoUrl
 import kotlinx.serialization.SerialName
@@ -170,8 +170,13 @@ data class KboOfficialGame(
     }
 
     /** 취소·순연 등 정상경기가 아닌 경우의 사유 라벨 */
-    fun cancelReasonLabel(): String? =
-        resolveCancelReason(cancelScNm, cancelScId)
+    fun cancelReasonLabel(): String? {
+        if (cancelScId >= 1) {
+            kboCancelReasonById(cancelScId)?.let { return it }
+        }
+        return resolveCancelReason(cancelScNm, cancelScId)
+            ?: resolveCancelReason(gameScNm, cancelScId)
+    }
 
     fun cancelStatusText(): String = cancelDisplayLabel(cancelReasonLabel())
 
@@ -208,6 +213,7 @@ data class KboOfficialGame(
         awayScore = score(awayScore),
         status = status(),
         statusText = statusText(),
+        cancelReason = if (status() == GameStatus.CANCELED) cancelReasonLabel().orEmpty() else "",
         stadium = stadium.trim(),
         startTime = startTime.trim(),
         homeLogoUrl = resolveTeamLogoUrl(homeId.trim().uppercase(), homeEmblem, seasonId),
