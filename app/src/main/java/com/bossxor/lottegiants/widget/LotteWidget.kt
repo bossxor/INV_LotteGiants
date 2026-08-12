@@ -200,7 +200,7 @@ private fun CompactBefore(g: LotteGameInfo) {
         Text(g.stadium, style = TextStyle(color = muted, fontSize = 10.sp), maxLines = 1)
     }
     Text(
-        "선발 ${g.lotteStartingPitcher.ifBlank { "미정" }}",
+        startersAwayVsHome(g),
         style = TextStyle(color = white, fontSize = 10.sp),
         maxLines = 1,
     )
@@ -392,7 +392,7 @@ private fun BeforeWide(
         maxLines = 1,
     )
     Text(
-        "선발  ${g.lotteStartingPitcher.ifBlank { "미정" }} vs ${g.opponentStartingPitcher.ifBlank { "미정" }}",
+        startersAwayVsHome(g),
         style = TextStyle(color = white, fontSize = 11.sp),
         maxLines = 1,
     )
@@ -468,6 +468,12 @@ private fun FormRow(snap: LiveSnapshot?) {
             )
         }
     }
+}
+
+private fun startersAwayVsHome(g: LotteGameInfo): String {
+    val away = if (g.isHome) g.opponentStartingPitcher else g.lotteStartingPitcher
+    val home = if (g.isHome) g.lotteStartingPitcher else g.opponentStartingPitcher
+    return "${away.ifBlank { "미정" }} vs ${home.ifBlank { "미정" }}"
 }
 
 private fun isWithinMinutes(g: LotteGameInfo, minutes: Long): Boolean {
