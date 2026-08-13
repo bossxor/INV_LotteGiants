@@ -30,6 +30,7 @@ import com.bossxor.lottegiants.domain.isPitcherPosition
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.resolveStadiumCoord
 import com.bossxor.lottegiants.domain.teamLogoUrl
+import com.bossxor.lottegiants.domain.doubleHeaderNoFromGameId
 import com.bossxor.lottegiants.domain.weatherSummaryKo
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -101,12 +102,12 @@ class GiantsRepository private constructor(context: Context) {
 
         val rutaConnected = tryConnectRuta()
 
-        val kboLotte = kboToday.firstOrNull { it.involvesLotte() }
+        val kboLotte = pickKboLotte(kboToday)
         val lotteTodayNaver = if (kboLotte == null) {
             runCatching {
                 api.getGames(fromDate = todayStr, toDate = todayStr)
                     .result?.games.orEmpty().filter { it.categoryId == "kbo" && it.involvesLotte() }
-                    .firstOrNull()
+                    .let(::pickNaverLotte)
             }.getOrNull()
         } else {
             null
@@ -989,6 +990,21 @@ class GiantsRepository private constructor(context: Context) {
     private fun GameDto.involvesLotte() =
         homeTeamCode == LOTTE_TEAM_CODE || awayTeamCode == LOTTE_TEAM_CODE
 
+    private fun pickKboLotte(games: List<KboOfficialGame>): KboOfficialGame? =
+        games.filter { it.involvesLotte() }.minWithOrNull(
+            compareBy({ it.status().livePriority() }, { it.headerNo }, { it.startTime }),
+        )
+
+    private fun pickNaverLotte(games: List<GameDto>): GameDto? =
+        games.minWithOrNull(compareBy({ it.status().livePriority() }, { it.startTimeText() }))
+
+    private fun GameStatus.livePriority(): Int = when (this) {
+        GameStatus.LIVE -> 0
+        GameStatus.BEFORE -> 1
+        GameStatus.ENDED -> 2
+        GameStatus.CANCELED -> 3
+    }
+
     private fun GameDto.matchKey(): String =
         "${awayTeamCode.trim().uppercase()}_${homeTeamCode.trim().uppercase()}"
 
@@ -1082,6 +1098,7 @@ class GiantsRepository private constructor(context: Context) {
             gameDate = gameDate,
             homeTeamCode = homeTeamCode,
             awayTeamCode = awayTeamCode,
+            doubleHeaderNo = doubleHeaderNoFromGameId(gameId),
         )
     }
 
@@ -1116,6 +1133,7 @@ class GiantsRepository private constructor(context: Context) {
             currentPitcherName = (if (isHome) awayCurrentPitcherName else homeCurrentPitcherName).orEmpty(),
             winPitcherName = winPitcherName.orEmpty(),
             losePitcherName = losePitcherName.orEmpty(),
+            doubleHeaderNo = doubleHeaderNoFromGameId(gameId),
         )
     }
 

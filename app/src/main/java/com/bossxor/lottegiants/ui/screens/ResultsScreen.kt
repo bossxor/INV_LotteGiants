@@ -533,15 +533,28 @@ private fun RowScope.CalendarDayCell(
 ) {
     Box(Modifier.weight(1f).aspectRatio(0.85f)) {
         if (date != null) {
-            val lotte = cellGames.firstOrNull { it.isLotteGame() }
+            val lotteGames = cellGames.filter { it.isLotteGame() }
+            val lotte = lotteGames.firstOrNull()
+            val dh = lotteGames.size >= 2
             val lotteHome = lotte?.isLotteHome()
-            val ended = lotte?.status == GameStatus.ENDED
-            val canceled = lotte?.isCanceledGame() == true
-            val lotteWon = lotte?.lotteResult() == true
-            val lotteLost = lotte?.lotteResult() == false
-            val draw = ended && lotte != null && lotte.homeScore == lotte.awayScore
+            val endedGames = lotteGames.filter { it.status == GameStatus.ENDED && !it.isCanceledGame() }
+            val canceled = !dh && lotte?.isCanceledGame() == true
+            val ended = if (dh) endedGames.size == lotteGames.count { !it.isCanceledGame() } && endedGames.isNotEmpty()
+            else lotte?.status == GameStatus.ENDED
+            val wins = endedGames.count { it.lotteResult() == true }
+            val losses = endedGames.count { it.lotteResult() == false }
+            val draws = endedGames.count { it.status == GameStatus.ENDED && it.homeScore == it.awayScore }
+            val lotteWon = !dh && lotte?.lotteResult() == true
+            val lotteLost = !dh && lotte?.lotteResult() == false
+            val draw = !dh && ended && lotte != null && lotte.homeScore == lotte.awayScore
             val cellLabel = when {
-                canceled -> lotte.cancelShortLabel
+                dh && ended -> buildString {
+                    if (wins > 0) append("${wins}승")
+                    if (losses > 0) append("${losses}패")
+                    if (draws > 0) append("${draws}무")
+                }.ifBlank { "DH" }
+                dh -> "DH"
+                canceled -> lotte?.cancelShortLabel
                 ended && lotteWon -> "승"
                 ended && lotteLost -> "패"
                 ended && draw -> "무"
@@ -550,6 +563,9 @@ private fun RowScope.CalendarDayCell(
                 else -> null
             }
             val cellLabelColor = when {
+                dh && ended && wins > 0 && losses == 0 && draws == 0 -> WinGreen
+                dh && ended && losses > 0 && wins == 0 && draws == 0 -> LoseRed
+                dh -> LotteGold
                 canceled -> MaterialTheme.colorScheme.onSurfaceVariant
                 ended && lotteWon -> WinGreen
                 ended && lotteLost -> LoseRed
@@ -564,6 +580,9 @@ private fun RowScope.CalendarDayCell(
             }
             val borderWidth = if (date == selectedDate) 2.dp else 1.dp
             val cellBg = when {
+                dh && ended && wins > 0 && losses == 0 && draws == 0 -> WinGreen.copy(alpha = 0.10f)
+                dh && ended && losses > 0 && wins == 0 && draws == 0 -> LoseRed.copy(alpha = 0.10f)
+                dh -> LotteGold.copy(alpha = 0.10f)
                 canceled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                 ended && lotteWon -> WinGreen.copy(alpha = 0.10f)
                 ended && lotteLost -> LoseRed.copy(alpha = 0.10f)

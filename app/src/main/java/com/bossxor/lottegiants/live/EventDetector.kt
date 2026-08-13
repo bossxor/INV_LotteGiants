@@ -42,9 +42,11 @@ class EventDetector(private val store: SnapshotStore) {
             seed(game)
             initialized = true
             if (game.lotteLineup.isNotEmpty()) lineupAnnouncedFor = game.gameId
-            // 스케줄러는 매 실행 새 detector → 이미 취소된 경기도 DataStore 중복 방지 하에 1회 알림
+            // 스케줄러는 매 실행 새 detector → 이미 끝난/취소된 경기도 DataStore 중복 방지 하에 1회 알림
             if (game.status == GameStatus.CANCELED) {
                 notifyCanceled(context, game)
+            } else if (game.status == GameStatus.ENDED) {
+                notifyEnded(context, game)
             }
             return
         }
@@ -56,17 +58,7 @@ class EventDetector(private val store: SnapshotStore) {
                     context, NotificationType.GAME_START, 2001,
                     "경기 시작!", "${game.opponentName}전 시작 · ${game.stadium}"
                 )
-                GameStatus.ENDED -> {
-                    val result = when {
-                        game.lotteScore > game.opponentScore -> "롯데 승리!"
-                        game.lotteScore < game.opponentScore -> "롯데 패배"
-                        else -> "무승부"
-                    }
-                    maybeNotify(
-                        context, NotificationType.GAME_END, 2002,
-                        result, "최종 ${game.lotteScore}:${game.opponentScore} vs ${game.opponentName}"
-                    )
-                }
+                GameStatus.ENDED -> notifyEnded(context, game)
                 GameStatus.CANCELED -> notifyCanceled(context, game)
                 else -> {}
             }
@@ -136,13 +128,13 @@ class EventDetector(private val store: SnapshotStore) {
                         if (!who.isNullOrBlank()) append(" · $who")
                         append(" · $score")
                     }
-                    maybeNotify(context, NotificationType.HOMERUN, 2300 + t.seqno % 100, title, text)
+                    maybeNotify(context, NotificationType.HOMERUN, 3_000_000 + t.seqno, title, text)
                     store.setHighlight(title)
                     WearBridge.sendScoreEvent(context, title)
                 } else {
                     val whoHow = describeLotteScore(game, text)
                     val title = "롯데 득점! $whoHow · $score"
-                    maybeNotify(context, NotificationType.SCORE, 2100 + t.seqno % 100, title, text)
+                    maybeNotify(context, NotificationType.SCORE, 1_000_000 + t.seqno, title, text)
                     store.setHighlight(title)
                     WearBridge.sendScoreEvent(context, "$title · ${game.inningLabel}")
                 }
@@ -150,7 +142,7 @@ class EventDetector(private val store: SnapshotStore) {
             if (oppScored) {
                 val n = oppRuns.takeIf { it > 0 } ?: 1
                 val title = "${n}점 실점 · $score"
-                maybeNotify(context, NotificationType.CONCEDING, 2150 + t.seqno % 100, title, "")
+                maybeNotify(context, NotificationType.CONCEDING, 2_000_000 + t.seqno, title, "")
                 store.setHighlight(title)
                 WearBridge.sendScoreEvent(context, "$title · ${game.inningLabel}")
             }
@@ -164,7 +156,7 @@ class EventDetector(private val store: SnapshotStore) {
                         else -> "${game.opponentName} 역전"
                     }
                     maybeNotify(
-                        context, NotificationType.LEAD_CHANGE, 2200 + t.seqno % 100,
+                        context, NotificationType.LEAD_CHANGE, 4_000_000 + t.seqno,
                         title, score
                     )
                 }
@@ -307,6 +299,22 @@ class EventDetector(private val store: SnapshotStore) {
         addFrom(game.lottePitchers, game.lotteStartingPitcher)
         addFrom(game.opponentPitchers, game.opponentStartingPitcher)
         return codes
+    }
+
+    private suspend fun notifyEnded(context: Context, game: LotteGameInfo) {
+        if (store.notifiedEndGameId() == game.gameId) return
+        val today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).toString()
+        if (game.gameDate.isNotBlank() && game.gameDate != today) return
+        val result = when {
+            game.lotteScore > game.opponentScore -> "롯데 승리!"
+            game.lotteScore < game.opponentScore -> "롯데 패배"
+            else -> "무승부"
+        }
+        maybeNotify(
+            context, NotificationType.GAME_END, 2002,
+            result, "최종 ${game.lotteScore}:${game.opponentScore} vs ${game.opponentName}"
+        )
+        store.setNotifiedEndGameId(game.gameId)
     }
 
     private suspend fun notifyCanceled(context: Context, game: LotteGameInfo) {

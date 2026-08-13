@@ -198,6 +198,14 @@ class SnapshotStore(private val context: Context) {
         context.dataStore.edit { it[KEY_NOTIFIED_CANCEL] = gameId }
     }
 
+    /** 이미 종료 알림을 보낸 경기 ID (워커 재시작·콜드 스타트 중복 방지) */
+    suspend fun notifiedEndGameId(): String =
+        context.dataStore.data.map { it[KEY_NOTIFIED_END].orEmpty() }.first()
+
+    suspend fun setNotifiedEndGameId(gameId: String) {
+        context.dataStore.edit { it[KEY_NOTIFIED_END] = gameId }
+    }
+
     /** 권한 대기 중인 업데이트 APK (절대 경로). 빈 문자열이면 없음. */
     suspend fun pendingUpdateApkPath(): String =
         context.dataStore.data.map { it[KEY_PENDING_UPDATE_APK].orEmpty() }.first()
@@ -231,6 +239,7 @@ class SnapshotStore(private val context: Context) {
         private val KEY_FAVORITE_PLAYERS = stringPreferencesKey("favorite_players")
         private val KEY_BANNER_DAY = stringPreferencesKey("perm_banner_dismissed_day")
         private val KEY_NOTIFIED_CANCEL = stringPreferencesKey("notified_cancel_game_id")
+        private val KEY_NOTIFIED_END = stringPreferencesKey("notified_end_game_id")
         private val KEY_NOTIFIED_ROSTER = stringSetPreferencesKey("notified_roster_keys")
         private val KEY_PENDING_UPDATE_APK = stringPreferencesKey("pending_update_apk")
         private val KEY_PENDING_UPDATE_CODE = stringPreferencesKey("pending_update_code")

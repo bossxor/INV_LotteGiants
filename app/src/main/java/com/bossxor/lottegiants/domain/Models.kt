@@ -55,6 +55,33 @@ fun resolveTeamLogoUrl(
 
 val LOTTE_LOGO_URL = teamLogoUrl(LOTTE_TEAM_CODE)
 
+/** KBO `G_TM`은 `"6:30"`처럼 한 자리 시가 온다. */
+fun parseKboStartMillis(date: String, time: String): Long? = runCatching {
+    val datePart = date.trim().let { d ->
+        if (d.length == 8 && d.all { it.isDigit() }) {
+            "${d.substring(0, 4)}-${d.substring(4, 6)}-${d.substring(6, 8)}"
+        } else {
+            d
+        }
+    }
+    val nums = time.trim().split(':', '\uFF1A').mapNotNull { it.trim().toIntOrNull() }
+    if (nums.size < 2) return@runCatching null
+    java.time.LocalDate.parse(datePart)
+        .atTime(nums[0], nums[1], nums.getOrNull(2) ?: 0)
+        .atZone(java.time.ZoneId.of("Asia/Seoul"))
+        .toInstant()
+        .toEpochMilli()
+}.getOrNull()
+
+/** 네이버 gameId `YYYYMMDDAAHH0` / `…0{season}` 끝자리가 DH 차전. 0이면 단경기. */
+fun doubleHeaderNoFromGameId(gameId: String): Int {
+    val id = gameId.trim()
+    if (id.length < 13) return 0
+    val kboId = if (id.length >= 17 && id.takeLast(4).all { it.isDigit() }) id.dropLast(4) else id
+    val n = kboId.lastOrNull()?.digitToIntOrNull() ?: return 0
+    return if (n in 1..2) n else 0
+}
+
 @Serializable
 enum class GameStatus { BEFORE, LIVE, ENDED, CANCELED }
 

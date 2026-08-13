@@ -47,10 +47,7 @@ import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.teamLogoUrl
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
+import com.bossxor.lottegiants.domain.parseKboStartMillis
 
 private val Navy = Color(0xFF0B2A4A)
 private val Red = Color(0xFFC8102E)
@@ -477,15 +474,9 @@ private fun startersAwayVsHome(g: LotteGameInfo): String {
 }
 
 private fun isWithinMinutes(g: LotteGameInfo, minutes: Long): Boolean {
-    return try {
-        val date = LocalDate.parse(g.gameDate)
-        val time = LocalTime.parse(g.startTime.padStart(5, '0'), DateTimeFormatter.ofPattern("H:mm"))
-        val start = LocalDateTime.of(date, time)
-        val now = LocalDateTime.now()
-        !now.isAfter(start) && java.time.Duration.between(now, start).toMinutes() in 0..minutes
-    } catch (_: Exception) {
-        false
-    }
+    val start = parseKboStartMillis(g.gameDate, g.startTime) ?: return false
+    val until = start - System.currentTimeMillis()
+    return until in 0..(minutes * 60_000L)
 }
 
 class LotteWidgetReceiver : GlanceAppWidgetReceiver() {

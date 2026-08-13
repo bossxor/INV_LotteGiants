@@ -11,6 +11,7 @@ import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LeaderPlayer
 import com.bossxor.lottegiants.domain.LineupSlot
 import com.bossxor.lottegiants.domain.LiveSnapshot
+import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.LotteTeamCard
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.PitcherLine
@@ -362,9 +363,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun fetchDayGames(date: LocalDate) {
         _dayGamesLoading.value = true
         try {
-            if (date == LocalDate.now() && _snapshot.value != null) {
-                syncTodayGamesFromSnapshot(_snapshot.value!!)
-            }
             runCatching { repo.fetchGamesForDate(date) }
                 .onSuccess { _dayGames.value = sortLotteFirst(it) }
         } finally {
@@ -464,42 +462,60 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun syncTodayGamesFromSnapshot(snap: LiveSnapshot) {
-        val list = buildList {
-            snap.lotteGame?.let { g ->
-                add(
-                    MiniGame(
-                        gameId = g.gameId,
-                        homeName = if (g.isHome) "롯데" else g.opponentName,
-                        awayName = if (g.isHome) g.opponentName else "롯데",
-                        homeScore = if (g.isHome) g.lotteScore else g.opponentScore,
-                        awayScore = if (g.isHome) g.opponentScore else g.lotteScore,
-                        status = g.status,
-                        statusText = if (g.status == GameStatus.CANCELED) g.cancelLabel else g.statusText,
-                        cancelReason = g.cancelReason,
-                        stadium = g.stadium,
-                        startTime = g.startTime,
-                        homeLogoUrl = if (g.isHome) g.lotteLogoUrl.ifBlank { com.bossxor.lottegiants.domain.LOTTE_LOGO_URL } else g.opponentLogoUrl,
-                        awayLogoUrl = if (g.isHome) g.opponentLogoUrl else g.lotteLogoUrl.ifBlank { com.bossxor.lottegiants.domain.LOTTE_LOGO_URL },
-                        homeStarter = if (g.isHome) g.lotteStartingPitcher else g.opponentStartingPitcher,
-                        awayStarter = if (g.isHome) g.opponentStartingPitcher else g.lotteStartingPitcher,
-                        broadChannel = g.broadChannel,
-                        winPitcherName = g.winPitcherName,
-                        losePitcherName = g.losePitcherName,
-                        gameDate = g.gameDate,
-                        homeTeamCode = if (g.isHome) LOTTE_TEAM_CODE else g.opponentCode,
-                        awayTeamCode = if (g.isHome) g.opponentCode else LOTTE_TEAM_CODE,
-                    )
+        val liveById = buildMap {
+            snap.lotteGame?.let { put(it.gameId, it.toResultsMini()) }
+            snap.otherGames.forEach { g ->
+                put(
+                    g.gameId,
+                    if (g.status != GameStatus.CANCELED) g else g.copy(statusText = g.cancelLabel),
                 )
             }
-            addAll(
-                snap.otherGames.map { g ->
-                    if (g.status != GameStatus.CANCELED) g
-                    else g.copy(statusText = g.cancelLabel)
-                },
-            )
         }
-        if (list.isNotEmpty()) _dayGames.value = sortLotteFirst(list)
+        if (liveById.isEmpty()) return
+        val current = _dayGames.value
+        if (current.isEmpty()) return
+        _dayGames.value = sortLotteFirst(
+            current.map { g -> liveById[g.gameId]?.let { live -> g.mergeLive(live) } ?: g },
+        )
     }
+
+    private fun LotteGameInfo.toResultsMini(): MiniGame = MiniGame(
+        gameId = gameId,
+        homeName = if (isHome) "롯데" else opponentName,
+        awayName = if (isHome) opponentName else "롯데",
+        homeScore = if (isHome) lotteScore else opponentScore,
+        awayScore = if (isHome) opponentScore else lotteScore,
+        status = status,
+        statusText = if (status == GameStatus.CANCELED) cancelLabel else statusText,
+        cancelReason = cancelReason,
+        stadium = stadium,
+        startTime = startTime,
+        homeLogoUrl = if (isHome) lotteLogoUrl.ifBlank { com.bossxor.lottegiants.domain.LOTTE_LOGO_URL } else opponentLogoUrl,
+        awayLogoUrl = if (isHome) opponentLogoUrl else lotteLogoUrl.ifBlank { com.bossxor.lottegiants.domain.LOTTE_LOGO_URL },
+        homeStarter = if (isHome) lotteStartingPitcher else opponentStartingPitcher,
+        awayStarter = if (isHome) opponentStartingPitcher else lotteStartingPitcher,
+        broadChannel = broadChannel,
+        winPitcherName = winPitcherName,
+        losePitcherName = losePitcherName,
+        gameDate = gameDate,
+        homeTeamCode = if (isHome) LOTTE_TEAM_CODE else opponentCode,
+        awayTeamCode = if (isHome) opponentCode else LOTTE_TEAM_CODE,
+        doubleHeaderNo = doubleHeaderNo,
+    )
+
+    private fun MiniGame.mergeLive(live: MiniGame): MiniGame = copy(
+        homeScore = live.homeScore,
+        awayScore = live.awayScore,
+        status = live.status,
+        statusText = live.statusText,
+        cancelReason = live.cancelReason.ifBlank { cancelReason },
+        homeStarter = live.homeStarter.ifBlank { homeStarter },
+        awayStarter = live.awayStarter.ifBlank { awayStarter },
+        winPitcherName = live.winPitcherName.ifBlank { winPitcherName },
+        losePitcherName = live.losePitcherName.ifBlank { losePitcherName },
+        broadChannel = live.broadChannel.ifBlank { broadChannel },
+        doubleHeaderNo = if (live.doubleHeaderNo > 0) live.doubleHeaderNo else doubleHeaderNo,
+    )
 
     companion object {
         const val POLL_LIVE_SEC = 10

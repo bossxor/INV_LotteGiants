@@ -16,9 +16,6 @@ import com.bossxor.lottegiants.data.NotificationType
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.widget.WidgetUpdater
 import kotlinx.coroutines.runBlocking
-import java.time.LocalDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
 class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
@@ -118,10 +115,8 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             }
         }
 
-        private fun parseGameMillis(date: String, time: String): Long? = runCatching {
-            val dt = LocalDateTime.parse("$date $time", DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
-            dt.atZone(ZoneId.of("Asia/Seoul")).toInstant().toEpochMilli()
-        }.getOrNull()
+        private fun parseGameMillis(date: String, time: String): Long? =
+            com.bossxor.lottegiants.domain.parseKboStartMillis(date, time)
 
         const val ACTION_START_LIVE = "com.bossxor.lottegiants.START_LIVE"
         const val ACTION_PREGAME = "com.bossxor.lottegiants.PREGAME"
