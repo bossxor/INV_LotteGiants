@@ -174,7 +174,7 @@ fun ResultsScreen(
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { shiftDay(-1) }) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "이전 달")
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "이전 날")
                     }
                     AnimatedContent(
                         targetState = selectedDate,
@@ -199,7 +199,7 @@ fun ResultsScreen(
                         )
                     }
                     IconButton(onClick = { shiftDay(1) }) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "다음 달")
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "다음 날")
                     }
                 }
                 BoxWithConstraints(Modifier.fillMaxWidth()) {

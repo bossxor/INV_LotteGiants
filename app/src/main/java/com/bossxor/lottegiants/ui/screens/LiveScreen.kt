@@ -216,7 +216,7 @@ fun LiveScreen(
                                     snapshot = snapshot,
                                     weather = weather ?: snapshot?.weather ?: game.preview?.weather,
                                 )
-                                1 -> LineupTab(game, onPlayerClick, onPitcherClick)
+                                1 -> LineupTab(game, onPlayerClick, onPitcherClick, onRefresh)
                                 2 -> SummaryTab(
                                     g = game,
                                     snapshot = snapshot,
@@ -226,9 +226,10 @@ fun LiveScreen(
                                     onOpenTeamHistory = onOpenTeamHistory,
                                     onOpenEntryBoard = onOpenEntryBoard,
                                     onOpenLeaders = onOpenLeaders,
+                                    onRetry = onRefresh,
                                 )
-                                3 -> RelayTab(game, snapshot)
-                                4 -> RecordTab(game, onPlayerClick, onPitcherClick)
+                                3 -> RelayTab(game, snapshot, onRefresh)
+                                4 -> RecordTab(game, onPlayerClick, onPitcherClick, onRefresh)
                             }
                         }
                     }
@@ -607,7 +608,9 @@ private fun SummaryTab(
     onOpenTeamHistory: () -> Unit = {},
     onOpenEntryBoard: () -> Unit = {},
     onOpenLeaders: () -> Unit = {},
+    onRetry: () -> Unit = {},
 ) {
+    DetailLoadError(g.detailError, onRetry)
     if (g.status == GameStatus.LIVE) {
         SectionCard {
             Column(Modifier.fillMaxWidth()) {
@@ -792,12 +795,14 @@ private fun LineupTab(
     g: LotteGameInfo,
     onPlayerClick: (LineupSlot) -> Unit,
     onPitcherClick: (com.bossxor.lottegiants.domain.PitcherLine) -> Unit = {},
+    onRetry: () -> Unit = {},
 ) {
     var showLotte by remember { mutableStateOf(true) }
     val lineup = if (showLotte) g.lotteLineup else g.opponentLineup
     val bench = if (showLotte) g.lotteBenchBatters else g.opponentBenchBatters
     val pitchers = if (showLotte) g.lottePitchers else g.opponentPitchers
     val starterName = if (showLotte) g.lotteStartingPitcher else g.opponentStartingPitcher
+    DetailLoadError(g.detailError, onRetry)
 
     SectionCard {
         Column {
@@ -822,7 +827,14 @@ private fun LineupTab(
     Spacer(Modifier.height(10.dp))
     if (lineup.isEmpty()) {
         SectionCard {
-            Text("라인업이 아직 발표되지 않았습니다.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                when {
+                    g.lineupAnnounced -> "라인업은 발표됐지만 상세를 아직 못 불러왔습니다."
+                    g.status == GameStatus.ENDED -> "타순 기록을 불러오지 못했습니다."
+                    else -> "라인업이 아직 발표되지 않았습니다."
+                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     } else {
         SectionCard {
@@ -946,8 +958,9 @@ private fun LineupTeamChip(label: String, selected: Boolean, onClick: () -> Unit
 }
 
 @Composable
-private fun RelayTab(g: LotteGameInfo, snapshot: LiveSnapshot? = null) {
+private fun RelayTab(g: LotteGameInfo, snapshot: LiveSnapshot? = null, onRetry: () -> Unit = {}) {
     var filterMode by remember { mutableIntStateOf(0) } // 0 all, 1 scoring
+    DetailLoadError(g.detailError, onRetry)
     if (g.status == GameStatus.LIVE) {
         SectionCard {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1121,8 +1134,10 @@ private fun RecordTab(
     g: LotteGameInfo,
     onPlayerClick: (LineupSlot) -> Unit = {},
     onPitcherClick: (com.bossxor.lottegiants.domain.PitcherLine) -> Unit = {},
+    onRetry: () -> Unit = {},
 ) {
     var showLotte by remember { mutableStateOf(true) }
+    DetailLoadError(g.detailError, onRetry)
     if (g.status == GameStatus.LIVE || g.status == GameStatus.ENDED) {
         ScoreBoard(
             opponentName = g.opponentName,
@@ -1652,6 +1667,29 @@ private fun KeyPlayerChip(
             }
         }
     }
+}
+
+@Composable
+private fun DetailLoadError(message: String, onRetry: () -> Unit) {
+    if (message.isBlank()) return
+    SectionCard {
+        Column(Modifier.fillMaxWidth()) {
+            Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "다시 시도",
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .clickable(onClick = onRetry)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 13.sp,
+            )
+        }
+    }
+    Spacer(Modifier.height(10.dp))
 }
 
 private fun isIgnoringBatteryOptimizations(context: android.content.Context): Boolean {

@@ -300,6 +300,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 position = "투수",
                 playerCode = p.playerCode,
                 backNumber = p.backNumber,
+                isPitcher = true,
             )
             runCatching { repo.fetchPlayerDetail(p.playerCode, slot, _snapshot.value?.lotteGame?.gameId) }
                 .onSuccess { fetched ->
@@ -434,8 +435,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         backNumber = slot.backNumber,
                         hitType = slot.hitType,
                         position = slot.position,
+                        isPitcher = slot.isPitcher ||
+                            com.bossxor.lottegiants.domain.isPitcherPosition(slot.position),
                         seasonAvg = slot.seasonAvg?.let { a -> String.format("%.3f", a) }.orEmpty(),
                         todayLine = "${slot.todayHits}/${slot.todayAtBats}",
+                        photoUrl = if (slot.playerCode.isNotBlank()) playerPhotoUrl(slot.playerCode) else "",
                     )
                 }
             _playerLoading.value = false

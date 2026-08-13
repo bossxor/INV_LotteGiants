@@ -469,6 +469,7 @@ private fun AppScaffold(
                                 playerCode = p.playerCode,
                                 backNumber = p.backNumber,
                                 hitType = p.hitType,
+                                isPitcher = p.isPitcher || p.position.contains("투수"),
                             ),
                         )
                     },

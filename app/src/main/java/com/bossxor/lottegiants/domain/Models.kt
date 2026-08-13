@@ -84,6 +84,7 @@ data class LineupSlot(
     val playerCode: String = "",
     val backNumber: String = "",
     val hitType: String = "",
+    val isPitcher: Boolean = false,
 )
 
 @Serializable
@@ -155,7 +156,25 @@ data class FavoritePlayer(
 )
 
 fun playerPhotoUrl(playerCode: String): String =
-    "https://sports-phinf.pstatic.net/player/kbo/default/$playerCode.png"
+    playerPhotoCandidates(playerCode).firstOrNull().orEmpty()
+
+/** KBO 공식 이미지 우선, 없으면 네이버 CDN */
+fun playerPhotoCandidates(playerCode: String): List<String> {
+    val code = playerCode.trim()
+    if (code.isBlank()) return emptyList()
+    return listOf(
+        "https://img.koreabaseball.com/file/person/middle/$code.jpg",
+        "https://www.koreabaseball.com/file/person/middle/new/$code.jpg",
+        "https://sports-phinf.pstatic.net/player/kbo/default/$code.png",
+    )
+}
+
+fun isPitcherPosition(position: String, hinted: Boolean = false): Boolean {
+    if (hinted) return true
+    val p = position.trim()
+    return p.contains("투수") || p.equals("P", true) || p == "1" ||
+        p.contains("pitcher", true)
+}
 
 @Serializable
 data class EntryPlayer(
@@ -350,6 +369,8 @@ data class LotteGameInfo(
     val provisionalMvpLine: String = "",
     /** 당일 투구 위치 (네이버 ptsOptions) */
     val pitchLocations: List<PitchLocation> = emptyList(),
+    /** 라인업·중계·기록 보강 실패 시 사용자에게 보여줄 메시지 */
+    val detailError: String = "",
 )
 
 /** 루타식 프리뷰 묶음 */

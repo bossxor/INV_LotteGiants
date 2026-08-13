@@ -26,6 +26,7 @@ import com.bossxor.lottegiants.domain.TeamStanding
 import com.bossxor.lottegiants.domain.WinProbPoint
 import com.bossxor.lottegiants.domain.cancelDisplayLabel
 import com.bossxor.lottegiants.domain.resolveCancelReason
+import com.bossxor.lottegiants.domain.isPitcherPosition
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.resolveStadiumCoord
 import com.bossxor.lottegiants.domain.normalizeKboImageUrl
@@ -121,13 +122,22 @@ class GiantsRepository private constructor(context: Context) {
         val relayGameId = kboLotte?.naverGameId() ?: lotteTodayNaver?.gameId
         var relayData: TextRelayData? = null
         if (relayGameId != null && lotteInfo != null) {
-            if (lotteInfo.status == GameStatus.LIVE) {
-                relayData = runCatching { fetchFullRelay(relayGameId) }.getOrNull()
+            // KBO 스코어보드·박스스코어 우선 (LIVE/ENDED/BEFORE 모두)
+            lotteInfo = enrichFromKboDetail(lotteInfo, kboLotte)
+            val wantRelay = lotteInfo.status == GameStatus.LIVE ||
+                lotteInfo.status == GameStatus.ENDED ||
+                lotteInfo.status == GameStatus.BEFORE
+            if (wantRelay) {
+                val relayResult = runCatching { fetchFullRelay(relayGameId) }
+                relayData = relayResult.getOrNull()
                 if (relayData != null) {
                     lotteInfo = mergeRelay(lotteInfo, relayData)
+                } else if (relayResult.isFailure &&
+                    lotteInfo.lotteLineup.isEmpty() &&
+                    lotteInfo.recentTexts.isEmpty()
+                ) {
+                    lotteInfo = lotteInfo.copy(detailError = "상세 기록을 불러오지 못했습니다.")
                 }
-            } else if (lotteInfo.status == GameStatus.ENDED) {
-                lotteInfo = enrichFromKboDetail(lotteInfo, kboLotte)
             }
             lotteInfo = enrichGameSummary(lotteInfo, kboRange, kboLotte)
         }
@@ -136,7 +146,11 @@ class GiantsRepository private constructor(context: Context) {
             .filter { it.involvesLotte() && it.status() == GameStatus.BEFORE && it.isoDate() > todayStr }
             .minWithOrNull(compareBy({ it.isoDate() }, { it.startTime }))
         val nextLotte = nextKbo?.let { kbo ->
-            enrichGameSummary(enrichFromKboDetail(kbo.toLotteBase(), kbo), kboRange, kbo)
+            var info = enrichFromKboDetail(kbo.toLotteBase(), kbo)
+            runCatching { fetchFullRelay(kbo.naverGameId()) }.getOrNull()?.let { relay ->
+                info = mergeRelay(info, relay)
+            }
+            enrichGameSummary(info, kboRange, kbo)
         } ?: run {
             val nextDto = runCatching {
                 api.getGames(
@@ -302,7 +316,7 @@ class GiantsRepository private constructor(context: Context) {
             gameDuration = sb.duration.ifBlank { base.gameDuration },
         )
 
-        if (base.status == GameStatus.ENDED) {
+        if (base.status == GameStatus.ENDED || base.status == GameStatus.LIVE) {
             val box = runCatching {
                 kboOfficialApi.getBoxScoreScroll(
                     seasonId = seasonId,
@@ -664,21 +678,37 @@ class GiantsRepository private constructor(context: Context) {
         )
         val codeByName = if (resolveCodes) {
             runCatching {
-                (fetchLeaders(false) + fetchLeaders(true))
-                    .filter { it.isLotte }
-                    .associate { it.name to it.playerCode }
-            }.getOrDefault(emptyMap())
+                val batters = fetchLeaders(false).filter { it.isLotte }
+                val pitchers = fetchLeaders(true).filter { it.isLotte }
+                val moves = fetchAllRosterMoves()
+                    .filter { it.playerCode.isNotBlank() && it.playerName.isNotBlank() }
+                    .associate { it.playerName to it.playerCode }
+                Triple(
+                    batters.associate { it.name to it.playerCode },
+                    pitchers.associate { it.name to it.playerCode },
+                    moves,
+                )
+            }.getOrNull()
         } else {
-            emptyMap()
+            null
+        }
+        fun codeFor(name: String, isPitcher: Boolean): String {
+            val maps = codeByName ?: return ""
+            val (batterMap, pitcherMap, moveMap) = maps
+            val primary = if (isPitcher) pitcherMap[name] else batterMap[name]
+            return primary?.takeIf { it.isNotBlank() }
+                ?: moveMap[name].orEmpty()
+                    .ifBlank { (if (isPitcher) batterMap[name] else pitcherMap[name]).orEmpty() }
         }
         fun toPlayers(table: String) = KboRosterParser.parsePlayers(table).map {
+            val pitcher = it.position.contains("투수")
             EntryPlayer(
                 name = it.name,
-                playerCode = codeByName[it.name].orEmpty(),
+                playerCode = codeFor(it.name, pitcher),
                 backNumber = it.backNumber,
                 position = it.position,
                 hitType = it.batsThrows,
-                isPitcher = it.position.contains("투수"),
+                isPitcher = pitcher,
             )
         }
         val kboReg = toPlayers(res.tableKboY)
@@ -692,9 +722,13 @@ class GiantsRepository private constructor(context: Context) {
         fun merge(kbo: List<EntryPlayer>, extras: List<RosterMove>): List<EntryPlayer> {
             val names = kbo.map { it.name }.toSet()
             val added = extras.filter { it.playerName.isNotBlank() && it.playerName !in names }.map { m ->
+                val pitcher = m.playerName.let { n ->
+                    codeByName?.second?.containsKey(n) == true
+                }
                 EntryPlayer(
                     name = m.playerName,
-                    playerCode = m.playerCode.ifBlank { codeByName[m.playerName].orEmpty() },
+                    playerCode = m.playerCode.ifBlank { codeFor(m.playerName, pitcher) },
+                    isPitcher = pitcher,
                 )
             }
             return kbo + added
@@ -760,8 +794,14 @@ class GiantsRepository private constructor(context: Context) {
             val name = fallback?.name.orEmpty()
             if (name.isBlank()) ""
             else runCatching {
-                pickLeaderByName(name, fetchLeaders(false) + fetchLeaders(true))
-                    ?.playerCode.orEmpty()
+                val pitcherFirst = fallback?.isPitcher == true ||
+                    isPitcherPosition(fallback?.position.orEmpty())
+                val ordered = if (pitcherFirst) {
+                    fetchLeaders(true) + fetchLeaders(false)
+                } else {
+                    fetchLeaders(false) + fetchLeaders(true)
+                }
+                pickLeaderByName(name, ordered)?.playerCode.orEmpty()
             }.getOrDefault("")
         }
         val hintId = gameIdHint?.takeIf { it.isNotBlank() }
@@ -821,16 +861,12 @@ class GiantsRepository private constructor(context: Context) {
         ).let { withKeuboSeasonStats(it) }
     }
 
-    /** 프리뷰에 없는 선수라도 Keubo 타이틀 스탯으로 시즌 성적 보강 */
+    /** 프리뷰에 없는 선수라도 루타(Keubo) 시즌 스탯으로 보강. 투수/타자 힌트를 존중한다. */
     private suspend fun withKeuboSeasonStats(detail: PlayerDetail): PlayerDetail {
-        val needsBatter = !detail.isPitcher &&
-            (detail.seasonAvg.isBlank() || detail.seasonHits == 0 && detail.seasonHr == 0 && detail.seasonRbi == 0)
-        val needsPitcher = detail.isPitcher && detail.pitcherEra.isBlank()
-        if (!needsBatter && !needsPitcher && detail.seasonOps.isNotBlank()) return detail
-
         val season = LocalDate.now().let { if (it.monthValue < 3) it.year - 1 else it.year }
         val code = detail.playerCode
         val name = detail.name
+        val pitcherHint = detail.isPitcher || isPitcherPosition(detail.position)
 
         fun matchByCode(s: KeuboStatDto): Boolean =
             code.isNotBlank() && (s.kboId == code || s.playerId == code)
@@ -838,48 +874,69 @@ class GiantsRepository private constructor(context: Context) {
         fun matchByNamePreferLotte(stats: List<KeuboStatDto>): KeuboStatDto? {
             val hits = stats.filter { name.isNotBlank() && it.name == name }
             return hits.firstOrNull { it.team.contains("롯데") || it.team.equals("LT", true) }
+                ?: hits.firstOrNull()
         }
 
-        if (needsPitcher || detail.isPitcher) {
-            val pitcher = runCatching {
-                val stats = keuboApi.getStats("pitcher", season).stats
-                stats.firstOrNull(::matchByCode) ?: matchByNamePreferLotte(stats)
-            }.getOrNull()
-            if (pitcher != null) {
-                val seeded = pitcher.toLeader(true)
-                return detail.copy(
-                    name = detail.name.ifBlank { seeded.name },
-                    seasonGames = if (detail.seasonGames > 0) detail.seasonGames else seeded.games,
-                    pitcherEra = detail.pitcherEra.ifBlank { seeded.era },
-                    pitcherWins = if (detail.pitcherWins > 0) detail.pitcherWins else seeded.wins,
-                    pitcherLosses = if (detail.pitcherLosses > 0) detail.pitcherLosses else seeded.losses,
-                    pitcherSo = if (detail.pitcherSo > 0) detail.pitcherSo else seeded.so,
-                    pitcherInn = detail.pitcherInn.ifBlank { seeded.ip },
-                    pitcherSaves = if (detail.pitcherSaves > 0) detail.pitcherSaves else seeded.saves,
-                    pitcherHolds = if (detail.pitcherHolds > 0) detail.pitcherHolds else seeded.holds,
-                    pitcherWhip = detail.pitcherWhip.ifBlank { seeded.whip },
-                    isPitcher = true,
-                )
-            }
-        }
+        suspend fun findPitcher(): KeuboStatDto? = runCatching {
+            val stats = keuboApi.getStats("pitcher", season).stats
+            stats.firstOrNull(::matchByCode) ?: matchByNamePreferLotte(stats)
+        }.getOrNull()
 
-        val batter = runCatching {
+        suspend fun findBatter(): KeuboStatDto? = runCatching {
             val stats = keuboApi.getStats("batter", season).stats
             stats.firstOrNull(::matchByCode) ?: matchByNamePreferLotte(stats)
-        }.getOrNull() ?: return detail
+        }.getOrNull()
 
-        val seeded = batter.toLeader(false)
+        if (pitcherHint) {
+            val pitcher = findPitcher() ?: return detail
+            val seeded = pitcher.toLeader(true)
+            return detail.copy(
+                name = detail.name.ifBlank { seeded.name },
+                seasonGames = if (detail.seasonGames > 0) detail.seasonGames else seeded.games,
+                pitcherEra = detail.pitcherEra.ifBlank { seeded.era },
+                pitcherWins = if (detail.pitcherWins > 0) detail.pitcherWins else seeded.wins,
+                pitcherLosses = if (detail.pitcherLosses > 0) detail.pitcherLosses else seeded.losses,
+                pitcherSo = if (detail.pitcherSo > 0) detail.pitcherSo else seeded.so,
+                pitcherInn = detail.pitcherInn.ifBlank { seeded.ip },
+                pitcherSaves = if (detail.pitcherSaves > 0) detail.pitcherSaves else seeded.saves,
+                pitcherHolds = if (detail.pitcherHolds > 0) detail.pitcherHolds else seeded.holds,
+                pitcherWhip = detail.pitcherWhip.ifBlank { seeded.whip },
+                isPitcher = true,
+            )
+        }
+
+        val batter = findBatter()
+        if (batter != null) {
+            val seeded = batter.toLeader(false)
+            return detail.copy(
+                name = detail.name.ifBlank { seeded.name },
+                seasonAvg = detail.seasonAvg.ifBlank { seeded.avg },
+                seasonGames = if (detail.seasonGames > 0) detail.seasonGames else seeded.games,
+                seasonHits = if (detail.seasonHits > 0) detail.seasonHits else seeded.hits,
+                seasonHr = if (detail.seasonHr > 0) detail.seasonHr else seeded.hr,
+                seasonRbi = if (detail.seasonRbi > 0) detail.seasonRbi else seeded.rbi,
+                seasonObp = detail.seasonObp.ifBlank { seeded.obp },
+                seasonOps = detail.seasonOps.ifBlank { seeded.ops },
+                seasonSlg = detail.seasonSlg.ifBlank { seeded.slg },
+                seasonSb = if (detail.seasonSb > 0) detail.seasonSb else seeded.sb,
+                isPitcher = false,
+            )
+        }
+
+        val pitcher = findPitcher() ?: return detail
+        val seeded = pitcher.toLeader(true)
         return detail.copy(
             name = detail.name.ifBlank { seeded.name },
-            seasonAvg = detail.seasonAvg.ifBlank { seeded.avg },
             seasonGames = if (detail.seasonGames > 0) detail.seasonGames else seeded.games,
-            seasonHits = if (detail.seasonHits > 0) detail.seasonHits else seeded.hits,
-            seasonHr = if (detail.seasonHr > 0) detail.seasonHr else seeded.hr,
-            seasonRbi = if (detail.seasonRbi > 0) detail.seasonRbi else seeded.rbi,
-            seasonObp = detail.seasonObp.ifBlank { seeded.obp },
-            seasonOps = detail.seasonOps.ifBlank { seeded.ops },
-            seasonSlg = detail.seasonSlg.ifBlank { seeded.slg },
-            seasonSb = if (detail.seasonSb > 0) detail.seasonSb else seeded.sb,
+            pitcherEra = detail.pitcherEra.ifBlank { seeded.era },
+            pitcherWins = if (detail.pitcherWins > 0) detail.pitcherWins else seeded.wins,
+            pitcherLosses = if (detail.pitcherLosses > 0) detail.pitcherLosses else seeded.losses,
+            pitcherSo = if (detail.pitcherSo > 0) detail.pitcherSo else seeded.so,
+            pitcherInn = detail.pitcherInn.ifBlank { seeded.ip },
+            pitcherSaves = if (detail.pitcherSaves > 0) detail.pitcherSaves else seeded.saves,
+            pitcherHolds = if (detail.pitcherHolds > 0) detail.pitcherHolds else seeded.holds,
+            pitcherWhip = detail.pitcherWhip.ifBlank { seeded.whip },
+            isPitcher = true,
         )
     }
 
@@ -890,6 +947,7 @@ class GiantsRepository private constructor(context: Context) {
 
     private fun basePlayerFromLineup(slot: LineupSlot?, code: String): PlayerDetail {
         val c = code.ifBlank { slot?.playerCode.orEmpty() }
+        val pitcher = slot?.isPitcher == true || isPitcherPosition(slot?.position.orEmpty())
         return PlayerDetail(
             playerCode = c,
             name = slot?.name.orEmpty(),
@@ -899,13 +957,16 @@ class GiantsRepository private constructor(context: Context) {
             seasonAvg = slot?.seasonAvg?.let { String.format("%.3f", it) }.orEmpty(),
             todayLine = if (slot != null) "${slot.todayHits}/${slot.todayAtBats}" else "",
             photoUrl = if (c.isNotBlank()) playerPhotoUrl(c) else "",
+            isPitcher = pitcher,
         )
     }
 
     private fun mergePreviewPlayer(base: PlayerDetail, block: PreviewPlayerBlock): PlayerDetail {
         val info = block.playerInfo
         val stats = block.currentSeasonStats
-        val isPitcher = stats?.era != null || stats?.inn != null
+        val isPitcher = base.isPitcher ||
+            isPitcherPosition(base.position) ||
+            stats?.era != null || stats?.inn != null
         return base.copy(
             playerCode = info?.pCode ?: block.playerCode ?: base.playerCode,
             name = info?.name?.takeIf { it.isNotBlank() } ?: base.name,

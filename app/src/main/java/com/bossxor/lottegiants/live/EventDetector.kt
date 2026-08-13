@@ -109,7 +109,7 @@ class EventDetector(private val store: SnapshotStore) {
             val favName = favorites.firstOrNull { it.code == batterCode }?.name
                 ?.ifBlank { game.currentBatterName } ?: game.currentBatterName
             maybeNotify(
-                context, NotificationType.FAVORITE_AT_BAT, 2701,
+                context, NotificationType.FAVORITE_AT_BAT, 2711,
                 "즐겨찾기 타석", "$favName · ${game.inningLabel}"
             )
         }
@@ -121,27 +121,38 @@ class EventDetector(private val store: SnapshotStore) {
             val text = t.text
             val lotteScored = game.lotteScore > lastLotteScore
             val oppScored = game.opponentScore > lastOppScore
+            val lotteRuns = (game.lotteScore - lastLotteScore).coerceAtLeast(0)
+            val oppRuns = (game.opponentScore - lastOppScore).coerceAtLeast(0)
+            val score = "${game.lotteScore}:${game.opponentScore}"
+            val isHr = text.contains("홈런")
+            val lotteHr = isHr && isLotteHomerun(game, text)
+
             if (lotteScored) {
-                maybeNotify(
-                    context, NotificationType.SCORE, 2100 + t.seqno % 100,
-                    "롯데 득점! ${game.lotteScore}:${game.opponentScore}", text
-                )
-                store.setHighlight("롯데 득점! ${game.lotteScore}:${game.opponentScore}")
-                WearBridge.sendScoreEvent(
-                    context,
-                    "롯데 득점! ${game.lotteScore}:${game.opponentScore} · ${game.inningLabel}",
-                )
+                if (lotteHr) {
+                    val runs = parseHrRuns(text) ?: lotteRuns.takeIf { it > 0 } ?: 1
+                    val who = scorerName(game, text)
+                    val title = buildString {
+                        append("롯데 홈런! ${runs}점")
+                        if (!who.isNullOrBlank()) append(" · $who")
+                        append(" · $score")
+                    }
+                    maybeNotify(context, NotificationType.HOMERUN, 2300 + t.seqno % 100, title, text)
+                    store.setHighlight(title)
+                    WearBridge.sendScoreEvent(context, title)
+                } else {
+                    val whoHow = describeLotteScore(game, text)
+                    val title = "롯데 득점! $whoHow · $score"
+                    maybeNotify(context, NotificationType.SCORE, 2100 + t.seqno % 100, title, text)
+                    store.setHighlight(title)
+                    WearBridge.sendScoreEvent(context, "$title · ${game.inningLabel}")
+                }
             }
             if (oppScored) {
-                maybeNotify(
-                    context, NotificationType.CONCEDING, 2150 + t.seqno % 100,
-                    "실점 ${game.lotteScore}:${game.opponentScore}", text
-                )
-                store.setHighlight("실점 ${game.lotteScore}:${game.opponentScore}")
-                WearBridge.sendScoreEvent(
-                    context,
-                    "실점 ${game.lotteScore}:${game.opponentScore} · ${game.inningLabel}",
-                )
+                val n = oppRuns.takeIf { it > 0 } ?: 1
+                val title = "${n}점 실점 · $score"
+                maybeNotify(context, NotificationType.CONCEDING, 2150 + t.seqno % 100, title, "")
+                store.setHighlight(title)
+                WearBridge.sendScoreEvent(context, "$title · ${game.inningLabel}")
             }
             if (lotteScored || oppScored) {
                 val prevLead = leadOf(lastLotteScore, lastOppScore)
@@ -154,21 +165,10 @@ class EventDetector(private val store: SnapshotStore) {
                     }
                     maybeNotify(
                         context, NotificationType.LEAD_CHANGE, 2200 + t.seqno % 100,
-                        title, "${game.lotteScore}:${game.opponentScore} · $text"
+                        title, score
                     )
                 }
                 seedScores(game)
-            }
-            if (text.contains("홈런")) {
-                val lotteHr = !text.contains(game.opponentName) || text.contains("롯데") ||
-                    game.lotteLineup.any { text.contains(it.name) }
-                val title = if (lotteHr) "롯데 홈런!" else "홈런"
-                maybeNotify(
-                    context, NotificationType.HOMERUN, 2300 + t.seqno % 100,
-                    title, text
-                )
-                store.setHighlight(title)
-                WearBridge.sendScoreEvent(context, "$title · ${game.lotteScore}:${game.opponentScore}")
             }
         }
         if (newTexts.isNotEmpty()) lastSeqno = newTexts.maxOf { it.seqno }
@@ -186,7 +186,10 @@ class EventDetector(private val store: SnapshotStore) {
         }
         if (newPitcherCode.isNotBlank()) lastPitcherCode = newPitcherCode
 
-        if (lastInning > 0 && (game.inning != lastInning || game.isTopInning != (lastTop == true))) {
+        if (game.status == GameStatus.LIVE &&
+            lastInning > 0 &&
+            (game.inning != lastInning || game.isTopInning != (lastTop == true))
+        ) {
             if (game.out == 0 || game.inning != lastInning) {
                 maybeNotify(
                     context, NotificationType.INNING_CHANGE, 2501,
@@ -399,6 +402,45 @@ class EventDetector(private val store: SnapshotStore) {
         lotte > opp -> 1
         lotte < opp -> -1
         else -> 0
+    }
+
+    private fun isLotteHomerun(game: LotteGameInfo, text: String): Boolean {
+        if (game.lotteLineup.any { it.name.isNotBlank() && text.contains(it.name) }) return true
+        if (game.lotteBenchBatters.any { it.name.isNotBlank() && text.contains(it.name) }) return true
+        if (text.contains("롯데") && !text.contains(game.opponentName)) return true
+        return game.isLotteBatting && !text.contains(game.opponentName)
+    }
+
+    private fun parseHrRuns(text: String): Int? {
+        if (text.contains("솔로")) return 1
+        if (text.contains("만루") || text.contains("그랜드슬램") || text.contains("그랜드 슬램")) return 4
+        Regex("""(\d)\s*점\s*홈런""").find(text)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
+        Regex("""(\d)\s*타점""").find(text)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
+        return null
+    }
+
+    private fun scorerName(game: LotteGameInfo, text: String): String? =
+        (game.lotteLineup + game.lotteBenchBatters)
+            .firstOrNull { it.name.isNotBlank() && text.contains(it.name) }
+            ?.name
+
+    private fun describeLotteScore(game: LotteGameInfo, text: String): String {
+        val who = scorerName(game, text)
+        val how = when {
+            text.contains("홈런") -> "홈런"
+            text.contains("3루타") -> "3루타"
+            text.contains("2루타") -> "2루타"
+            text.contains("적시") -> "적시타"
+            text.contains("희생플라이") || text.contains("희플") -> "희생플라이"
+            text.contains("밀어내기") -> "밀어내기"
+            text.contains("내야안타") -> "내야안타"
+            text.contains("안타") -> "안타"
+            text.contains("폭투") -> "폭투"
+            text.contains("도루") -> "도루"
+            text.contains("실책") -> "실책"
+            else -> ""
+        }
+        return listOfNotNull(who, how.takeIf { it.isNotBlank() }).joinToString(" ").ifBlank { "득점" }
     }
 
     private fun basesLabel(g: LotteGameInfo): String = buildList {
