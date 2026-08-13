@@ -26,7 +26,6 @@ class EventDetector(private val store: SnapshotStore) {
     private var eighthNotifiedFor: String = ""
     private var extraNotifiedFor: String = ""
     private var lastFavoriteBatterCode: String = ""
-    private var notifiedRosterKeys: MutableSet<String> = mutableSetOf()
     private var lastGameId: String = ""
     private var initialized = false
 
@@ -326,21 +325,41 @@ class EventDetector(private val store: SnapshotStore) {
 
     suspend fun processRosterMoves(context: Context, moves: List<com.bossxor.lottegiants.domain.RosterMove>) {
         if (moves.isEmpty()) return
+        fun keyOf(m: com.bossxor.lottegiants.domain.RosterMove) =
+            "${m.moveDate}:${m.playerCode}:${m.moveType}:${m.playerName}"
+        val stored = store.notifiedRosterKeys().toMutableSet()
+        if (stored.isEmpty()) {
+            store.setNotifiedRosterKeys(moves.map(::keyOf).toSet())
+            return
+        }
+        val from = java.time.LocalDate.now().minusDays(1).toString()
         val favorites = store.favoritePlayers()
-        if (favorites.isEmpty()) return
         val byCode = favorites.associateBy { it.code }
         val byName = favorites.filter { it.name.isNotBlank() }.associateBy { it.name }
+        var changed = false
         for (m in moves) {
-            val key = "${m.moveDate}:${m.playerCode}:${m.moveType}:${m.playerName}"
-            if (key in notifiedRosterKeys) continue
-            val fav = byCode[m.playerCode] ?: byName[m.playerName] ?: continue
+            val key = keyOf(m)
+            if (key in stored) continue
+            stored.add(key)
+            changed = true
+            if (m.moveDate < from) continue
             val label = if (m.isRegister) "등록" else "말소"
-            maybeNotify(
-                context, NotificationType.FAVORITE_ROSTER, 2800 + (key.hashCode() and 0xFF),
-                "즐겨찾기 등말소", "${fav.name.ifBlank { m.playerName }} $label · ${m.moveDate}"
-            )
-            notifiedRosterKeys.add(key)
+            val name = m.playerName
+            val fav = m.playerCode.takeIf { it.isNotBlank() }?.let { byCode[it] }
+                ?: byName[name]
+            if (fav != null) {
+                maybeNotify(
+                    context, NotificationType.FAVORITE_ROSTER, 2800 + (key.hashCode() and 0xFF),
+                    "즐겨찾기 등말소", "${fav.name.ifBlank { name }} $label · ${m.moveDate}",
+                )
+            } else {
+                maybeNotify(
+                    context, NotificationType.ROSTER, 2820 + (key.hashCode() and 0xFF),
+                    "엔트리 $label", "$name $label · ${m.moveDate}",
+                )
+            }
         }
+        if (changed) store.setNotifiedRosterKeys(stored)
     }
 
     private fun resetInMemory() {

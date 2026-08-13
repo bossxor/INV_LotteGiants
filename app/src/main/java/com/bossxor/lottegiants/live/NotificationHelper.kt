@@ -39,6 +39,7 @@ object NotificationHelper {
     const val CHANNEL_LINEUP = "event_lineup"
     const val CHANNEL_CANCEL = "event_cancel"
     const val CHANNEL_FAVORITE = "event_favorite"
+    const val CHANNEL_ROSTER = "event_roster"
 
     const val LIVE_NOTIFICATION_ID = 1001
 
@@ -67,6 +68,7 @@ object NotificationHelper {
         ch(CHANNEL_LINEUP, "선발 라인업")
         ch(CHANNEL_CANCEL, "경기 취소", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_FAVORITE, "즐겨찾기 선수", NotificationManager.IMPORTANCE_DEFAULT)
+        ch(CHANNEL_ROSTER, "엔트리 등말소", NotificationManager.IMPORTANCE_HIGH)
     }
 
     fun buildLiveNotification(
@@ -357,13 +359,31 @@ object NotificationHelper {
             NotificationType.PREGAME_REMINDER -> CHANNEL_PREGAME
             NotificationType.LINEUP -> CHANNEL_LINEUP
             NotificationType.CANCELED -> CHANNEL_CANCEL
+            NotificationType.ROSTER -> CHANNEL_ROSTER
             NotificationType.FAVORITE_AT_BAT, NotificationType.FAVORITE_ROSTER -> CHANNEL_FAVORITE
         }
+        val openTab = when (type) {
+            NotificationType.ROSTER, NotificationType.FAVORITE_ROSTER -> "entry"
+            else -> "live"
+        }
+        val content = PendingIntent.getActivity(
+            context,
+            id,
+            Intent(context, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_OPEN_TAB, openTab)
+                .addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP,
+                ),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         val n = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(content)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()

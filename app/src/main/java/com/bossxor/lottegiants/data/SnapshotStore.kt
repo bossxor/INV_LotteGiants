@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.bossxor.lottegiants.domain.FavoritePlayer
 import com.bossxor.lottegiants.domain.LiveDisplayMode
@@ -181,6 +182,14 @@ class SnapshotStore(private val context: Context) {
         context.dataStore.edit { it[KEY_BANNER_DAY] = day }
     }
 
+    /** 이미 알림을 보낸 등말소 키 (중복 알림 방지) */
+    suspend fun notifiedRosterKeys(): Set<String> =
+        context.dataStore.data.map { it[KEY_NOTIFIED_ROSTER].orEmpty() }.first()
+
+    suspend fun setNotifiedRosterKeys(keys: Set<String>) {
+        context.dataStore.edit { it[KEY_NOTIFIED_ROSTER] = keys }
+    }
+
     /** 이미 취소 알림을 보낸 경기 ID (중복 알림 방지) */
     suspend fun notifiedCancelGameId(): String =
         context.dataStore.data.map { it[KEY_NOTIFIED_CANCEL].orEmpty() }.first()
@@ -222,6 +231,7 @@ class SnapshotStore(private val context: Context) {
         private val KEY_FAVORITE_PLAYERS = stringPreferencesKey("favorite_players")
         private val KEY_BANNER_DAY = stringPreferencesKey("perm_banner_dismissed_day")
         private val KEY_NOTIFIED_CANCEL = stringPreferencesKey("notified_cancel_game_id")
+        private val KEY_NOTIFIED_ROSTER = stringSetPreferencesKey("notified_roster_keys")
         private val KEY_PENDING_UPDATE_APK = stringPreferencesKey("pending_update_apk")
         private val KEY_PENDING_UPDATE_CODE = stringPreferencesKey("pending_update_code")
     }
@@ -242,6 +252,7 @@ enum class NotificationType(val label: String, val description: String) {
     PREGAME_REMINDER("경기 30분 전", "경기 시작 30분 전 리마인더"),
     LINEUP("선발 라인업", "라인업 발표 시 선발투수와 타순 알림"),
     CANCELED("경기 취소", "우천 취소·순연 알림"),
+    ROSTER("엔트리 등말소", "롯데 선수 등록·말소 공시 알림"),
     FAVORITE_AT_BAT("즐겨찾기 타석", "즐겨찾기 선수가 타석에 설 때"),
     FAVORITE_ROSTER("즐겨찾기 등말소", "즐겨찾기 선수 등록·말소 시"),
 }

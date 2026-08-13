@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -173,34 +172,37 @@ fun EntryBoardScreen(
             fontSize = 14.sp,
         )
         Spacer(Modifier.height(6.dp))
-        Box(Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 220.dp)) {
-            when {
-                loading -> Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(Modifier.size(28.dp), color = MaterialTheme.colorScheme.primary)
-                }
-                else -> {
-                    val reg = dayEntry?.registered.orEmpty()
-                    val rem = dayEntry?.removed.orEmpty()
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (reg.isEmpty() && rem.isEmpty()) {
-                            SectionCard {
-                                Text("이 날 롯데 등말소 공시가 없습니다.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        } else {
-                            if (reg.isNotEmpty()) ChangeBlock(title = "등록", accent = WinGreen, players = reg, onPlayerClick = onPlayerClick)
-                            if (rem.isNotEmpty()) ChangeBlock(title = "말소", accent = LoseRed, players = rem, onPlayerClick = onPlayerClick)
-                        }
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.height(10.dp))
         LazyColumn(
             Modifier
                 .weight(1f)
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            item {
+                when {
+                    loading -> Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(Modifier.size(28.dp), color = MaterialTheme.colorScheme.primary)
+                    }
+                    else -> {
+                        val reg = dayEntry?.registered.orEmpty()
+                        val rem = dayEntry?.removed.orEmpty()
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (reg.isEmpty() && rem.isEmpty()) {
+                                SectionCard {
+                                    Text("이 날 롯데 등말소 공시가 없습니다.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            } else {
+                                if (reg.isNotEmpty()) {
+                                    ChangeBlock(title = "등록", accent = WinGreen, players = reg, onPlayerClick = onPlayerClick)
+                                }
+                                if (rem.isNotEmpty()) {
+                                    ChangeBlock(title = "말소", accent = LoseRed, players = rem, onPlayerClick = onPlayerClick)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             item {
                 Text("최근 7일 변동", fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }

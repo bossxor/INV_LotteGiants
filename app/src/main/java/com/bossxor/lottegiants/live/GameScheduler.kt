@@ -32,8 +32,11 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         val game = snap.lotteGame
         // 라이브 폴링이 없어도 취소·시작 등 상태 전이 알림
         NotificationHelper.createChannels(applicationContext)
+        val detector = EventDetector(repo.store)
+        runCatching { detector.process(applicationContext, game) }
         runCatching {
-            EventDetector(repo.store).process(applicationContext, game)
+            val moves = repo.fetchRecentRosterMoves(3)
+            detector.processRosterMoves(applicationContext, moves)
         }
 
         when (game?.status) {

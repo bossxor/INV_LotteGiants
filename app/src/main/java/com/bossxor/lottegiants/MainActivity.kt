@@ -1,6 +1,7 @@
 package com.bossxor.lottegiants
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -90,6 +91,8 @@ private enum class Overlay { None, TeamHistory, EntryBoard, Leaders }
 class MainActivity : ComponentActivity() {
 
     private val vm: MainViewModel by viewModels()
+    private val openTabExtra = mutableStateOf<String?>(null)
+    private val openTabNonce = mutableIntStateOf(0)
 
     private val notifPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -99,6 +102,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestNotifIfNeeded()
+        openTabExtra.value = intent.getStringExtra(EXTRA_OPEN_TAB)
 
         setContent {
             val themeMode by vm.themeMode.collectAsState()
@@ -244,7 +248,9 @@ class MainActivity : ComponentActivity() {
                 }
 
                 AppScaffold(
-                    initialTab = tabFromIntent(intent.getStringExtra(EXTRA_OPEN_TAB)),
+                    initialTab = tabFromIntent(openTabExtra.value),
+                    openEntry = isEntryIntent(openTabExtra.value),
+                    openEntryNonce = openTabNonce.intValue,
                     snapshot = snapshot,
                     standings = standings,
                     error = error,
@@ -292,6 +298,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openTabExtra.value = intent.getStringExtra(EXTRA_OPEN_TAB)
+        openTabNonce.intValue++
+    }
+
     private fun requestNotifIfNeeded() {
         if (Build.VERSION.SDK_INT >= 33) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
@@ -311,12 +324,17 @@ class MainActivity : ComponentActivity() {
             "settings", "3" -> 3
             else -> 0
         }
+
+        fun isEntryIntent(value: String?): Boolean =
+            value?.lowercase() in setOf("entry", "roster")
     }
 }
 
 @Composable
 private fun AppScaffold(
     initialTab: Int,
+    openEntry: Boolean,
+    openEntryNonce: Int,
     snapshot: com.bossxor.lottegiants.domain.LiveSnapshot?,
     standings: List<com.bossxor.lottegiants.domain.TeamStanding>,
     error: String?,
@@ -362,7 +380,7 @@ private fun AppScaffold(
     val scope = rememberCoroutineScope()
     val store = remember { GiantsRepository.get(context).store }
     var tab by remember { mutableIntStateOf(initialTab) }
-    var overlay by remember { mutableStateOf(Overlay.None) }
+    var overlay by remember { mutableStateOf(if (openEntry) Overlay.EntryBoard else Overlay.None) }
     var showPlayerSheet by remember { mutableStateOf(false) }
     var lastBackAt by remember { mutableLongStateOf(0L) }
     var showOnboarding by remember { mutableStateOf(false) }
@@ -371,6 +389,12 @@ private fun AppScaffold(
         if (!store.isOnboardingDone()) showOnboarding = true
     }
     LaunchedEffect(initialTab) { tab = initialTab }
+    LaunchedEffect(openEntry, openEntryNonce) {
+        if (openEntry) {
+            overlay = Overlay.EntryBoard
+            onOpenEntrySmart()
+        }
+    }
 
     BackHandler {
         when {
@@ -488,10 +512,15 @@ private fun AppScaffold(
                         },
                         onKeyPlayerClick = { code, name ->
                             showPlayerSheet = true
-                            val leader = batterLeaders.firstOrNull { p ->
-                                (code.isNotBlank() && p.playerCode == code) ||
-                                    (name.isNotBlank() && p.name == name)
+                            val byCode = batterLeaders.firstOrNull { p ->
+                                code.isNotBlank() && p.playerCode == code
                             }
+                            val byName = batterLeaders.filter { p ->
+                                name.isNotBlank() && p.name == name
+                            }
+                            val leader = byCode
+                                ?: byName.firstOrNull { it.isLotte }
+                                ?: byName.firstOrNull()
                             if (leader != null) {
                                 onLeaderPlayerClick(leader)
                             } else {

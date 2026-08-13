@@ -681,10 +681,28 @@ class GiantsRepository private constructor(context: Context) {
                 isPitcher = it.position.contains("투수"),
             )
         }
+        val kboReg = toPlayers(res.tableKboY)
+        val kboRem = toPlayers(res.tableKboN)
+        val keuboDay = if (resolveCodes) {
+            runCatching { fetchAllRosterMoves() }.getOrDefault(emptyList())
+                .filter { it.moveDate == gDt }
+        } else {
+            emptyList()
+        }
+        fun merge(kbo: List<EntryPlayer>, extras: List<RosterMove>): List<EntryPlayer> {
+            val names = kbo.map { it.name }.toSet()
+            val added = extras.filter { it.playerName.isNotBlank() && it.playerName !in names }.map { m ->
+                EntryPlayer(
+                    name = m.playerName,
+                    playerCode = m.playerCode.ifBlank { codeByName[m.playerName].orEmpty() },
+                )
+            }
+            return kbo + added
+        }
         return DayEntryChanges(
             date = gDt,
-            registered = toPlayers(res.tableKboY),
-            removed = toPlayers(res.tableKboN),
+            registered = merge(kboReg, keuboDay.filter { it.isRegister }),
+            removed = merge(kboRem, keuboDay.filter { !it.isRegister }),
         )
     }
 
@@ -693,7 +711,7 @@ class GiantsRepository private constructor(context: Context) {
         val today = LocalDate.now()
         for (i in 0..lookback) {
             val d = today.minusDays(i.toLong())
-            val changes = runCatching { fetchDayEntryChanges(d) }.getOrNull()
+            val changes = runCatching { fetchDayEntryChanges(d, resolveCodes = false) }.getOrNull()
             if (changes != null && changes.hasChanges) return d
         }
         return today
@@ -707,13 +725,19 @@ class GiantsRepository private constructor(context: Context) {
             runCatching { fetchDayEntryChanges(d, resolveCodes = false) }
                 .onSuccess { if (it.hasChanges) hits.add(d) }
         }
+        runCatching { fetchAllRosterMoves() }.getOrDefault(emptyList()).forEach { m ->
+            val d = runCatching { LocalDate.parse(m.moveDate) }.getOrNull() ?: return@forEach
+            if (YearMonth.from(d) == month) hits.add(d)
+        }
         return hits
     }
 
+    suspend fun fetchAllRosterMoves(): List<RosterMove> =
+        keuboApi.getRosterMoves(KeuboApi.LOTTE_TEAM_ID).moves.map { it.toDomain() }
+
     suspend fun fetchRecentRosterMoves(days: Int = 7): List<RosterMove> {
         val from = LocalDate.now().minusDays((days - 1).toLong()).toString()
-        val moves = keuboApi.getRosterMoves(KeuboApi.LOTTE_TEAM_ID).moves.map { it.toDomain() }
-        return moves.filter { it.moveDate >= from }.sortedByDescending { it.moveDate }
+        return fetchAllRosterMoves().filter { it.moveDate >= from }.sortedByDescending { it.moveDate }
     }
 
     suspend fun fetchLeaders(isPitcher: Boolean): List<LeaderPlayer> {
@@ -736,8 +760,8 @@ class GiantsRepository private constructor(context: Context) {
             val name = fallback?.name.orEmpty()
             if (name.isBlank()) ""
             else runCatching {
-                (fetchLeaders(false) + fetchLeaders(true))
-                    .firstOrNull { it.name == name }?.playerCode.orEmpty()
+                pickLeaderByName(name, fetchLeaders(false) + fetchLeaders(true))
+                    ?.playerCode.orEmpty()
             }.getOrDefault("")
         }
         val hintId = gameIdHint?.takeIf { it.isNotBlank() }
@@ -760,12 +784,15 @@ class GiantsRepository private constructor(context: Context) {
                 preview?.awayTopPlayer,
             )
             val match = blocks.firstOrNull {
-                (resolvedCode.isNotBlank() && (
+                resolvedCode.isNotBlank() && (
                     it.playerCode == resolvedCode ||
                         it.playerInfo?.pCode == resolvedCode ||
                         it.currentSeasonStats?.playerCode == resolvedCode
-                    )) ||
-                    (fallback?.name?.isNotBlank() == true && it.playerInfo?.name == fallback.name)
+                    )
+            } ?: blocks.firstOrNull {
+                resolvedCode.isBlank() &&
+                    fallback?.name?.isNotBlank() == true &&
+                    it.playerInfo?.name == fallback.name
             }
             if (match != null) {
                 detail = mergePreviewPlayer(detail, match)
@@ -774,10 +801,7 @@ class GiantsRepository private constructor(context: Context) {
             val relay = runCatching { api.getRelay(hintId).result?.textRelayData }.getOrNull()
             val entryPlayer = listOfNotNull(relay?.homeEntry, relay?.awayEntry)
                 .flatMap { it.batter + it.pitcher }
-                .firstOrNull {
-                    (resolvedCode.isNotBlank() && it.pcode == resolvedCode) ||
-                        (fallback?.name?.isNotBlank() == true && it.name == fallback.name)
-                }
+                .firstOrNull { resolvedCode.isNotBlank() && it.pcode == resolvedCode }
             if (entryPlayer != null) {
                 detail = detail.copy(
                     name = detail.name.ifBlank { entryPlayer.name },
@@ -808,14 +832,18 @@ class GiantsRepository private constructor(context: Context) {
         val code = detail.playerCode
         val name = detail.name
 
-        fun match(s: KeuboStatDto): Boolean {
-            if (code.isNotBlank() && (s.kboId == code || s.playerId == code)) return true
-            return name.isNotBlank() && s.name == name
+        fun matchByCode(s: KeuboStatDto): Boolean =
+            code.isNotBlank() && (s.kboId == code || s.playerId == code)
+
+        fun matchByNamePreferLotte(stats: List<KeuboStatDto>): KeuboStatDto? {
+            val hits = stats.filter { name.isNotBlank() && it.name == name }
+            return hits.firstOrNull { it.team.contains("롯데") || it.team.equals("LT", true) }
         }
 
         if (needsPitcher || detail.isPitcher) {
             val pitcher = runCatching {
-                keuboApi.getStats("pitcher", season).stats.firstOrNull(::match)
+                val stats = keuboApi.getStats("pitcher", season).stats
+                stats.firstOrNull(::matchByCode) ?: matchByNamePreferLotte(stats)
             }.getOrNull()
             if (pitcher != null) {
                 val seeded = pitcher.toLeader(true)
@@ -836,7 +864,8 @@ class GiantsRepository private constructor(context: Context) {
         }
 
         val batter = runCatching {
-            keuboApi.getStats("batter", season).stats.firstOrNull(::match)
+            val stats = keuboApi.getStats("batter", season).stats
+            stats.firstOrNull(::matchByCode) ?: matchByNamePreferLotte(stats)
         }.getOrNull() ?: return detail
 
         val seeded = batter.toLeader(false)
@@ -852,6 +881,11 @@ class GiantsRepository private constructor(context: Context) {
             seasonSlg = detail.seasonSlg.ifBlank { seeded.slg },
             seasonSb = if (detail.seasonSb > 0) detail.seasonSb else seeded.sb,
         )
+    }
+
+    private fun pickLeaderByName(name: String, leaders: List<LeaderPlayer>): LeaderPlayer? {
+        val hits = leaders.filter { it.name == name }
+        return hits.firstOrNull { it.isLotte }
     }
 
     private fun basePlayerFromLineup(slot: LineupSlot?, code: String): PlayerDetail {
