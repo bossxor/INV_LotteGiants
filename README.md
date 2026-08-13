@@ -62,8 +62,8 @@ CI 서명 시크릿 등록: `.\scripts\setup-ci-signing.ps1`
 
 | 필드 | 설명 | 예시 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `1.3.8` |
-| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1015` |
+| `versionName` | 사용자에게 보이는 버전 | `1.3.9` |
+| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1016` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 됩니다.
 

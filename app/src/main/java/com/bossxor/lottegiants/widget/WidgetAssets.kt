@@ -10,6 +10,7 @@ import androidx.annotation.DrawableRes
 import androidx.glance.ImageProvider
 import com.bossxor.lottegiants.R
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
+import com.bossxor.lottegiants.domain.resolveTeamLogoUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -90,7 +91,8 @@ object WidgetAssets {
     }
 
     suspend fun logoProvider(context: Context, teamCode: String, url: String): ImageProvider {
-        val bmp = loadCachedBitmap(context, "team_logos", "${teamCode.ifBlank { "UNK" }}.png", url)
+        val resolved = resolveTeamLogoUrl(teamCode, url)
+        val bmp = loadCachedBitmap(context, "team_logos", "${teamCode.ifBlank { "UNK" }}.png", resolved)
         return if (bmp != null) ImageProvider(bmp) else ImageProvider(R.drawable.ic_notification)
     }
 
@@ -115,7 +117,9 @@ object WidgetAssets {
             try {
                 val dir = File(context.cacheDir, dirName).also { it.mkdirs() }
                 val file = File(dir, fileName)
-                if (!file.exists() || file.length() == 0L) {
+                // 예전 스코어보드 이니셜(1~2KB) 캐시가 남아 있으면 다시 받는다.
+                val stale = dirName == "team_logos" && file.exists() && file.length() < 8_000L
+                if (!file.exists() || file.length() == 0L || stale) {
                     if (url.isBlank()) return@withContext null
                     URL(url).openStream().use { input ->
                         file.outputStream().use { output -> input.copyTo(output) }

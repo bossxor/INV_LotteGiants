@@ -4,11 +4,17 @@ import kotlinx.serialization.Serializable
 
 const val LOTTE_TEAM_CODE = "LT"
 
-/** 네이버 스포츠 KBO 팀 엠블럼 (투명 배경 PNG) */
-fun teamLogoUrl(teamCode: String): String =
-    "https://sports-phinf.pstatic.net/team/kbo/default/$teamCode.png"
+private val TEAM_CODE_IN_LOGO_URL =
+    Regex("(?:emblem_|initial_|/default/)([A-Za-z]{2})(?:[_./]|$)")
 
-/** KBO 공식 엠블럼 CDN (regular 시즌) */
+/** 네이버 스포츠 KBO 팀 엠블럼 (투명 PNG, 184px) */
+fun teamLogoUrl(teamCode: String): String {
+    val code = teamCode.trim().uppercase()
+    if (code.isBlank()) return ""
+    return "https://sports-phinf.pstatic.net/team/kbo/default/$code.png"
+}
+
+/** KBO CDN 시즌 엠블럼. 스코어보드용이라 64px 수준이라 화면에는 쓰지 않는다. */
 fun kboTeamEmblemUrl(teamCode: String, season: Int = java.time.LocalDate.now().year): String {
     val code = teamCode.trim().uppercase()
     if (code.isBlank()) return ""
@@ -22,14 +28,30 @@ fun normalizeKboImageUrl(url: String): String = when {
     else -> ""
 }
 
-/** KBO 엠블럼 우선, 없으면 네이버 폴백 */
+/** 스코어보드 `H/A_INITIAL_LK` 는 26px 이니셜이라 팀 로고가 아니다. */
+fun isKboInitialLogoUrl(url: String): Boolean =
+    url.contains("/initial_", ignoreCase = true)
+
+fun teamCodeFromLogoUrl(url: String): String =
+    TEAM_CODE_IN_LOGO_URL.find(url)?.groupValues?.get(1)?.uppercase().orEmpty()
+
+/**
+ * 화면에 쓸 팀 로고.
+ * KBO 스코어보드는 이니셜(26px)·워드마크(64px)를 내려주므로, 팀 코드가 있으면
+ * 네이버 KBO 미디어 엠블럼을 쓰고, 없을 때만 원본 URL을 남긴다.
+ */
 fun resolveTeamLogoUrl(
     teamCode: String,
     kboUrl: String = "",
     season: Int = java.time.LocalDate.now().year,
-): String = normalizeKboImageUrl(kboUrl)
-    .ifBlank { kboTeamEmblemUrl(teamCode, season) }
-    .ifBlank { teamLogoUrl(teamCode) }
+): String {
+    val code = teamCode.trim().uppercase()
+        .ifBlank { teamCodeFromLogoUrl(kboUrl) }
+    if (code.isNotBlank()) return teamLogoUrl(code)
+    val fromKbo = normalizeKboImageUrl(kboUrl)
+    if (fromKbo.isNotBlank() && !isKboInitialLogoUrl(fromKbo)) return fromKbo
+    return kboTeamEmblemUrl(teamCode, season)
+}
 
 val LOTTE_LOGO_URL = teamLogoUrl(LOTTE_TEAM_CODE)
 

@@ -29,7 +29,6 @@ import com.bossxor.lottegiants.domain.resolveCancelReason
 import com.bossxor.lottegiants.domain.isPitcherPosition
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.resolveStadiumCoord
-import com.bossxor.lottegiants.domain.normalizeKboImageUrl
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.weatherSummaryKo
 import kotlinx.coroutines.async
@@ -298,12 +297,8 @@ class GiantsRepository private constructor(context: Context) {
 
         val board = KboTableParser.parseInningBoard(sb.table2, sb.table3, sb.maxInning)
         val isHome = base.isHome
-        val lotteEmblem = normalizeKboImageUrl(if (isHome) sb.homeEmblem else sb.awayEmblem)
-        val oppEmblem = normalizeKboImageUrl(if (isHome) sb.awayEmblem else sb.homeEmblem)
 
         var result = base.copy(
-            lotteLogoUrl = lotteEmblem.ifBlank { base.lotteLogoUrl },
-            opponentLogoUrl = oppEmblem.ifBlank { base.opponentLogoUrl },
             lotteInningScores = if (isHome) board.homeScores else board.awayScores,
             opponentInningScores = if (isHome) board.awayScores else board.homeScores,
             lotteHits = if (isHome) board.homeHits else board.awayHits,
@@ -1077,8 +1072,8 @@ class GiantsRepository private constructor(context: Context) {
             cancelReason = reason,
             stadium = stadium.orEmpty(),
             startTime = startTimeText(),
-            homeLogoUrl = homeTeamEmblemUrl ?: teamLogoUrl(homeTeamCode),
-            awayLogoUrl = awayTeamEmblemUrl ?: teamLogoUrl(awayTeamCode),
+            homeLogoUrl = teamLogoUrl(homeTeamCode),
+            awayLogoUrl = teamLogoUrl(awayTeamCode),
             homeStarter = homeStarterName.orEmpty(),
             awayStarter = awayStarterName.orEmpty(),
             broadChannel = broadChannel.orEmpty(),
@@ -1106,8 +1101,7 @@ class GiantsRepository private constructor(context: Context) {
             isHome = isHome,
             opponentCode = oppCode,
             opponentName = if (isHome) awayTeamName else homeTeamName,
-            opponentLogoUrl = (if (isHome) awayTeamEmblemUrl else homeTeamEmblemUrl)
-                ?: teamLogoUrl(oppCode),
+            opponentLogoUrl = teamLogoUrl(oppCode),
             lotteScore = if (isHome) homeTeamScore else awayTeamScore,
             opponentScore = if (isHome) awayTeamScore else homeTeamScore,
             status = status(),

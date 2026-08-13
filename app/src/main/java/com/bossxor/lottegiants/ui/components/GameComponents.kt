@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.bossxor.lottegiants.domain.resolveTeamLogoUrl
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.WinGreen
@@ -37,9 +39,10 @@ import com.bossxor.lottegiants.ui.WinGreen
 /** 팀 엠블럼 */
 @Composable
 fun TeamLogo(url: String, size: Int = 40, modifier: Modifier = Modifier) {
-    if (url.isBlank()) return
+    val model = remember(url) { resolveTeamLogoUrl("", url).ifBlank { url } }
+    if (model.isBlank()) return
     AsyncImage(
-        model = url,
+        model = model,
         contentDescription = null,
         contentScale = ContentScale.Fit,
         modifier = modifier.size(size.dp),
