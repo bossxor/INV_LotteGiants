@@ -32,6 +32,8 @@ import com.bossxor.lottegiants.domain.runnerOccupied
 import com.bossxor.lottegiants.domain.resolveStadiumCoord
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.doubleHeaderNoFromGameId
+import com.bossxor.lottegiants.domain.KBO_ZONE
+import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.weatherSummaryKo
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -67,7 +69,7 @@ class GiantsRepository private constructor(context: Context) {
      * 네이버 문자중계로 라인업·투구 위치 등 KBO에 없는 항목만 보완한다.
      */
     suspend fun refreshSnapshot(): LiveSnapshot {
-        val today = LocalDate.now()
+        val today = kboToday()
         val fmt = DateTimeFormatter.ISO_LOCAL_DATE
         val todayStr = today.format(fmt)
 
@@ -1040,7 +1042,11 @@ class GiantsRepository private constructor(context: Context) {
         val key = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
         val cached = kboDateCache[key]
         val now = System.currentTimeMillis()
-        val ttl = if (date == LocalDate.now()) KBO_TODAY_TTL_MS else KBO_PAST_TTL_MS
+        val ttl = if (date == kboToday() || date == LocalDate.now(KBO_ZONE)) {
+            KBO_TODAY_TTL_MS
+        } else {
+            KBO_PAST_TTL_MS
+        }
         if (cached != null && now - cached.first < ttl) return cached.second
         val games = runCatching {
             kboOfficialApi.getGameList(date = KboOfficialApi.dateParam(date))

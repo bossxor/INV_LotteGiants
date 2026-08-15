@@ -21,6 +21,7 @@ import com.bossxor.lottegiants.domain.StadiumWeather
 import com.bossxor.lottegiants.domain.TeamStanding
 import com.bossxor.lottegiants.domain.ThemeMode
 import com.bossxor.lottegiants.domain.cancelLabel
+import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.widget.WidgetUpdater
 import kotlinx.coroutines.Job
@@ -55,13 +56,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _dayGamesLoading = MutableStateFlow(false)
     val dayGamesLoading: StateFlow<Boolean> = _dayGamesLoading.asStateFlow()
 
-    private val _selectedDate = MutableStateFlow(LocalDate.now())
+    private val _selectedDate = MutableStateFlow(kboToday())
     val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
 
     private val _monthGames = MutableStateFlow<List<MiniGame>>(emptyList())
     val monthGames: StateFlow<List<MiniGame>> = _monthGames.asStateFlow()
 
-    private val _calendarMonth = MutableStateFlow(YearMonth.now())
+    private val _calendarMonth = MutableStateFlow(YearMonth.from(kboToday()))
     val calendarMonth: StateFlow<YearMonth> = _calendarMonth.asStateFlow()
 
     private val _weather = MutableStateFlow<StadiumWeather?>(null)
@@ -137,8 +138,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             runCatching { repo.fetchRecentRosterMoves(7) }.onSuccess { _recentMoves.value = it }
         }
-        loadGamesForDate(LocalDate.now())
-        loadMonthGames(YearMonth.now())
+        loadGamesForDate(kboToday())
+        loadMonthGames(YearMonth.from(kboToday()))
         openEntrySmart()
     }
 
@@ -338,7 +339,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _snapshot.value = it
                 _error.value = null
                 WidgetUpdater.updateAll(getApplication())
-                if (_selectedDate.value == LocalDate.now()) {
+                if (_selectedDate.value == kboToday()) {
                     syncTodayGamesFromSnapshot(it)
                 }
                 refreshWeatherFromSnapshot(it)

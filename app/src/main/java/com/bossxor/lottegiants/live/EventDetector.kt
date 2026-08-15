@@ -303,7 +303,7 @@ class EventDetector(private val store: SnapshotStore) {
 
     private suspend fun notifyEnded(context: Context, game: LotteGameInfo) {
         if (store.notifiedEndGameId() == game.gameId) return
-        val today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).toString()
+        val today = com.bossxor.lottegiants.domain.kboToday().toString()
         if (game.gameDate.isNotBlank() && game.gameDate != today) return
         val result = when {
             game.lotteScore > game.opponentScore -> "롯데 승리!"

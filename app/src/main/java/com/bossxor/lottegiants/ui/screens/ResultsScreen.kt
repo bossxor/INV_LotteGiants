@@ -71,6 +71,7 @@ import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.cancelShortLabel
 import com.bossxor.lottegiants.domain.isCanceledGame
+import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.LoseRed
@@ -100,7 +101,7 @@ fun ResultsScreen(
     refreshing: Boolean = false,
 ) {
     var mode by remember { mutableIntStateOf(0) } // 0 list, 1 calendar
-    val today = remember { LocalDate.now() }
+    val today = remember { kboToday() }
     val listMonth = remember(selectedDate) { YearMonth.from(selectedDate) }
     val monthDates = remember(listMonth) {
         (1..listMonth.lengthOfMonth()).map { listMonth.atDay(it) }

@@ -1586,7 +1586,7 @@ private fun NextGameContent(g: LotteGameInfo) {
     val dDay = remember(g.gameDate) {
         runCatching {
             val d = java.time.LocalDate.parse(g.gameDate.take(10))
-            java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), d).toInt()
+            java.time.temporal.ChronoUnit.DAYS.between(com.bossxor.lottegiants.domain.kboToday(), d).toInt()
         }.getOrNull()
     }
     SectionCard {

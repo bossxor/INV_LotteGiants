@@ -55,6 +55,19 @@ fun resolveTeamLogoUrl(
 
 val LOTTE_LOGO_URL = teamLogoUrl(LOTTE_TEAM_CODE)
 
+val KBO_ZONE: java.time.ZoneId = java.time.ZoneId.of("Asia/Seoul")
+
+/** 자정~이 시각 전까지는 전날을 경기일(오늘)로 본다. */
+val KBO_DAY_ROLLOVER: java.time.LocalTime = java.time.LocalTime.of(5, 0)
+
+fun kboNow(): java.time.ZonedDateTime = java.time.ZonedDateTime.now(KBO_ZONE)
+
+/** 서울 기준 오전 5시가 지나야 날짜가 바뀐다. 위젯·라이브·결과 탭의 '오늘'에 쓴다. */
+fun kboToday(now: java.time.ZonedDateTime = kboNow()): java.time.LocalDate {
+    val date = now.toLocalDate()
+    return if (now.toLocalTime() < KBO_DAY_ROLLOVER) date.minusDays(1) else date
+}
+
 /** KBO `G_TM`은 `"6:30"`처럼 한 자리 시가 온다. */
 fun parseKboStartMillis(date: String, time: String): Long? = runCatching {
     val datePart = date.trim().let { d ->
