@@ -102,13 +102,14 @@ class GiantsRepository private constructor(context: Context) {
         }
 
         val rutaConnected = tryConnectRuta()
+        val preferredLiveId = store.preferredLiveGameId()
 
-        val kboLotte = pickKboLotte(kboToday)
+        val kboLotte = pickKboLotte(kboToday, preferredLiveId)
         val lotteTodayNaver = if (kboLotte == null) {
             runCatching {
                 api.getGames(fromDate = todayStr, toDate = todayStr)
                     .result?.games.orEmpty().filter { it.categoryId == "kbo" && it.involvesLotte() }
-                    .let(::pickNaverLotte)
+                    .let { pickNaverLotte(it, preferredLiveId) }
             }.getOrNull()
         } else {
             null
@@ -189,6 +190,19 @@ class GiantsRepository private constructor(context: Context) {
             }
         val lastLotte = recentLotte.firstOrNull()
 
+        val todayLotteGames = if (kboToday.any { it.involvesLotte() }) {
+            kboToMiniGames(today, kboToday.filter { it.involvesLotte() })
+                .sortedWith(compareBy({ it.doubleHeaderNo }, { it.startTime }))
+        } else {
+            runCatching {
+                api.getGames(fromDate = todayStr, toDate = todayStr)
+                    .result?.games.orEmpty()
+                    .filter { it.categoryId == "kbo" && it.involvesLotte() }
+                    .map { it.toMiniGame() }
+                    .sortedWith(compareBy({ it.doubleHeaderNo }, { it.startTime }))
+            }.getOrDefault(emptyList())
+        }
+
         val prev = store.loadSnapshot()
         val now = System.currentTimeMillis()
         val keepHighlight = (prev?.highlightUntilMillis ?: 0L) > now
@@ -211,6 +225,7 @@ class GiantsRepository private constructor(context: Context) {
             recentLotteGames = recentLotte,
             otherGames = otherGames,
             yesterdayGames = yesterdayGames,
+            todayLotteGames = todayLotteGames,
             highlightText = when {
                 rutaExtras.highlightText.isNotBlank() -> rutaExtras.highlightText
                 keepHighlight -> prev?.highlightText.orEmpty()
@@ -991,13 +1006,24 @@ class GiantsRepository private constructor(context: Context) {
     private fun GameDto.involvesLotte() =
         homeTeamCode == LOTTE_TEAM_CODE || awayTeamCode == LOTTE_TEAM_CODE
 
-    private fun pickKboLotte(games: List<KboOfficialGame>): KboOfficialGame? =
-        games.filter { it.involvesLotte() }.minWithOrNull(
+    private fun pickKboLotte(games: List<KboOfficialGame>, preferredId: String? = null): KboOfficialGame? {
+        val lotte = games.filter { it.involvesLotte() }
+        if (lotte.isEmpty()) return null
+        preferredId?.takeIf { it.isNotBlank() }?.let { id ->
+            lotte.firstOrNull { it.naverGameId() == id || it.gameId == id }?.let { return it }
+        }
+        return lotte.minWithOrNull(
             compareBy({ it.status().livePriority() }, { it.headerNo }, { it.startTime }),
         )
+    }
 
-    private fun pickNaverLotte(games: List<GameDto>): GameDto? =
-        games.minWithOrNull(compareBy({ it.status().livePriority() }, { it.startTimeText() }))
+    private fun pickNaverLotte(games: List<GameDto>, preferredId: String? = null): GameDto? {
+        if (games.isEmpty()) return null
+        preferredId?.takeIf { it.isNotBlank() }?.let { id ->
+            games.firstOrNull { it.gameId == id }?.let { return it }
+        }
+        return games.minWithOrNull(compareBy({ it.status().livePriority() }, { it.startTimeText() }))
+    }
 
     private fun GameStatus.livePriority(): Int = when (this) {
         GameStatus.LIVE -> 0

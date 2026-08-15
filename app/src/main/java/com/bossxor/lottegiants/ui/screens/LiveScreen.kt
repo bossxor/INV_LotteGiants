@@ -70,6 +70,7 @@ import com.bossxor.lottegiants.ui.components.DiamondView
 import com.bossxor.lottegiants.ui.components.ScoreBoard
 import com.bossxor.lottegiants.ui.components.SectionCard
 import com.bossxor.lottegiants.ui.components.SectionHeader
+import com.bossxor.lottegiants.ui.components.PlayerAvatar
 import com.bossxor.lottegiants.ui.components.TeamLogo
 import com.bossxor.lottegiants.ui.heroGradient
 
@@ -93,6 +94,7 @@ fun LiveScreen(
     onPitcherClick: (com.bossxor.lottegiants.domain.PitcherLine) -> Unit = {},
     onKeyPlayerClick: (String, String) -> Unit = { _, _ -> },
     onShare: (LotteGameInfo) -> Unit = {},
+    onSelectLiveGame: (String) -> Unit = {},
 ) {
     val pagerState = rememberPagerState(pageCount = { DETAIL_TABS.size })
     val scope = rememberCoroutineScope()
@@ -167,6 +169,15 @@ fun LiveScreen(
                         Spacer(Modifier.height(10.dp))
                     }
                     if (snapshot?.lotteGame != null) {
+                        val liveChoices = snapshot.todayLotteGames
+                        if (liveChoices.size >= 2) {
+                            DhGameSwitcher(
+                                games = liveChoices,
+                                selectedId = game.gameId,
+                                onSelect = onSelectLiveGame,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                        }
                         HeroCard(game, onShare = { onShare(game) })
                     } else {
                         NextGameContent(game)
@@ -805,18 +816,23 @@ private fun LineupTab(
     DetailLoadError(g.detailError, onRetry)
 
     SectionCard {
-        Column {
-            SectionHeader("선발 투수")
-            Text(
-                starterName.ifBlank { "미정" },
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp,
-            )
-            Text(
-                if (showLotte) "롯데 선발" else "${g.opponentName} 선발",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        val starterCode = pitchers.firstOrNull { it.name == starterName }?.playerCode.orEmpty()
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PlayerAvatar(playerCode = starterCode, name = starterName.ifBlank { "미정" }, size = 40.dp)
+            Spacer(Modifier.width(10.dp))
+            Column {
+                SectionHeader("선발 투수")
+                Text(
+                    starterName.ifBlank { "미정" },
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp,
+                )
+                Text(
+                    if (showLotte) "롯데 선발" else "${g.opponentName} 선발",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
     Spacer(Modifier.height(10.dp))
@@ -875,9 +891,14 @@ private fun LineupTab(
                                 .fillMaxWidth()
                                 .clickable(enabled = p.playerCode.isNotBlank()) { onPitcherClick(p) }
                                 .padding(vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Text(p.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                PlayerAvatar(playerCode = p.playerCode, name = p.name, size = 28.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text(p.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            }
                             Text(
                                 listOfNotNull(
                                     p.innings.takeIf { it.isNotBlank() }?.let { "${it}이닝" },
@@ -930,6 +951,8 @@ private fun LineupPlayerRow(
                 Text("${slot.batOrder}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             }
             Spacer(Modifier.width(8.dp))
+            PlayerAvatar(playerCode = slot.playerCode, name = slot.name, size = 28.dp)
+            Spacer(Modifier.width(8.dp))
             Text(slot.name + if (slot.isSubstitute) " *" else "", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         }
         Text(
@@ -955,6 +978,31 @@ private fun LineupTeamChip(label: String, selected: Boolean, onClick: () -> Unit
         fontWeight = FontWeight.Bold,
         fontSize = 13.sp,
     )
+}
+
+@Composable
+private fun DhGameSwitcher(
+    games: List<MiniGame>,
+    selectedId: String,
+    onSelect: (String) -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        games.forEachIndexed { idx, g ->
+            val label = when {
+                g.doubleHeaderNo in 1..2 -> "${g.doubleHeaderNo}차전"
+                else -> "${idx + 1}차전"
+            }
+            val sub = when (g.status) {
+                GameStatus.LIVE -> "LIVE"
+                GameStatus.ENDED -> "종료"
+                GameStatus.CANCELED -> "취소"
+                GameStatus.BEFORE -> g.startTime.ifBlank { "예정" }
+            }
+            LineupTeamChip("$label · $sub", selected = g.gameId == selectedId) {
+                onSelect(g.gameId)
+            }
+        }
+    }
 }
 
 @Composable
@@ -1199,7 +1247,11 @@ private fun RecordTab(
                                 .padding(vertical = 3.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(p.name, Modifier.weight(1.1f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Row(Modifier.weight(1.1f), verticalAlignment = Alignment.CenterVertically) {
+                                PlayerAvatar(playerCode = p.playerCode, name = p.name, size = 18.dp)
+                                Spacer(Modifier.width(4.dp))
+                                Text(p.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            }
                             Text(
                                 p.seasonEra.ifBlank { "—" },
                                 Modifier.width(36.dp),
@@ -1303,7 +1355,11 @@ private fun BatterRecordCard(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("${slot.batOrder}", Modifier.width(22.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Text(slot.name, Modifier.weight(1.1f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        Row(Modifier.weight(1.1f), verticalAlignment = Alignment.CenterVertically) {
+                            PlayerAvatar(playerCode = slot.playerCode, name = slot.name, size = 18.dp)
+                            Spacer(Modifier.width(4.dp))
+                            Text(slot.name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        }
                         Text(formatAvg(slot.seasonAvg), Modifier.width(36.dp), fontSize = 11.sp, textAlign = TextAlign.End, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("${slot.todayAtBats}", Modifier.width(28.dp), fontSize = 12.sp, textAlign = TextAlign.End)
                         Text("${slot.todayHits}", Modifier.width(28.dp), fontSize = 12.sp, textAlign = TextAlign.End, fontWeight = FontWeight.Bold)

@@ -292,6 +292,7 @@ class MainActivity : ComponentActivity() {
                     onToggleFavorite = { code, name, team -> vm.toggleFavorite(code, name, team) },
                     onRemoveFavorite = vm::removeFavorite,
                     onClearPlayer = vm::clearPlayerDetail,
+                    onSelectLiveGame = vm::selectLiveGame,
                     onExit = { finish() },
                 )
             }
@@ -374,6 +375,7 @@ private fun AppScaffold(
     onToggleFavorite: (String, String, String) -> Unit,
     onRemoveFavorite: (String) -> Unit,
     onClearPlayer: () -> Unit,
+    onSelectLiveGame: (String) -> Unit,
     onExit: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -536,6 +538,7 @@ private fun AppScaffold(
                             }
                             context.startActivity(android.content.Intent.createChooser(send, "공유"))
                         },
+                        onSelectLiveGame = onSelectLiveGame,
                     )
                     1 -> ResultsScreen(
                         selectedDate = selectedDate,

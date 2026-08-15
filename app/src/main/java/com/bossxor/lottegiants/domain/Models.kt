@@ -559,6 +559,8 @@ data class LiveSnapshot(
     val recentLotteGames: List<LotteGameInfo> = emptyList(),
     val otherGames: List<MiniGame> = emptyList(),
     val yesterdayGames: List<MiniGame> = emptyList(),
+    /** 오늘 롯데 경기 (DH 1·2차전 전환용) */
+    val todayLotteGames: List<MiniGame> = emptyList(),
     val highlightText: String = "",
     val highlightUntilMillis: Long = 0L,
     val weather: StadiumWeather? = null,

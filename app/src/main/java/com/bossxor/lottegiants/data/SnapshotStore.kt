@@ -229,6 +229,16 @@ class SnapshotStore(private val context: Context) {
         }
     }
 
+    suspend fun preferredLiveGameId(): String =
+        context.dataStore.data.first()[KEY_PREFERRED_LIVE].orEmpty()
+
+    suspend fun setPreferredLiveGameId(gameId: String) {
+        context.dataStore.edit { prefs ->
+            if (gameId.isBlank()) prefs.remove(KEY_PREFERRED_LIVE)
+            else prefs[KEY_PREFERRED_LIVE] = gameId
+        }
+    }
+
     companion object {
         private val KEY_SNAPSHOT = stringPreferencesKey("live_snapshot")
         private val KEY_THEME = stringPreferencesKey("theme_mode")
@@ -243,6 +253,7 @@ class SnapshotStore(private val context: Context) {
         private val KEY_NOTIFIED_ROSTER = stringSetPreferencesKey("notified_roster_keys")
         private val KEY_PENDING_UPDATE_APK = stringPreferencesKey("pending_update_apk")
         private val KEY_PENDING_UPDATE_CODE = stringPreferencesKey("pending_update_code")
+        private val KEY_PREFERRED_LIVE = stringPreferencesKey("preferred_live_game_id")
     }
 }
 

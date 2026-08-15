@@ -101,7 +101,15 @@ object NotificationHelper {
             compactLine
         }
         val countBmp = game?.takeIf { it.status == GameStatus.LIVE }?.let {
-            WidgetAssets.ballCountBitmap(context, it.ball, it.strike, it.out)
+            WidgetAssets.ballCountBitmap(
+                context,
+                it.ball,
+                it.strike,
+                it.out,
+                it.onBase1,
+                it.onBase2,
+                it.onBase3,
+            )
         }
 
         val (title, text) = when (mode) {

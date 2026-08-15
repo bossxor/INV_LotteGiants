@@ -176,6 +176,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun selectLiveGame(gameId: String) {
+        if (gameId.isBlank()) return
+        viewModelScope.launch {
+            repo.store.setPreferredLiveGameId(gameId)
+            refreshNow()
+        }
+    }
+
     fun refreshStandings() {
         viewModelScope.launch {
             _isRefreshing.value = true

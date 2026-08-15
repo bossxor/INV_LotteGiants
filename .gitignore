@@ -42,6 +42,7 @@ tab_*.xml
 LotteGiantsLive-*.apk
 
 # Extracted / reverse-engineered trees
+_keubo_apk_res/
 ruta_*/
 ruta_*
 Logo/

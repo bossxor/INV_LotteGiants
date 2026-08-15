@@ -21,14 +21,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -49,13 +47,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
-import coil.compose.AsyncImage
 import com.bossxor.lottegiants.BuildConfig
 import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.data.InstallResult
@@ -64,10 +60,10 @@ import com.bossxor.lottegiants.data.UpdateCheckResult
 import com.bossxor.lottegiants.data.UpdateChecker
 import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.ThemeMode
-import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.live.LiveScoreService
 import com.bossxor.lottegiants.live.NotificationHelper
 import com.bossxor.lottegiants.ui.LoseRed
+import com.bossxor.lottegiants.ui.components.PlayerAvatar
 import com.bossxor.lottegiants.ui.components.SectionCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -151,31 +147,11 @@ fun SettingsScreen(
                         Modifier.fillMaxWidth().padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Box(
-                            Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            if (fav.code.isNotBlank()) {
-                                AsyncImage(
-                                    model = playerPhotoUrl(fav.code),
-                                    contentDescription = fav.name.ifBlank { fav.code },
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop,
-                                )
-                            } else {
-                                Icon(
-                                    Icons.Default.Person,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(22.dp),
-                                )
-                            }
-                        }
+                        PlayerAvatar(
+                            playerCode = fav.code,
+                            name = fav.name.ifBlank { fav.code },
+                            size = 40.dp,
+                        )
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
