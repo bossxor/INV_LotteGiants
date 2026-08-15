@@ -18,9 +18,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -31,7 +35,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.bossxor.lottegiants.domain.playerPhotoCandidates
 import com.bossxor.lottegiants.domain.resolveTeamLogoUrl
+import com.bossxor.lottegiants.ui.BaseOccupied
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.WinGreen
@@ -47,6 +53,46 @@ fun TeamLogo(url: String, size: Int = 40, modifier: Modifier = Modifier) {
         contentScale = ContentScale.Fit,
         modifier = modifier.size(size.dp),
     )
+}
+
+/** 선수 사진 — KBO/네이버 URL을 순서대로 시도하고, 전부 실패하면 이니셜 */
+@Composable
+fun PlayerAvatar(
+    playerCode: String,
+    name: String,
+    size: Dp = 40.dp,
+    modifier: Modifier = Modifier,
+    extraUrls: List<String> = emptyList(),
+) {
+    val urls = remember(playerCode, extraUrls) {
+        (extraUrls + playerPhotoCandidates(playerCode)).distinct().filter { it.isNotBlank() }
+    }
+    var idx by remember(playerCode) { mutableIntStateOf(0) }
+    Box(
+        modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+    ) {
+        val url = urls.getOrNull(idx)
+        if (url != null) {
+            AsyncImage(
+                model = url,
+                contentDescription = name,
+                modifier = Modifier.size(size),
+                contentScale = ContentScale.Crop,
+                onError = { idx++ },
+            )
+        } else {
+            Text(
+                name.take(1).ifBlank { "?" },
+                fontWeight = FontWeight.Black,
+                fontSize = (size.value * 0.38f).sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 /** 카드 래퍼 — 그림자 대신 얇은 외곽선으로 깔끔하게 */
@@ -101,8 +147,8 @@ fun DiamondView(
     inningLabel: String = "",
     modifier: Modifier = Modifier,
 ) {
-    val occupied = LotteGold
-    val empty = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+    val occupied = BaseOccupied
+    val empty = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.40f)
     val outline = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         if (inningLabel.isNotBlank()) {
@@ -144,7 +190,7 @@ fun DiamondView(
                 }
                 drawPath(diamond, color = if (filled) occupied else empty.copy(alpha = 0.55f))
                 if (filled) {
-                    drawPath(diamond, color = Color.White.copy(alpha = 0.35f), style = Stroke(width = 2f))
+                    drawPath(diamond, color = Color(0xFF1A3300), style = Stroke(width = 2.4f))
                 }
             }
             drawBase(first, on1, "1")

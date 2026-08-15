@@ -213,9 +213,25 @@ fun playerPhotoCandidates(playerCode: String): List<String> {
     if (code.isBlank()) return emptyList()
     return listOf(
         "https://img.koreabaseball.com/file/person/middle/$code.jpg",
+        "https://img.koreabaseball.com/file/person/middle/new/$code.jpg",
         "https://www.koreabaseball.com/file/person/middle/new/$code.jpg",
+        "https://www.koreabaseball.com/file/person/middle/$code.jpg",
         "https://sports-phinf.pstatic.net/player/kbo/default/$code.png",
+        "https://sports-phinf.pstatic.net/player/kbo/default/$code.jpg",
     )
+}
+
+/**
+ * 네이버 중계는 주자를 `"1"`뿐 아니라 선수코드·`Y`로도 준다.
+ * `"0"` / 빈 값만 비점유로 본다.
+ */
+fun runnerOccupied(raw: String?): Boolean {
+    val v = raw?.trim().orEmpty()
+    if (v.isEmpty()) return false
+    return when (v.lowercase()) {
+        "0", "00", "false", "n", "no", "off", "-", ".", "null" -> false
+        else -> true
+    }
 }
 
 fun isPitcherPosition(position: String, hinted: Boolean = false): Boolean {

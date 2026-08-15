@@ -131,21 +131,22 @@ private fun WidgetRoot(
             (snap?.highlightUntilMillis ?: 0L) > System.currentTimeMillis()
         when {
             game != null && game.status == GameStatus.LIVE -> {
-                if (compact) CompactLive(game) else LiveWide(game, snap, lotteLogo, oppLogo, pitcherPhoto, batterPhoto, highlightActive)
+                if (compact) CompactLive(game, lotteLogo, oppLogo)
+                else LiveWide(game, snap, lotteLogo, oppLogo, pitcherPhoto, batterPhoto, highlightActive)
             }
             game != null && game.status == GameStatus.ENDED -> {
-                if (compact) CompactScore(game, "종료") else EndedWide(game, lotteLogo, oppLogo, snap)
+                if (compact) CompactScore(game, "종료", lotteLogo, oppLogo) else EndedWide(game, lotteLogo, oppLogo, snap)
             }
             game != null && game.status == GameStatus.CANCELED -> {
-                if (compact) CompactScore(game, game.cancelLabel)
+                if (compact) CompactScore(game, game.cancelLabel, lotteLogo, oppLogo)
                 else CanceledWide(game, lotteLogo, oppLogo)
             }
             game != null && game.status == GameStatus.BEFORE -> {
-                if (compact) CompactBefore(game) else BeforeWide(game, snap, lotteLogo, oppLogo)
+                if (compact) CompactBefore(game, lotteLogo, oppLogo) else BeforeWide(game, snap, lotteLogo, oppLogo)
             }
             snap?.nextLotteGame != null -> {
                 val next = snap.nextLotteGame!!
-                if (compact) CompactBefore(next) else BeforeWide(next, snap, lotteLogo, oppLogo)
+                if (compact) CompactBefore(next, lotteLogo, oppLogo) else BeforeWide(next, snap, lotteLogo, oppLogo)
             }
             else -> Text(
                 "경기 없음",
@@ -156,46 +157,108 @@ private fun WidgetRoot(
 }
 
 @Composable
-private fun CompactLive(g: LotteGameInfo) {
+private fun CompactLive(
+    g: LotteGameInfo,
+    lotteLogo: ImageProvider,
+    oppLogo: ImageProvider,
+) {
     val white = ColorProvider(Color.White, Color.White)
     val red = ColorProvider(Red, Red)
     val gold = ColorProvider(Gold, Gold)
-    Text("LIVE", style = TextStyle(color = red, fontSize = 10.sp, fontWeight = FontWeight.Bold))
-    Text(
-        "${g.lotteScore}:${g.opponentScore}",
-        style = TextStyle(color = white, fontSize = 24.sp, fontWeight = FontWeight.Bold),
-    )
-    Text(g.inningLabel, style = TextStyle(color = gold, fontSize = 11.sp))
-    Image(
-        provider = ImageProvider(WidgetAssets.basesDrawable(g.onBase1, g.onBase2, g.onBase3)),
-        contentDescription = "bases",
-        modifier = GlanceModifier.size(28.dp),
-    )
+    val muted = ColorProvider(Muted, Muted)
+    val awayLogo = if (g.isHome) oppLogo else lotteLogo
+    val homeLogo = if (g.isHome) lotteLogo else oppLogo
+    val awayScore = if (g.isHome) g.opponentScore else g.lotteScore
+    val homeScore = if (g.isHome) g.lotteScore else g.opponentScore
+    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("LIVE", style = TextStyle(color = red, fontSize = 9.sp, fontWeight = FontWeight.Bold))
+        Spacer(GlanceModifier.defaultWeight())
+        Text(g.inningLabel, style = TextStyle(color = gold, fontSize = 10.sp, fontWeight = FontWeight.Bold))
+    }
+    Spacer(GlanceModifier.height(2.dp))
+    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Image(awayLogo, contentDescription = null, modifier = GlanceModifier.size(22.dp))
+        Spacer(GlanceModifier.defaultWeight())
+        Text("$awayScore", style = TextStyle(color = white, fontSize = 22.sp, fontWeight = FontWeight.Bold))
+        Text(" - ", style = TextStyle(color = muted, fontSize = 14.sp))
+        Text("$homeScore", style = TextStyle(color = white, fontSize = 22.sp, fontWeight = FontWeight.Bold))
+        Spacer(GlanceModifier.defaultWeight())
+        Image(homeLogo, contentDescription = null, modifier = GlanceModifier.size(22.dp))
+    }
+    Spacer(GlanceModifier.height(4.dp))
+    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = GlanceModifier.defaultWeight()) {
+            BsoDotsRow(g.ball, g.strike, g.out)
+            if (g.currentPitcherName.isNotBlank()) {
+                Text(
+                    "P ${g.currentPitcherName}",
+                    style = TextStyle(color = muted, fontSize = 9.sp),
+                    maxLines = 1,
+                )
+            }
+        }
+        Image(
+            provider = ImageProvider(WidgetAssets.basesDrawable(g.onBase1, g.onBase2, g.onBase3)),
+            contentDescription = "bases",
+            modifier = GlanceModifier.size(36.dp),
+        )
+    }
 }
 
 @Composable
-private fun CompactScore(g: LotteGameInfo, label: String) {
+private fun CompactScore(
+    g: LotteGameInfo,
+    label: String,
+    lotteLogo: ImageProvider,
+    oppLogo: ImageProvider,
+) {
     val white = ColorProvider(Color.White, Color.White)
     val muted = ColorProvider(Muted, Muted)
+    val awayLogo = if (g.isHome) oppLogo else lotteLogo
+    val homeLogo = if (g.isHome) lotteLogo else oppLogo
+    val awayScore = if (g.isHome) g.opponentScore else g.lotteScore
+    val homeScore = if (g.isHome) g.lotteScore else g.opponentScore
     Text(label, style = TextStyle(color = muted, fontSize = 10.sp))
-    Text(
-        "${g.lotteScore}:${g.opponentScore}",
-        style = TextStyle(color = white, fontSize = 22.sp, fontWeight = FontWeight.Bold),
-    )
-    Text(g.opponentName, style = TextStyle(color = muted, fontSize = 11.sp))
+    Spacer(GlanceModifier.height(2.dp))
+    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Image(awayLogo, contentDescription = null, modifier = GlanceModifier.size(24.dp))
+        Spacer(GlanceModifier.defaultWeight())
+        Text("$awayScore", style = TextStyle(color = white, fontSize = 22.sp, fontWeight = FontWeight.Bold))
+        Text(" - ", style = TextStyle(color = muted, fontSize = 14.sp))
+        Text("$homeScore", style = TextStyle(color = white, fontSize = 22.sp, fontWeight = FontWeight.Bold))
+        Spacer(GlanceModifier.defaultWeight())
+        Image(homeLogo, contentDescription = null, modifier = GlanceModifier.size(24.dp))
+    }
+    Spacer(GlanceModifier.height(2.dp))
+    Text(g.opponentName, style = TextStyle(color = muted, fontSize = 11.sp), maxLines = 1)
 }
 
 @Composable
-private fun CompactBefore(g: LotteGameInfo) {
+private fun CompactBefore(
+    g: LotteGameInfo,
+    lotteLogo: ImageProvider,
+    oppLogo: ImageProvider,
+) {
     val white = ColorProvider(Color.White, Color.White)
     val gold = ColorProvider(Gold, Gold)
     val muted = ColorProvider(Muted, Muted)
+    val awayLogo = if (g.isHome) oppLogo else lotteLogo
+    val homeLogo = if (g.isHome) lotteLogo else oppLogo
     Text("다음", style = TextStyle(color = gold, fontSize = 10.sp, fontWeight = FontWeight.Bold))
-    Text(g.startTime.ifBlank { g.gameDate }, style = TextStyle(color = white, fontSize = 15.sp, fontWeight = FontWeight.Bold))
-    Text("vs ${g.opponentName}", style = TextStyle(color = muted, fontSize = 11.sp))
-    if (g.stadium.isNotBlank()) {
-        Text(g.stadium, style = TextStyle(color = muted, fontSize = 10.sp), maxLines = 1)
+    Spacer(GlanceModifier.height(2.dp))
+    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Image(awayLogo, contentDescription = null, modifier = GlanceModifier.size(24.dp))
+        Spacer(GlanceModifier.defaultWeight())
+        Text("vs", style = TextStyle(color = muted, fontSize = 12.sp))
+        Spacer(GlanceModifier.defaultWeight())
+        Image(homeLogo, contentDescription = null, modifier = GlanceModifier.size(24.dp))
     }
+    Spacer(GlanceModifier.height(2.dp))
+    Text(
+        g.startTime.ifBlank { g.gameDate },
+        style = TextStyle(color = white, fontSize = 13.sp, fontWeight = FontWeight.Bold),
+    )
+    Text("vs ${g.opponentName}", style = TextStyle(color = muted, fontSize = 11.sp), maxLines = 1)
     Text(
         startersAwayVsHome(g),
         style = TextStyle(color = white, fontSize = 10.sp),

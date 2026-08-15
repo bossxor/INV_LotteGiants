@@ -9,11 +9,12 @@ import android.graphics.Typeface
 import androidx.annotation.DrawableRes
 import androidx.glance.ImageProvider
 import com.bossxor.lottegiants.R
-import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
+import com.bossxor.lottegiants.domain.playerPhotoCandidates
 import com.bossxor.lottegiants.domain.resolveTeamLogoUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.HttpURLConnection
 import java.net.URL
 
 object WidgetAssets {
@@ -98,13 +99,15 @@ object WidgetAssets {
 
     suspend fun playerProvider(context: Context, playerCode: String, url: String): ImageProvider {
         if (playerCode.isBlank()) return ImageProvider(R.drawable.ic_notification)
-        val bmp = loadCachedBitmap(context, "player_photos", "$playerCode.png", url)
+        val urls = (listOf(url) + playerPhotoCandidates(playerCode)).distinct().filter { it.isNotBlank() }
+        val bmp = loadCachedBitmap(context, "player_photos", "$playerCode.png", urls)
         return if (bmp != null) ImageProvider(bmp) else ImageProvider(R.drawable.ic_notification)
     }
 
     suspend fun loadPlayerBitmap(context: Context, playerCode: String, url: String): Bitmap? {
         if (playerCode.isBlank()) return null
-        return loadCachedBitmap(context, "player_photos", "$playerCode.png", url)
+        val urls = (listOf(url) + playerPhotoCandidates(playerCode)).distinct().filter { it.isNotBlank() }
+        return loadCachedBitmap(context, "player_photos", "$playerCode.png", urls)
     }
 
     private suspend fun loadCachedBitmap(
@@ -112,6 +115,13 @@ object WidgetAssets {
         dirName: String,
         fileName: String,
         url: String,
+    ): Bitmap? = loadCachedBitmap(context, dirName, fileName, listOf(url))
+
+    private suspend fun loadCachedBitmap(
+        context: Context,
+        dirName: String,
+        fileName: String,
+        urls: List<String>,
     ): Bitmap? =
         withContext(Dispatchers.IO) {
             try {
@@ -119,17 +129,44 @@ object WidgetAssets {
                 val file = File(dir, fileName)
                 // 예전 스코어보드 이니셜(1~2KB) 캐시가 남아 있으면 다시 받는다.
                 val stale = dirName == "team_logos" && file.exists() && file.length() < 8_000L
-                if (!file.exists() || file.length() == 0L || stale) {
-                    if (url.isBlank()) return@withContext null
-                    URL(url).openStream().use { input ->
-                        file.outputStream().use { output -> input.copyTo(output) }
+                val tooSmallPhoto = dirName == "player_photos" && file.exists() && file.length() < 400L
+                if (!file.exists() || file.length() == 0L || stale || tooSmallPhoto) {
+                    var saved = false
+                    for (candidate in urls) {
+                        if (candidate.isBlank()) continue
+                        saved = downloadToFile(candidate, file)
+                        if (saved) break
                     }
+                    if (!saved) return@withContext null
                 }
                 BitmapFactory.decodeFile(file.absolutePath)
             } catch (_: Exception) {
                 null
             }
         }
+
+    private fun downloadToFile(url: String, file: File): Boolean {
+        return try {
+            val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = true
+                connectTimeout = 8_000
+                readTimeout = 10_000
+                setRequestProperty("User-Agent", "Mozilla/5.0")
+                setRequestProperty("Referer", "https://www.koreabaseball.com/")
+            }
+            if (conn.responseCode !in 200..299) {
+                conn.disconnect()
+                return false
+            }
+            conn.inputStream.use { input ->
+                file.outputStream().use { output -> input.copyTo(output) }
+            }
+            conn.disconnect()
+            file.length() > 400L
+        } catch (_: Exception) {
+            false
+        }
+    }
 
     fun formLetter(lotteScore: Int, oppScore: Int): String = when {
         lotteScore > oppScore -> "W"

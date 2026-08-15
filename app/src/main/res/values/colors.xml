@@ -3,4 +3,6 @@
     <color name="ic_launcher_background">#041E42</color>
     <color name="lotte_navy">#041E42</color>
     <color name="lotte_red">#D00F31</color>
+    <color name="notif_live_bg">#FF0B2A4A</color>
+    <color name="base_occupied">#CCFF00</color>
 </resources>

@@ -28,6 +28,7 @@ import com.bossxor.lottegiants.domain.cancelDisplayLabel
 import com.bossxor.lottegiants.domain.resolveCancelReason
 import com.bossxor.lottegiants.domain.isPitcherPosition
 import com.bossxor.lottegiants.domain.playerPhotoUrl
+import com.bossxor.lottegiants.domain.runnerOccupied
 import com.bossxor.lottegiants.domain.resolveStadiumCoord
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.doubleHeaderNoFromGameId
@@ -1358,9 +1359,9 @@ class GiantsRepository private constructor(context: Context) {
             strike = state?.strike?.toIntOrNull() ?: base.strike,
             ball = state?.ball?.toIntOrNull() ?: base.ball,
             out = state?.out?.toIntOrNull() ?: base.out,
-            onBase1 = if (state == null) base.onBase1 else state.base1 == "1",
-            onBase2 = if (state == null) base.onBase2 else state.base2 == "1",
-            onBase3 = if (state == null) base.onBase3 else state.base3 == "1",
+            onBase1 = mergeRunner(state?.base1, base.onBase1, state == null),
+            onBase2 = mergeRunner(state?.base2, base.onBase2, state == null),
+            onBase3 = mergeRunner(state?.base3, base.onBase3, state == null),
             currentPitcherName = names[pitcherCode]
                 ?: listOf(lottePitchers, opponentPitchers).flatten()
                     .firstOrNull { it.playerCode == pitcherCode }?.name
@@ -1430,6 +1431,13 @@ class GiantsRepository private constructor(context: Context) {
         if (t <= 0) return null
         val z = z0 + vz0 * t + 0.5 * az * t * t
         return z.toFloat().takeIf { it in 0.5f..5.5f }
+    }
+
+    /** 네이버가 주자 필드를 안 주면 KBO 값을 유지하고, 주면 그 값을 따른다. */
+    private fun mergeRunner(relayRaw: String?, kboValue: Boolean, noRelayState: Boolean): Boolean {
+        if (noRelayState) return kboValue
+        val raw = relayRaw ?: return kboValue
+        return runnerOccupied(raw)
     }
 
     companion object {

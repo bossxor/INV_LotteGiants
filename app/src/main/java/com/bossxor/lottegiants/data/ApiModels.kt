@@ -163,9 +163,9 @@ data class GameStateDto(
     val strike: String = "0",
     val ball: String = "0",
     val out: String = "0",
-    val base1: String = "0",
-    val base2: String = "0",
-    val base3: String = "0",
+    val base1: String? = null,
+    val base2: String? = null,
+    val base3: String? = null,
 )
 
 @Serializable

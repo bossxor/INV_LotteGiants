@@ -2,8 +2,9 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="@color/notif_live_bg"
     android:orientation="vertical"
-    android:paddingHorizontal="4dp"
+    android:paddingHorizontal="8dp"
     android:paddingVertical="8dp">
 
     <include layout="@layout/notification_live" />
@@ -13,7 +14,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
-        android:textColor="?android:attr/textColorSecondary"
+        android:textColor="#FFAAB4CB"
         android:textSize="12sp" />
 
     <LinearLayout
@@ -41,7 +42,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="투수"
-                android:textColor="?android:attr/textColorSecondary"
+                android:textColor="#FFAAB4CB"
                 android:textSize="10sp" />
 
             <TextView
@@ -50,7 +51,7 @@
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="?android:attr/textColorPrimary"
+                android:textColor="#FFFFFFFF"
                 android:textSize="13sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -74,7 +75,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="타자"
-                android:textColor="?android:attr/textColorSecondary"
+                android:textColor="#FFAAB4CB"
                 android:textSize="10sp" />
 
             <TextView
@@ -83,7 +84,7 @@
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="?android:attr/textColorPrimary"
+                android:textColor="#FFFFFFFF"
                 android:textSize="13sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -96,6 +97,6 @@
         android:layout_marginTop="6dp"
         android:ellipsize="end"
         android:maxLines="1"
-        android:textColor="?android:attr/textColorSecondary"
+        android:textColor="#FFAAB4CB"
         android:textSize="12sp" />
 </LinearLayout>

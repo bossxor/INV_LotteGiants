@@ -1,6 +1,8 @@
 package com.bossxor.lottegiants
 
 import android.app.Application
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.live.EventDetector
@@ -12,8 +14,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 
-class GiantsApp : Application() {
+class GiantsApp : Application(), ImageLoaderFactory {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
@@ -31,5 +35,24 @@ class GiantsApp : Application() {
                 }
             }
         }
+    }
+
+    override fun newImageLoader(): ImageLoader {
+        val client = OkHttpClient.Builder()
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(12, TimeUnit.SECONDS)
+            .addInterceptor { chain ->
+                chain.proceed(
+                    chain.request().newBuilder()
+                        .header("User-Agent", "Mozilla/5.0")
+                        .header("Referer", "https://www.koreabaseball.com/")
+                        .build(),
+                )
+            }
+            .build()
+        return ImageLoader.Builder(this)
+            .okHttpClient(client)
+            .crossfade(true)
+            .build()
     }
 }

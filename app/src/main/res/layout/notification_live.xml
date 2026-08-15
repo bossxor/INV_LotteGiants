@@ -2,10 +2,11 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="@color/notif_live_bg"
     android:gravity="center_vertical"
     android:orientation="vertical"
-    android:paddingHorizontal="4dp"
-    android:paddingVertical="6dp">
+    android:paddingHorizontal="8dp"
+    android:paddingVertical="8dp">
 
     <!-- 상단 볼카운트 (이닝 라벨은 그 아래 유지) -->
     <LinearLayout
@@ -139,7 +140,7 @@
                 android:id="@+id/notif_score"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="?android:attr/textColorPrimary"
+                android:textColor="#FFFFFFFF"
                 android:textSize="15sp"
                 android:textStyle="bold" />
 
@@ -147,14 +148,14 @@
                 android:id="@+id/notif_inning"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="?android:attr/textColorSecondary"
+                android:textColor="#FFAAB4CB"
                 android:textSize="12sp" />
 
             <TextView
                 android:id="@+id/notif_count_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="?android:attr/textColorPrimary"
+                android:textColor="#FFFFFFFF"
                 android:textSize="12sp"
                 android:textStyle="bold" />
 
@@ -164,7 +165,7 @@
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="?android:attr/textColorSecondary"
+                android:textColor="#FFAAB4CB"
                 android:textSize="11sp" />
         </LinearLayout>
 

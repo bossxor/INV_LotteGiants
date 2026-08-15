@@ -435,15 +435,21 @@ private fun CalendarMonthView(
     }
     val weeks = remember(cells) { cells.chunked(7) }
 
-    LazyColumn(
-        modifier
-            .fillMaxSize()
-            .swipeChangeDay(enabled = swipeEnabled, onSwipe = onSwipeDay),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        item {
+    fun shiftMonth(delta: Long) {
+        val next = month.plusMonths(delta)
+        onSelectMonth(next)
+        val day = selectedDate.dayOfMonth.coerceAtMost(next.lengthOfMonth())
+        onSelectDate(next.atDay(day))
+    }
+
+    Column(modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .swipeChangeDay(enabled = swipeEnabled, onSwipe = { delta -> shiftMonth(delta) }),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { onSelectMonth(month.minusMonths(1)) }) {
+                IconButton(onClick = { shiftMonth(-1) }) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "이전 달")
                 }
                 Text(
@@ -452,13 +458,11 @@ private fun CalendarMonthView(
                     textAlign = TextAlign.Center,
                     fontWeight = FontWeight.Bold,
                 )
-                IconButton(onClick = { onSelectMonth(month.plusMonths(1)) }) {
+                IconButton(onClick = { shiftMonth(1) }) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "다음 달")
                 }
             }
             Spacer(Modifier.height(6.dp))
-        }
-        item {
             Row(Modifier.fillMaxWidth()) {
                 listOf("일", "월", "화", "수", "목", "금", "토").forEachIndexed { i, w ->
                     Text(
@@ -476,21 +480,20 @@ private fun CalendarMonthView(
                 }
             }
             Spacer(Modifier.height(4.dp))
-        }
-        items(weeks, key = { week -> week.firstOrNull()?.toString() ?: "pad" }) { week ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                week.forEach { date ->
-                    CalendarDayCell(
-                        date = date,
-                        cellGames = date?.let { byDate[it.toString()].orEmpty() }.orEmpty(),
-                        selectedDate = selectedDate,
-                        today = today,
-                        onSelectDate = onSelectDate,
-                    )
+            weeks.forEach { week ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    week.forEach { date ->
+                        CalendarDayCell(
+                            date = date,
+                            cellGames = date?.let { byDate[it.toString()].orEmpty() }.orEmpty(),
+                            selectedDate = selectedDate,
+                            today = today,
+                            onSelectDate = onSelectDate,
+                        )
+                    }
                 }
+                Spacer(Modifier.height(3.dp))
             }
-        }
-        item {
             Spacer(Modifier.height(8.dp))
             Row(
                 Modifier.fillMaxWidth(),
@@ -503,23 +506,31 @@ private fun CalendarMonthView(
                 Text("·", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("홈/원정 = 예정·진행", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Spacer(Modifier.height(10.dp))
-            Text(
-                selectedDate.format(DateTimeFormatter.ofPattern("M월 d일 경기", Locale.KOREAN)),
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-            )
-            Spacer(Modifier.height(8.dp))
         }
-        if (selectedGames.isEmpty()) {
-            item { EmptyRetry(message = "경기가 없습니다.", onRetry = onRetry) }
-        } else {
-            items(selectedGames.sortedWith(lotteFirstComparator()), key = { it.gameId }) { g ->
-                ResultGameCard(g)
-                Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(10.dp))
+        Text(
+            selectedDate.format(DateTimeFormatter.ofPattern("M월 d일 경기", Locale.KOREAN)),
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+        )
+        Spacer(Modifier.height(8.dp))
+        val games = selectedGames.sortedWith(lotteFirstComparator())
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .swipeChangeDay(enabled = swipeEnabled, onSwipe = onSwipeDay),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (games.isEmpty()) {
+                item { EmptyRetry(message = "경기가 없습니다.", onRetry = onRetry) }
+            } else {
+                items(games, key = { it.gameId }) { g ->
+                    ResultGameCard(g)
+                }
             }
+            item { Spacer(Modifier.height(16.dp)) }
         }
-        item { Spacer(Modifier.height(16.dp)) }
     }
 }
 
@@ -769,7 +780,7 @@ private fun koreanDow(d: DayOfWeek): String = when (d) {
     DayOfWeek.SUNDAY -> "일"
 }
 
-/** 경기 목록·캘린더 하단에서 좌우 스와이프로 날짜 이동 */
+/** 달력 그리드는 월 이동, 하단 경기 목록은 일 이동 */
 private fun Modifier.swipeChangeDay(
     enabled: Boolean,
     onSwipe: (Long) -> Unit,

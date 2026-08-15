@@ -36,17 +36,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.bossxor.lottegiants.domain.LeaderPlayer
 import com.bossxor.lottegiants.domain.TitleRankEntry
-import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.teamNameToCode
 import com.bossxor.lottegiants.ui.LotteGold
+import com.bossxor.lottegiants.ui.components.PlayerAvatar
 import com.bossxor.lottegiants.ui.components.SectionCard
 import com.bossxor.lottegiants.ui.components.TeamLogo
 import java.time.LocalDate
@@ -266,14 +264,10 @@ private fun TitlePlayerRow(
         }
         Spacer(Modifier.width(10.dp))
         Box(Modifier.size(40.dp)) {
-            AsyncImage(
-                model = playerPhotoUrl(p.playerCode),
-                contentDescription = p.name,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentScale = ContentScale.Crop,
+            PlayerAvatar(
+                playerCode = p.playerCode,
+                name = p.name,
+                size = 40.dp,
             )
             val code = teamNameToCode(p.team)
             if (code.isNotBlank()) {

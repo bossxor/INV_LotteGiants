@@ -23,6 +23,9 @@ val LotteRed = Color(0xFFC8102E)
 /** 골드 액센트 — 뱃지·차트 전용 (제목에는 쓰지 않음) */
 val LotteGold = Color(0xFFC9A227)
 
+/** 루상 주자 점유 — 알림·위젯·다이아몬드 공통 */
+val BaseOccupied = Color(0xFFCCFF00)
+
 val WinGreen = Color(0xFF2EA35C)
 val LoseRed = Color(0xFFE04545)
 

@@ -45,6 +45,7 @@ object NotificationHelper {
 
     private const val REGULATION_INNINGS = 9
     private const val COLOR_LOTTE = 0xFFD00F31.toInt()
+    private const val COLOR_NAVY = 0xFF0B2A4A.toInt()
     private const val COLOR_OPPONENT = 0xFF9AA0A6.toInt()
     private const val COLOR_TRACK = 0xFF4A4F55.toInt()
 
@@ -138,6 +139,8 @@ object NotificationHelper {
         }
         when {
             useCustom -> builder
+                .setColor(COLOR_NAVY)
+                .setColorized(true)
                 .setCustomContentView(buildLiveRemoteViews(context, game!!, big = false))
                 .setCustomBigContentView(buildLiveRemoteViews(context, game, big = true))
                 .setStyle(NotificationCompat.DecoratedCustomViewStyle())
