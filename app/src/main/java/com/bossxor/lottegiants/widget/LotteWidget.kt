@@ -28,6 +28,7 @@ import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
+import androidx.glance.layout.ColumnScope
 import androidx.glance.layout.ContentScale
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
@@ -132,8 +133,9 @@ private fun WidgetRoot(
         Column(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .padding(if (compact) 8.dp else 12.dp)
+                .padding(if (compact) 10.dp else 12.dp)
                 .clickable(actionStartActivity(openIntent)),
+            horizontalAlignment = Alignment.CenterHorizontally,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val game = snap?.lotteGame
@@ -145,7 +147,7 @@ private fun WidgetRoot(
                     else LiveWide(game, snap, lotteLogo, oppLogo, pitcherPhoto, batterPhoto, highlightActive)
                 }
                 game != null && game.status == GameStatus.ENDED -> {
-                    if (compact) CompactScore(game, "종료", lotteLogo, oppLogo)
+                    if (compact) CompactScore(game, "경기종료", lotteLogo, oppLogo)
                     else EndedWide(game, lotteLogo, oppLogo, snap)
                 }
                 game != null && game.status == GameStatus.CANCELED -> {
@@ -189,20 +191,15 @@ private fun CompactLive(
     lotteLogo: ImageProvider,
     oppLogo: ImageProvider,
 ) {
-    val pink = ColorProvider(Pink, Pink)
     val awayLogo = if (g.isHome) oppLogo else lotteLogo
     val homeLogo = if (g.isHome) lotteLogo else oppLogo
     val awayScore = if (g.isHome) g.opponentScore else g.lotteScore
     val homeScore = if (g.isHome) g.lotteScore else g.opponentScore
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Image(lotteLogo, contentDescription = null, modifier = GlanceModifier.size(14.dp))
-        Spacer(GlanceModifier.width(4.dp))
-        Text("롯데", style = TextStyle(color = pink, fontSize = 10.sp, fontWeight = FontWeight.Bold))
+    CompactFrame(lotteLogo) {
+        CompactScoreboard(awayLogo, homeLogo, awayScore, homeScore)
+        Spacer(GlanceModifier.defaultWeight())
+        StatusPill("LIVE  ${g.inningLabel}")
     }
-    Spacer(GlanceModifier.height(6.dp))
-    CompactScoreboard(awayLogo, homeLogo, awayScore, homeScore)
-    Spacer(GlanceModifier.height(8.dp))
-    StatusPill("LIVE  ${g.inningLabel}")
 }
 
 @Composable
@@ -212,20 +209,15 @@ private fun CompactScore(
     lotteLogo: ImageProvider,
     oppLogo: ImageProvider,
 ) {
-    val pink = ColorProvider(Pink, Pink)
     val awayLogo = if (g.isHome) oppLogo else lotteLogo
     val homeLogo = if (g.isHome) lotteLogo else oppLogo
     val awayScore = if (g.isHome) g.opponentScore else g.lotteScore
     val homeScore = if (g.isHome) g.lotteScore else g.opponentScore
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Image(lotteLogo, contentDescription = null, modifier = GlanceModifier.size(14.dp))
-        Spacer(GlanceModifier.width(4.dp))
-        Text("롯데", style = TextStyle(color = pink, fontSize = 10.sp, fontWeight = FontWeight.Bold))
+    CompactFrame(lotteLogo) {
+        CompactScoreboard(awayLogo, homeLogo, awayScore, homeScore)
+        Spacer(GlanceModifier.defaultWeight())
+        StatusPill(label)
     }
-    Spacer(GlanceModifier.height(6.dp))
-    CompactScoreboard(awayLogo, homeLogo, awayScore, homeScore)
-    Spacer(GlanceModifier.height(8.dp))
-    StatusPill(label)
 }
 
 @Composable
@@ -235,38 +227,58 @@ private fun CompactBefore(
     oppLogo: ImageProvider,
 ) {
     val white = ColorProvider(Color.White, Color.White)
-    val pink = ColorProvider(Pink, Pink)
     val muted = ColorProvider(Muted, Muted)
     val awayLogo = if (g.isHome) oppLogo else lotteLogo
     val homeLogo = if (g.isHome) lotteLogo else oppLogo
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Image(lotteLogo, contentDescription = null, modifier = GlanceModifier.size(14.dp))
-        Spacer(GlanceModifier.width(4.dp))
-        Text("롯데", style = TextStyle(color = pink, fontSize = 10.sp, fontWeight = FontWeight.Bold))
-    }
-    Spacer(GlanceModifier.height(6.dp))
-    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(
-            modifier = GlanceModifier.defaultWeight(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Image(awayLogo, contentDescription = null, modifier = GlanceModifier.size(26.dp))
+    CompactFrame(lotteLogo) {
+        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(
+                modifier = GlanceModifier.defaultWeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Image(awayLogo, contentDescription = null, modifier = GlanceModifier.size(32.dp))
+            }
+            Text("VS", style = TextStyle(color = muted, fontSize = 12.sp, fontWeight = FontWeight.Bold))
+            Column(
+                modifier = GlanceModifier.defaultWeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Image(homeLogo, contentDescription = null, modifier = GlanceModifier.size(32.dp))
+            }
         }
-        Text("VS", style = TextStyle(color = muted, fontSize = 12.sp, fontWeight = FontWeight.Bold))
-        Column(
-            modifier = GlanceModifier.defaultWeight(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Image(homeLogo, contentDescription = null, modifier = GlanceModifier.size(26.dp))
-        }
+        Spacer(GlanceModifier.defaultWeight())
+        StatusPill(g.startTime.ifBlank { "예정" })
+        Spacer(GlanceModifier.height(4.dp))
+        Text(
+            startersAwayVsHome(g),
+            style = TextStyle(color = white, fontSize = 9.sp),
+            maxLines = 1,
+        )
     }
-    Spacer(GlanceModifier.height(6.dp))
-    StatusPill(g.startTime.ifBlank { "예정" })
-    Text(
-        startersAwayVsHome(g),
-        style = TextStyle(color = white, fontSize = 9.sp),
-        maxLines = 1,
-    )
+}
+
+@Composable
+private fun CompactFrame(
+    lotteLogo: ImageProvider,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val pink = ColorProvider(Pink, Pink)
+    Column(
+        modifier = GlanceModifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Row(
+            modifier = GlanceModifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Image(lotteLogo, contentDescription = null, modifier = GlanceModifier.size(14.dp))
+            Spacer(GlanceModifier.width(4.dp))
+            Text("롯데", style = TextStyle(color = pink, fontSize = 10.sp, fontWeight = FontWeight.Bold))
+        }
+        Spacer(GlanceModifier.defaultWeight())
+        content()
+    }
 }
 
 @Composable
@@ -283,16 +295,18 @@ private fun CompactScoreboard(
             modifier = GlanceModifier.defaultWeight(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Image(awayLogo, contentDescription = null, modifier = GlanceModifier.size(26.dp))
-            Text("$awayScore", style = TextStyle(color = white, fontSize = 22.sp, fontWeight = FontWeight.Bold))
+            Image(awayLogo, contentDescription = null, modifier = GlanceModifier.size(32.dp))
+            Spacer(GlanceModifier.height(4.dp))
+            Text("$awayScore", style = TextStyle(color = white, fontSize = 24.sp, fontWeight = FontWeight.Bold))
         }
         Text("VS", style = TextStyle(color = muted, fontSize = 11.sp, fontWeight = FontWeight.Bold))
         Column(
             modifier = GlanceModifier.defaultWeight(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Image(homeLogo, contentDescription = null, modifier = GlanceModifier.size(26.dp))
-            Text("$homeScore", style = TextStyle(color = white, fontSize = 22.sp, fontWeight = FontWeight.Bold))
+            Image(homeLogo, contentDescription = null, modifier = GlanceModifier.size(32.dp))
+            Spacer(GlanceModifier.height(4.dp))
+            Text("$homeScore", style = TextStyle(color = white, fontSize = 24.sp, fontWeight = FontWeight.Bold))
         }
     }
 }
@@ -303,11 +317,15 @@ private fun StatusPill(text: String) {
     Row(
         modifier = GlanceModifier
             .background(ImageProvider(R.drawable.widget_status_pill))
-            .padding(horizontal = 8.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text, style = TextStyle(color = pink, fontSize = 10.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+        Text(
+            text,
+            style = TextStyle(color = pink, fontSize = 11.sp, fontWeight = FontWeight.Bold),
+            maxLines = 1,
+        )
     }
 }
 
@@ -519,7 +537,7 @@ private fun EndedWide(
     val white = ColorProvider(Color.White, Color.White)
     val muted = ColorProvider(Muted, Muted)
     val red = ColorProvider(Red, Red)
-    Text("경기 종료", style = TextStyle(color = muted, fontSize = 11.sp))
+    Text("경기종료", style = TextStyle(color = muted, fontSize = 11.sp))
     Spacer(GlanceModifier.height(4.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
         Image(lotteLogo, contentDescription = null, modifier = GlanceModifier.size(24.dp))
