@@ -11,7 +11,10 @@ import androidx.annotation.DrawableRes
 import androidx.glance.ImageProvider
 import com.bossxor.lottegiants.R
 import com.bossxor.lottegiants.domain.playerPhotoCandidates
+import com.bossxor.lottegiants.domain.kboTeamEmblemUrl
 import com.bossxor.lottegiants.domain.resolveTeamLogoUrl
+import com.bossxor.lottegiants.domain.teamLogoUrl
+import com.bossxor.lottegiants.domain.teamNameToCode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -124,10 +127,43 @@ object WidgetAssets {
         return bmp
     }
 
-    suspend fun logoProvider(context: Context, teamCode: String, url: String): ImageProvider {
-        val resolved = resolveTeamLogoUrl(teamCode, url)
-        val bmp = loadCachedBitmap(context, "team_logos", "${teamCode.ifBlank { "UNK" }}.png", resolved)
-        return if (bmp != null) ImageProvider(bmp) else ImageProvider(R.drawable.ic_notification)
+    suspend fun logoProvider(
+        context: Context,
+        teamCode: String,
+        url: String,
+        teamName: String = "",
+    ): ImageProvider {
+        val code = teamCode.trim().uppercase().ifBlank { teamNameToCode(teamName) }
+        val urls = listOfNotNull(
+            resolveTeamLogoUrl(code, url).takeIf { it.isNotBlank() },
+            teamLogoUrl(code).takeIf { code.isNotBlank() },
+            kboTeamEmblemUrl(code).takeIf { code.isNotBlank() },
+            url.takeIf { it.isNotBlank() },
+        ).distinct()
+        val cacheKey = code.ifBlank { teamName.take(8).ifBlank { "UNK" } }
+        val bmp = loadCachedBitmap(context, "team_logos", "$cacheKey.png", urls)
+        return if (bmp != null) {
+            ImageProvider(bmp)
+        } else {
+            ImageProvider(teamInitialBitmap(code, teamName))
+        }
+    }
+
+    fun teamInitialBitmap(teamCode: String, teamName: String): Bitmap {
+        val label = teamName.trim().take(1).ifBlank { teamCode.take(1) }.ifBlank { "?" }.uppercase()
+        val size = 96
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF18243A.toInt() }
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f, bg)
+        val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFFFFFFF.toInt()
+            typeface = Typeface.DEFAULT_BOLD
+            textSize = size * 0.42f
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawText(label, size / 2f, size / 2f - (text.descent() + text.ascent()) / 2f, text)
+        return bmp
     }
 
     suspend fun playerProvider(context: Context, playerCode: String, url: String): ImageProvider {

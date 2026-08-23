@@ -698,7 +698,7 @@ private fun ResultGameCard(g: MiniGame) {
                                 won == true -> StatusPill("롯데 승", WinGreen)
                                 won == false -> StatusPill("롯데 패", LoseRed)
                                 lotte && g.homeScore == g.awayScore -> StatusPill("무승부", LotteGold)
-                                else -> StatusPill("종료", MaterialTheme.colorScheme.onSurfaceVariant)
+                                else -> StatusPill("경기종료", MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                         g.status == GameStatus.BEFORE -> StatusPill(g.startTime.ifBlank { "예정" }, LotteGold)
@@ -746,6 +746,8 @@ private fun StatusPill(text: String, color: Color) {
         color = color,
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
+        maxLines = 1,
+        softWrap = false,
     )
 }
 

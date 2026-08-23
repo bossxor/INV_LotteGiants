@@ -53,6 +53,7 @@ import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.teamLogoUrl
+import com.bossxor.lottegiants.domain.teamNameToCode
 import com.bossxor.lottegiants.domain.parseKboStartMillis
 
 private val Red = Color(0xFFC8102E)
@@ -76,10 +77,12 @@ class LotteWidget : GlanceAppWidget() {
         val game = snap?.lotteGame ?: snap?.nextLotteGame
         val lotteLogo = WidgetAssets.logoProvider(context, LOTTE_TEAM_CODE, LOTTE_LOGO_URL)
         val oppLogo = if (game != null) {
+            val oppCode = game.opponentCode.ifBlank { teamNameToCode(game.opponentName) }
             WidgetAssets.logoProvider(
                 context,
-                game.opponentCode,
-                game.opponentLogoUrl.ifBlank { teamLogoUrl(game.opponentCode) },
+                oppCode,
+                game.opponentLogoUrl.ifBlank { teamLogoUrl(oppCode) },
+                game.opponentName,
             )
         } else {
             ImageProvider(R.drawable.ic_notification)
@@ -170,17 +173,22 @@ private fun WidgetRoot(
             }
         }
         Column(
-            modifier = GlanceModifier.fillMaxSize().padding(6.dp),
+            modifier = GlanceModifier.fillMaxSize().padding(4.dp),
             horizontalAlignment = Alignment.End,
             verticalAlignment = Alignment.Top,
         ) {
-            Image(
-                provider = ImageProvider(R.drawable.ic_widget_refresh),
-                contentDescription = "새로고침",
+            Box(
                 modifier = GlanceModifier
-                    .size(18.dp)
+                    .padding(4.dp)
                     .clickable(actionRunCallback<WidgetRefreshAction>()),
-            )
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    provider = ImageProvider(R.drawable.ic_widget_refresh),
+                    contentDescription = "새로고침",
+                    modifier = GlanceModifier.size(26.dp),
+                )
+            }
         }
     }
 }

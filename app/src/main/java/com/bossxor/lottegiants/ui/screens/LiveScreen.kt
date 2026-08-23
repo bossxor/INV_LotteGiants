@@ -843,14 +843,24 @@ private fun LineupTab(
     Spacer(Modifier.height(10.dp))
     if (lineup.isEmpty()) {
         SectionCard {
-            Text(
-                when {
-                    g.lineupAnnounced -> "라인업은 발표됐지만 상세를 아직 못 불러왔습니다."
-                    g.status == GameStatus.ENDED -> "타순 기록을 불러오지 못했습니다."
-                    else -> "라인업이 아직 발표되지 않았습니다."
-                },
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Column {
+                Text(
+                    when {
+                        g.lineupAnnounced -> "라인업은 발표됐지만 상세를 아직 못 불러왔습니다."
+                        g.status == GameStatus.ENDED -> "타순 기록을 불러오지 못했습니다."
+                        else -> "라인업이 아직 발표되지 않았습니다."
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (g.lineupAnnounced) {
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(onClick = onRetry) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("다시 불러오기")
+                    }
+                }
+            }
         }
     } else {
         SectionCard {
@@ -1448,6 +1458,8 @@ private fun CompactRefresh(secondsUntilRefresh: Int, isRefreshing: Boolean, onRe
     }
 }
 
+private data class ChipSpec(val text: String, val color: Color)
+
 @Composable
 private fun StatusChip(text: String, color: Color) {
     Box(
@@ -1455,7 +1467,14 @@ private fun StatusChip(text: String, color: Color) {
             .background(color.copy(alpha = 0.18f), RoundedCornerShape(50))
             .padding(horizontal = 10.dp, vertical = 3.dp)
     ) {
-        Text(text, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = color)
+        Text(
+            text,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = color,
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }
 
@@ -1490,19 +1509,27 @@ private fun HeroCard(g: LotteGameInfo, onShare: () -> Unit = {}) {
                 highlight = if (g.isHome) g.opponentScore > g.lotteScore else g.lotteScore > g.opponentScore,
                 modifier = Modifier.weight(1f),
             )
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(0.8f)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (g.doubleHeaderNo > 0) {
-                        StatusChip("DH${g.doubleHeaderNo}", LotteGold)
-                    }
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                val heroChips = buildList {
+                    if (g.doubleHeaderNo > 0) add(ChipSpec("DH${g.doubleHeaderNo}", LotteGold))
                     if (g.lotteRank > 0 || g.opponentRank > 0) {
-                        StatusChip(
-                            "${if (g.isHome) g.opponentRank else g.lotteRank}위 vs ${if (g.isHome) g.lotteRank else g.opponentRank}위",
-                            Color.White.copy(alpha = 0.75f),
+                        add(
+                            ChipSpec(
+                                "${if (g.isHome) g.opponentRank else g.lotteRank}·${if (g.isHome) g.lotteRank else g.opponentRank}위",
+                                Color.White.copy(alpha = 0.75f),
+                            ),
                         )
                     }
                     if (g.lineupAnnounced && g.status == GameStatus.BEFORE) {
-                        StatusChip("라인업", WinGreen)
+                        add(ChipSpec("라인업", WinGreen))
+                    }
+                }
+                if (heroChips.isNotEmpty()) {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        contentPadding = PaddingValues(horizontal = 2.dp),
+                    ) {
+                        items(heroChips) { chip -> StatusChip(chip.text, chip.color) }
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -1513,7 +1540,7 @@ private fun HeroCard(g: LotteGameInfo, onShare: () -> Unit = {}) {
                         Text(g.inningLabel, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = LotteGold)
                     }
                     GameStatus.ENDED -> {
-                        StatusChip("경기 종료", Color(0xFF9AA7C4))
+                        StatusChip("경기종료", Color(0xFF9AA7C4))
                         Spacer(Modifier.height(6.dp))
                         val (label, color) = when {
                             g.lotteScore > g.opponentScore -> "롯데 승" to WinGreen

@@ -6,9 +6,8 @@
     android:gravity="center_vertical"
     android:orientation="vertical"
     android:paddingHorizontal="8dp"
-    android:paddingVertical="8dp">
+    android:paddingVertical="6dp">
 
-    <!-- 상단 볼카운트 (이닝 라벨은 그 아래 유지) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -126,7 +125,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="3dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
@@ -138,26 +137,33 @@
 
             <TextView
                 android:id="@+id/notif_score"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:textColor="#FFFFFFFF"
                 android:textSize="15sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/notif_inning"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:textColor="#FFAAB4CB"
                 android:textSize="12sp" />
 
             <TextView
                 android:id="@+id/notif_count_text"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
                 android:textColor="#FFFFFFFF"
                 android:textSize="12sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/notif_players_line"
@@ -166,13 +172,14 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="#FFAAB4CB"
-                android:textSize="11sp" />
+                android:textSize="11sp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <ImageView
             android:id="@+id/notif_bases"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:layout_marginStart="6dp"
             android:contentDescription="@null"
             android:scaleType="fitCenter" />

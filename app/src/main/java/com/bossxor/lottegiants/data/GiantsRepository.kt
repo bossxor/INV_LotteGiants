@@ -132,7 +132,21 @@ class GiantsRepository private constructor(context: Context) {
                 lotteInfo.status == GameStatus.ENDED ||
                 lotteInfo.status == GameStatus.BEFORE
             if (wantRelay) {
-                val relayResult = runCatching { fetchFullRelay(relayGameId) }
+                val relayResult = if (
+                    lotteInfo.status == GameStatus.BEFORE &&
+                    lotteInfo.lineupAnnounced
+                ) {
+                    runCatching { fetchLineupRelay(relayGameId) }.let { quick ->
+                        val quickData = quick.getOrNull()
+                        if (quickData != null && relayHasLineup(quickData)) {
+                            quick
+                        } else {
+                            runCatching { fetchFullRelay(relayGameId) }
+                        }
+                    }
+                } else {
+                    runCatching { fetchFullRelay(relayGameId) }
+                }
                 relayData = relayResult.getOrNull()
                 if (relayData != null) {
                     lotteInfo = mergeRelay(lotteInfo, relayData)
@@ -1170,6 +1184,13 @@ class GiantsRepository private constructor(context: Context) {
         )
     }
 
+    private suspend fun fetchLineupRelay(gameId: String): TextRelayData? =
+        api.getRelay(gameId).result?.textRelayData
+
+    private fun relayHasLineup(relay: TextRelayData): Boolean =
+        listOfNotNull(relay.homeLineup, relay.awayLineup)
+            .any { dto -> dto.batter.any { it.name.isNotBlank() } }
+
     /**
      * 네이버 relay는 기본 응답에 현재 이닝 문자중계만 포함된다.
      * `?inning=N`으로 1~현재 이닝을 병렬 조회해 textRelays를 합친다.
@@ -1236,10 +1257,17 @@ class GiantsRepository private constructor(context: Context) {
                 .groupBy { it.batOrder }
                 .mapValues { (_, list) -> list.maxBy { it.seqno } }
 
-        fun LineupDto.startersByOrder(): Map<Int, LineupBatterDto> =
-            batter.filter { it.batOrder in 1..9 }
+        fun LineupDto.startersByOrder(): Map<Int, LineupBatterDto> {
+            val withOrder = batter.filter { it.batOrder in 1..9 }
                 .groupBy { it.batOrder }
                 .mapValues { (_, list) -> list.minBy { it.seqno } }
+            if (withOrder.isNotEmpty()) return withOrder
+            val starters = batter.filter { it.seqno <= 1 }
+                .ifEmpty { batter }
+                .distinctBy { it.pcode.ifBlank { it.name } }
+                .take(9)
+            return starters.mapIndexed { idx, b -> (idx + 1) to b }.toMap()
+        }
 
         fun bestSeasonAvg(b: LineupBatterDto, peers: List<LineupBatterDto> = emptyList()): Double? {
             b.seasonHra?.takeIf { it > 0.0 }?.let { return it }

@@ -96,7 +96,10 @@ object NotificationHelper {
             "롯데 ${game.lotteScore}:${game.opponentScore} · ${game.inningLabel}"
         }
         val headerLine = if (game != null && game.status == GameStatus.LIVE) {
-            game.inningLabel
+            buildString {
+                append(game.inningLabel)
+                append(if (game.isLotteBatting) " · 롯데 공격" else " · 상대 공격")
+            }
         } else {
             compactLine
         }
@@ -290,23 +293,30 @@ object NotificationHelper {
                 if (game.isLotteBatting) append(" · 롯데 공격") else append(" · 상대 공격")
             },
         )
-        rv.setTextViewText(R.id.notif_count_text, basesLabel(game))
         val batterLabel = buildString {
             if (game.currentBatterOrder > 0) append("${game.currentBatterOrder}번 ")
             append(game.currentBatterName.ifBlank { "-" })
         }
-        rv.setTextViewText(
-            R.id.notif_players_line,
-            buildString {
-                append("투 ${game.currentPitcherName.ifBlank { "-" }}")
-                if (game.currentPitcherPitchCount > 0) append("(${game.currentPitcherPitchCount}구)")
-                append("  ·  타 $batterLabel")
-            },
-        )
         rv.setImageViewResource(
             R.id.notif_bases,
             WidgetAssets.basesDrawable(game.onBase1, game.onBase2, game.onBase3),
         )
+        if (big) {
+            rv.setViewVisibility(R.id.notif_count_text, android.view.View.VISIBLE)
+            rv.setViewVisibility(R.id.notif_players_line, android.view.View.VISIBLE)
+            rv.setTextViewText(R.id.notif_count_text, basesLabel(game))
+            rv.setTextViewText(
+                R.id.notif_players_line,
+                buildString {
+                    append("투 ${game.currentPitcherName.ifBlank { "-" }}")
+                    if (game.currentPitcherPitchCount > 0) append("(${game.currentPitcherPitchCount}구)")
+                    append("  ·  타 $batterLabel")
+                },
+            )
+        } else {
+            rv.setViewVisibility(R.id.notif_count_text, android.view.View.GONE)
+            rv.setViewVisibility(R.id.notif_players_line, android.view.View.GONE)
+        }
         fun setDots(ids: IntArray, count: Int, kind: Char) {
             ids.forEachIndexed { i, id ->
                 rv.setImageViewResource(id, WidgetAssets.countDot(i < count, kind))
