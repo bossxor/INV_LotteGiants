@@ -54,7 +54,8 @@
 APK: `app/build/outputs/apk/release/app-release.apk`
 
 서명: 루트에 `keystore.properties` + `lotte-release.jks` (git 제외).  
-CI 서명 시크릿 등록: `.\scripts\setup-ci-signing.ps1`
+CI 서명 시크릿 등록: `.\scripts\setup-ci-signing.ps1`  
+debug/release 모두 이 키로 서명합니다. 디버그 키로 설치하면 GitHub 업데이트가 서명이 달라 실패합니다.
 
 ## 버전 관리
 
@@ -62,15 +63,19 @@ CI 서명 시크릿 등록: `.\scripts\setup-ci-signing.ps1`
 
 | 필드 | 설명 | 예시 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `1.3.17` |
-| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1024` |
+| `versionName` | 사용자에게 보이는 버전 | `1.3.18` |
+| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1025` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 됩니다.
 
 ## 자동 업데이트 (`latest` 채널)
 
 `main` 브랜치 push 시 GitHub Actions가 release APK를 빌드해 고정 태그 **`latest`** 에 덮어씁니다.  
-앱 시작 시 `update.json`을 읽어 `versionCode`가 더 크면 자동으로 다운로드 후 설치 화면을 띄웁니다.
+앱 시작 시 `update.json`을 읽어 `versionCode`가 더 크면 APK를 받은 뒤 **앱 내부 PackageInstaller**로 자기 자신을 갱신합니다.  
+이 앱이 설치 주체(installer of record)가 된 뒤에는 확인 없이 끝날 수 있고, 아니면 시스템 확인만 한 번 뜹니다.  
+외부 파일 앱으로 APK를 열어 설치하는 방식은 쓰지 않습니다. 다만 Android는 Play 스토어 없이 완전히 숨은 설치를 허용하지 않습니다.
+
+이미 **다른 키(디버그 키 등)** 로 깔린 기기는 한 번 삭제한 뒤 릴리스 APK로 다시 설치해야 합니다. 그 다음부터는 앱 안 업데이트로 이어집니다.
 
 ### 수동 배포
 
@@ -91,7 +96,7 @@ CI 서명 시크릿 등록: `.\scripts\setup-ci-signing.ps1`
 ```
 
 - 저장소가 **private**이면 `local.properties` 또는 환경변수에 `GITHUB_TOKEN` 설정 후 빌드
-- Android는 사용자 확인 없이 조용히 설치할 수 없어, **설치 화면 1회 확인**은 필수입니다
+- Android는 Play 스토어 밖에서 완전히 무확인 설치를 막습니다. 앱 내부 설치 세션을 쓰며, 필요할 때만 시스템 확인이 뜹니다.
 
 ## 프로젝트 구조 (요약)
 

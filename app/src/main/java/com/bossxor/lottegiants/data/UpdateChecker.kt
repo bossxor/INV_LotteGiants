@@ -9,6 +9,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.content.FileProvider
 import com.bossxor.lottegiants.BuildConfig
+import com.bossxor.lottegiants.update.ApkInstaller
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
@@ -50,8 +51,9 @@ sealed class InstallResult {
  * public 저장소는 토큰 없이 동작한다.
  * private 이면 local.properties / env 의 `GITHUB_TOKEN` 을 BuildConfig 로 주입한다.
  *
- * Android는 일반 앱이 사용자 확인 없이 조용히 설치를 끝낼 수 없다.
- * 대신 실행 시 자동으로 받아 시스템 설치 화면까지 연다.
+ * Android는 Play 스토어 밖에서 완전히 무확인 설치를 허용하지 않는다.
+ * 대신 앱이 PackageInstaller 세션으로 자기 자신을 갱신한다. 이 앱이
+ * installer of record 이면 확인 없이 끝날 수 있고, 아니면 시스템 확인만 한 번 뜬다.
  */
 object UpdateChecker {
 
@@ -319,7 +321,8 @@ object UpdateChecker {
     }
 
     private fun signingMismatchMessage(): String =
-        "업데이트 APK 서명이 설치된 앱과 달라 덮어쓸 수 없습니다. 앱을 삭제한 뒤 다시 설치하세요."
+        "지금 깔린 앱과 업데이트 파일의 서명이 달라 덮어쓸 수 없습니다. " +
+            "앱을 삭제한 뒤 같은 서명(릴리스) APK로 한 번만 다시 설치하면 이후에는 앱 안에서 갱신됩니다."
 
     private fun canInstallOver(context: Context, apk: File): Boolean {
         if (!apk.exists() || apk.length() < 1024L) return false
@@ -379,7 +382,7 @@ object UpdateChecker {
         File(File(context.cacheDir, "updates").apply { mkdirs() }, "update.apk")
 
     /**
-     * APK 다운로드 후 설치 인텐트.
+     * APK 다운로드 후 앱 내부 PackageInstaller 세션으로 설치.
      * 권한이 없으면 APK를 먼저 받은 뒤 설정 화면을 열고 [InstallResult.NeedsPermission]을 반환한다.
      */
     suspend fun downloadAndInstall(
@@ -484,43 +487,53 @@ object UpdateChecker {
     }
 
     private suspend fun launchInstall(context: Context, apk: File) {
-        withContext(Dispatchers.Main) {
-            val uri = FileProvider.getUriForFile(
-                context,
-                "${context.packageName}.fileprovider",
-                apk,
-            )
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            withContext(Dispatchers.IO) {
+                ApkInstaller.install(context, apk)
             }
-            val pm = context.packageManager
-            val handlers = pm.queryIntentActivities(
-                intent,
-                PackageManager.MATCH_DEFAULT_ONLY,
-            )
-            if (handlers.isEmpty()) {
-                throw IllegalStateException("설치 화면을 열 수 없습니다.")
+        } catch (e: Exception) {
+            Log.w(TAG, "PackageInstaller failed, falling back to view intent", e)
+            withContext(Dispatchers.Main) {
+                launchLegacyInstall(context, apk)
             }
-            for (resolve in handlers) {
-                context.grantUriPermission(
-                    resolve.activityInfo.packageName,
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                )
-            }
-            val preferred = handlers.firstOrNull { resolve ->
-                val pkg = resolve.activityInfo.packageName
-                pkg.contains("packageinstaller", ignoreCase = true) ||
-                    pkg == "com.google.android.packageinstaller" ||
-                    pkg == "com.samsung.android.packageinstaller"
-            }?.activityInfo?.packageName
-            if (preferred != null) {
-                intent.setPackage(preferred)
-            }
-            context.startActivity(intent)
         }
+    }
+
+    private fun launchLegacyInstall(context: Context, apk: File) {
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            apk,
+        )
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val handlers = context.packageManager.queryIntentActivities(
+            intent,
+            PackageManager.MATCH_DEFAULT_ONLY,
+        )
+        if (handlers.isEmpty()) {
+            throw IllegalStateException("설치 화면을 열 수 없습니다.")
+        }
+        for (resolve in handlers) {
+            context.grantUriPermission(
+                resolve.activityInfo.packageName,
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        }
+        val preferred = handlers.firstOrNull { resolve ->
+            val pkg = resolve.activityInfo.packageName
+            pkg.contains("packageinstaller", ignoreCase = true) ||
+                pkg == "com.google.android.packageinstaller" ||
+                pkg == "com.samsung.android.packageinstaller"
+        }?.activityInfo?.packageName
+        if (preferred != null) {
+            intent.setPackage(preferred)
+        }
+        context.startActivity(intent)
     }
 
     /** 하위 호환: 성공 여부만 필요할 때 */

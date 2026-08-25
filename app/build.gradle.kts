@@ -15,8 +15,8 @@ android {
         applicationId = "com.bossxor.lottegiants"
         minSdk = 31
         targetSdk = 36
-        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1024
-        versionName = (project.findProperty("versionName") as String?) ?: "1.3.17"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1025
+        versionName = (project.findProperty("versionName") as String?) ?: "1.3.18"
 
         // private GitHub 저장소 업데이트용 (local.properties 또는 env GITHUB_TOKEN)
         val localProps = Properties().apply {
@@ -45,6 +45,13 @@ android {
     }
 
     buildTypes {
+        // debug도 릴리스 키로 서명한다. Studio/adb로 깐 앱을 GitHub latest가 덮어쓰려면
+        // 서명이 같아야 하고, 디버그 키로 배포하면 받는 사람마다 업데이트 불능이 된다.
+        debug {
+            if (rootProject.file("keystore.properties").exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
