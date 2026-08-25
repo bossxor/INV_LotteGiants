@@ -300,7 +300,7 @@ class GiantsRepository private constructor(context: Context) {
                 }
             }
             val season = fetchKboGamesCached(date.minusDays(45), date.plusDays(1))
-            return enrichGameSummary(info, season, kbo)
+            return withStadiumWeather(enrichGameSummary(info, season, kbo))
         }
         val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
         val dto = runCatching {
@@ -318,7 +318,20 @@ class GiantsRepository private constructor(context: Context) {
             info = mergeRelay(info, relay)
         }
         val season = fetchKboGamesCached(date.minusDays(45), date.plusDays(1))
-        return enrichGameSummary(info, season, null)
+        return withStadiumWeather(enrichGameSummary(info, season, null))
+    }
+
+    private suspend fun withStadiumWeather(game: LotteGameInfo): LotteGameInfo {
+        val stadium = game.stadium.ifBlank { game.preview?.stadium.orEmpty() }
+        if (stadium.isBlank()) return game
+        val w = runCatching { fetchStadiumWeather(stadium) }.getOrNull() ?: return game
+        val preview = game.preview?.copy(weather = w) ?: GamePreview(
+            gameDate = game.gameDate,
+            startTime = game.startTime,
+            stadium = stadium,
+            weather = w,
+        )
+        return game.copy(preview = preview)
     }
 
     private fun parseNaverGameIdDate(gameId: String): LocalDate? {
