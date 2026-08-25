@@ -537,6 +537,8 @@ class GiantsRepository private constructor(context: Context) {
     private fun toPreviewBatter(block: PreviewPlayerBlock?): PreviewBatter {
         val info = block?.playerInfo
         val stats = block?.currentSeasonStats
+        val recent = block?.recentFiveGamesStats
+        val vsOpp = block?.currentSeasonStatsOnOpponents
         return PreviewBatter(
             name = info?.name.orEmpty(),
             playerCode = info?.pCode ?: block?.playerCode.orEmpty(),
@@ -546,6 +548,12 @@ class GiantsRepository private constructor(context: Context) {
             rbi = stats?.rbi ?: 0,
             games = stats?.gameCount ?: 0,
             ops = stats?.obp?.let { String.format("%.3f", it) }.orEmpty(),
+            recentAvg = recent?.hra.orEmpty(),
+            recentHits = recent?.hit ?: 0,
+            recentRbi = recent?.rbi ?: 0,
+            vsOpponentAvg = vsOpp?.hra.orEmpty(),
+            vsOpponentHits = vsOpp?.hit ?: 0,
+            vsOpponentHr = vsOpp?.hr ?: 0,
         )
     }
 

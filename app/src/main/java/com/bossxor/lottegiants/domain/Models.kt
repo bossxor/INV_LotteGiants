@@ -496,6 +496,14 @@ data class PreviewBatter(
     val rbi: Int = 0,
     val games: Int = 0,
     val ops: String = "",
+    /** 최근 5경기 (네이버가 키 플레이어를 뽑는 기준) */
+    val recentAvg: String = "",
+    val recentHits: Int = 0,
+    val recentRbi: Int = 0,
+    /** 이번 시즌 해당 상대팀 상대 성적 */
+    val vsOpponentAvg: String = "",
+    val vsOpponentHits: Int = 0,
+    val vsOpponentHr: Int = 0,
 )
 
 @Serializable

@@ -270,6 +270,7 @@ data class PreviewPlayerBlock(
     val playerInfo: PreviewPlayerInfo? = null,
     val currentSeasonStats: PreviewSeasonStats? = null,
     val recentFiveGamesStats: PreviewSeasonStats? = null,
+    val currentSeasonStatsOnOpponents: PreviewSeasonStats? = null,
 )
 
 @Serializable

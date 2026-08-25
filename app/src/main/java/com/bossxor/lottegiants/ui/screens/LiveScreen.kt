@@ -579,12 +579,44 @@ private fun PreviewTab(
                 Text("프리뷰 키플레이어 정보 없음", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
             } else {
                 if (!lb?.name.isNullOrBlank()) {
-                    Text("롯데  ${lb!!.name}  ${lb.avg.ifBlank { "-" }}  ${lb.hr}홈런 ${lb.rbi}타점", fontSize = 13.sp)
+                    KeyBatterLine("롯데", lb!!, g.opponentName)
                 }
                 if (!ob?.name.isNullOrBlank()) {
-                    Text("${g.opponentName}  ${ob!!.name}  ${ob.avg.ifBlank { "-" }}  ${ob.hr}홈런 ${ob.rbi}타점", fontSize = 13.sp)
+                    if (!lb?.name.isNullOrBlank()) Spacer(Modifier.height(6.dp))
+                    KeyBatterLine(g.opponentName, ob!!, "롯데")
                 }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "최근 5경기 성적이 좋은 타자를 네이버 프리뷰가 고릅니다.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun KeyBatterLine(
+    team: String,
+    batter: com.bossxor.lottegiants.domain.PreviewBatter,
+    opponentName: String,
+) {
+    Column {
+        Text(
+            "$team  ${batter.name}  시즌 ${batter.avg.ifBlank { "-" }} · ${batter.hr}홈런 ${batter.rbi}타점",
+            fontSize = 13.sp,
+        )
+        val detail = listOfNotNull(
+            batter.recentAvg.takeIf { it.isNotBlank() }?.let {
+                "최근 5경기 $it" + if (batter.recentHits > 0) " (${batter.recentHits}안타 ${batter.recentRbi}타점)" else ""
+            },
+            batter.vsOpponentAvg.takeIf { it.isNotBlank() }?.let {
+                "${opponentName}전 $it" + if (batter.vsOpponentHr > 0) " (${batter.vsOpponentHr}홈런)" else ""
+            },
+        ).joinToString("  ·  ")
+        if (detail.isNotBlank()) {
+            Text(detail, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -1703,50 +1735,84 @@ private fun PermissionBanner(
     }
 }
 
+private data class KeyPlayerPick(
+    val name: String,
+    val playerCode: String,
+    val metric: String,
+    val label: String,
+)
+
+/**
+ * 경기 중·종료면 오늘 실제로 활약한 타자, 경기 전이면 네이버 프리뷰가 최근 5경기로 뽑은 타자.
+ * 둘 다 없을 때만 시즌 리더보드 상위 타자로 떨어지므로 날마다 같은 이름이 나오지 않는다.
+ */
+private fun pickKeyPlayer(
+    game: LotteGameInfo?,
+    leaders: List<com.bossxor.lottegiants.domain.LeaderPlayer>,
+): KeyPlayerPick? {
+    if (game == null) return null
+
+    if (game.status == GameStatus.LIVE || game.status == GameStatus.ENDED) {
+        val best = (game.lotteLineup + game.lotteBenchBatters)
+            .filter { it.name.isNotBlank() }
+            .filter { it.todayHits > 0 || it.todayRbi > 0 || it.todayRun > 0 }
+            .maxByOrNull { it.todayHits * 3 + it.todayRbi * 2 + it.todayRun }
+        if (best != null) {
+            val metric = buildList {
+                if (best.todayAtBats > 0) add("${best.todayAtBats}타수 ${best.todayHits}안타")
+                else if (best.todayHits > 0) add("${best.todayHits}안타")
+                if (best.todayRbi > 0) add("${best.todayRbi}타점")
+                if (best.todayRun > 0) add("${best.todayRun}득점")
+            }.joinToString(" · ")
+            return KeyPlayerPick(best.name, best.playerCode, metric, "오늘의 키플레이어")
+        }
+    }
+
+    val fromPreview = game.preview?.lotteKeyBatter?.takeIf { it.name.isNotBlank() }
+    if (fromPreview != null) {
+        val metric = when {
+            fromPreview.recentAvg.isNotBlank() ->
+                "최근 5경기 ${fromPreview.recentAvg}" +
+                    if (fromPreview.recentRbi > 0) " · ${fromPreview.recentRbi}타점" else ""
+            fromPreview.vsOpponentAvg.isNotBlank() ->
+                "${game.opponentName}전 ${fromPreview.vsOpponentAvg}"
+            fromPreview.avg.isNotBlank() -> "시즌 ${fromPreview.avg}"
+            else -> ""
+        }
+        return KeyPlayerPick(fromPreview.name, fromPreview.playerCode, metric, "주목할 타자")
+    }
+
+    val leader = leaders.firstOrNull { it.isLotte && !it.isPitcher } ?: return null
+    val metric = when {
+        leader.avg.isNotBlank() -> "시즌 타율 ${leader.avg}"
+        leader.ops.isNotBlank() -> "시즌 OPS ${leader.ops}"
+        leader.hr > 0 -> "시즌 ${leader.hr}홈런"
+        else -> ""
+    }
+    return KeyPlayerPick(leader.name, leader.playerCode, metric, "시즌 팀 최고 타자")
+}
+
 @Composable
 private fun KeyPlayerChip(
     leaders: List<com.bossxor.lottegiants.domain.LeaderPlayer>,
     game: LotteGameInfo?,
     onClick: (String, String) -> Unit,
 ) {
-    val fromLineup = game?.lotteLineup?.firstOrNull { it.batOrder in 3..5 }
-        ?: game?.lotteLineup?.firstOrNull()
-    val lotteLeaders = leaders.filter { it.isLotte && !it.isPitcher }
-    val matched = when {
-        fromLineup != null -> lotteLeaders.firstOrNull {
-            (fromLineup.playerCode.isNotBlank() && it.playerCode == fromLineup.playerCode) ||
-                it.name == fromLineup.name
-        } ?: lotteLeaders.firstOrNull()
-        else -> lotteLeaders.firstOrNull()
-    }
-    val name = matched?.name ?: fromLineup?.name
-    val code = matched?.playerCode?.ifBlank { null }
-        ?: fromLineup?.playerCode.orEmpty()
-    val metric = matched?.let {
-        when {
-            it.avg.isNotBlank() -> "타율 ${it.avg}"
-            it.ops.isNotBlank() -> "OPS ${it.ops}"
-            it.hits > 0 -> "안타 ${it.hits}"
-            it.hr > 0 -> "홈런 ${it.hr}"
-            else -> it.team
-        }
-    } ?: fromLineup?.seasonAvg?.let { "타율 ${String.format("%.3f", it)}" }
-        ?: fromLineup?.let { "${it.position} · 타순 ${it.batOrder}" }
-    if (name.isNullOrBlank()) return
+    val pick = pickKeyPlayer(game, leaders) ?: return
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        onClick = { onClick(code, name) },
+        onClick = { onClick(pick.playerCode, pick.name) },
         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
     ) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("오늘의 키플레이어", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(pick.label, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.width(10.dp))
-            Text(name, fontWeight = FontWeight.Black, fontSize = 14.sp)
+            Text(pick.name, fontWeight = FontWeight.Black, fontSize = 14.sp)
             Spacer(Modifier.weight(1f))
-            if (!metric.isNullOrBlank()) {
-                Text(metric, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (pick.metric.isNotBlank()) {
+                Text(pick.metric, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
