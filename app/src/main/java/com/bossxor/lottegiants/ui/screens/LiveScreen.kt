@@ -66,7 +66,9 @@ import com.bossxor.lottegiants.ui.LoseRed
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.WinGreen
+import com.bossxor.lottegiants.domain.RecentFormGame
 import com.bossxor.lottegiants.ui.components.DiamondView
+import com.bossxor.lottegiants.ui.components.HotColdZoneChart
 import com.bossxor.lottegiants.ui.components.ScoreBoard
 import com.bossxor.lottegiants.ui.components.SectionCard
 import com.bossxor.lottegiants.ui.components.SectionHeader
@@ -226,6 +228,7 @@ fun LiveScreen(
                                     g = game,
                                     snapshot = snapshot,
                                     weather = weather ?: snapshot?.weather ?: game.preview?.weather,
+                                    onKeyPlayerClick = onKeyPlayerClick,
                                 )
                                 1 -> LineupTab(game, onPlayerClick, onPitcherClick, onRefresh)
                                 2 -> SummaryTab(
@@ -461,6 +464,7 @@ private fun PreviewTab(
     g: LotteGameInfo,
     snapshot: LiveSnapshot?,
     weather: StadiumWeather? = null,
+    onKeyPlayerClick: (String, String) -> Unit = { _, _ -> },
 ) {
     val p = g.preview
     SectionCard {
@@ -579,11 +583,11 @@ private fun PreviewTab(
                 Text("프리뷰 키플레이어 정보 없음", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
             } else {
                 if (!lb?.name.isNullOrBlank()) {
-                    KeyBatterLine("롯데", lb!!, g.opponentName)
+                    KeyBatterLine("롯데", lb!!, g.opponentName, onKeyPlayerClick)
                 }
                 if (!ob?.name.isNullOrBlank()) {
-                    if (!lb?.name.isNullOrBlank()) Spacer(Modifier.height(6.dp))
-                    KeyBatterLine(g.opponentName, ob!!, "롯데")
+                    if (!lb?.name.isNullOrBlank()) Spacer(Modifier.height(10.dp))
+                    KeyBatterLine(g.opponentName, ob!!, "롯데", onKeyPlayerClick)
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
@@ -594,6 +598,23 @@ private fun PreviewTab(
             }
         }
     }
+    val lotteForm = p?.lotteRecentForm.orEmpty()
+    val oppForm = p?.opponentRecentForm.orEmpty()
+    if (lotteForm.isNotEmpty() || oppForm.isNotEmpty()) {
+        Spacer(Modifier.height(10.dp))
+        SectionCard {
+            Column {
+                SectionHeader("최근 5경기")
+                if (lotteForm.isNotEmpty()) {
+                    RecentFormBlock("롯데", lotteForm)
+                }
+                if (oppForm.isNotEmpty()) {
+                    if (lotteForm.isNotEmpty()) Spacer(Modifier.height(10.dp))
+                    RecentFormBlock(g.opponentName.ifBlank { "상대" }, oppForm)
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -601,11 +622,19 @@ private fun KeyBatterLine(
     team: String,
     batter: com.bossxor.lottegiants.domain.PreviewBatter,
     opponentName: String,
+    onClick: (String, String) -> Unit = { _, _ -> },
 ) {
-    Column {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(enabled = batter.name.isNotBlank()) { onClick(batter.playerCode, batter.name) }
+            .padding(vertical = 2.dp),
+    ) {
         Text(
             "$team  ${batter.name}  시즌 ${batter.avg.ifBlank { "-" }} · ${batter.hr}홈런 ${batter.rbi}타점",
             fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
         )
         val detail = listOfNotNull(
             batter.recentAvg.takeIf { it.isNotBlank() }?.let {
@@ -617,6 +646,48 @@ private fun KeyBatterLine(
         ).joinToString("  ·  ")
         if (detail.isNotBlank()) {
             Text(detail, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (batter.hotCold.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            HotColdZoneChart(batter.hotCold)
+        }
+    }
+}
+
+@Composable
+private fun RecentFormBlock(team: String, games: List<RecentFormGame>) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(team, fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.width(52.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                games.take(5).forEach { g ->
+                    val (bg, fg) = when (g.result) {
+                        "승" -> WinGreen to Color.White
+                        "패" -> LoseRed to Color.White
+                        else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    Text(
+                        g.result.ifBlank { "·" },
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(bg)
+                            .padding(horizontal = 7.dp, vertical = 3.dp),
+                        color = fg,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        games.take(5).forEach { g ->
+            val date = g.date.takeLast(5)
+            val vs = if (g.isHome) "vs" else "@"
+            Text(
+                "$date $vs ${g.opponentName}  ${g.teamScore}:${g.oppScore}",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

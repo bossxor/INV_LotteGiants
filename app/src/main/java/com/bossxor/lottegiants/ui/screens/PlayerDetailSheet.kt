@@ -38,6 +38,7 @@ import coil.compose.AsyncImage
 import com.bossxor.lottegiants.domain.PlayerDetail
 import com.bossxor.lottegiants.domain.playerPhotoCandidates
 import com.bossxor.lottegiants.ui.LotteGold
+import com.bossxor.lottegiants.ui.components.HotColdZoneChart
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -168,6 +169,12 @@ private fun PlayerDetailContent(
             if (d.seasonAb > 0) {
                 Spacer(Modifier.height(8.dp))
                 Text("타수 ${d.seasonAb}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (d.hotCold.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                Text("핫/콜드 존", style = MaterialTheme.typography.titleSmall)
+                Spacer(Modifier.height(8.dp))
+                HotColdZoneChart(d.hotCold)
             }
         }
     }

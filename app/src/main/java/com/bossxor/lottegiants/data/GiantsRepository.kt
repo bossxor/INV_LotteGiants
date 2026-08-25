@@ -16,9 +16,11 @@ import com.bossxor.lottegiants.domain.MatchupRecord
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.PitcherLine
 import com.bossxor.lottegiants.domain.PlayerDetail
+import com.bossxor.lottegiants.domain.HotColdZone
 import com.bossxor.lottegiants.domain.PreviewBatter
 import com.bossxor.lottegiants.domain.PreviewPitcher
 import com.bossxor.lottegiants.domain.PreviewTeamLine
+import com.bossxor.lottegiants.domain.RecentFormGame
 import com.bossxor.lottegiants.domain.RelayText
 import com.bossxor.lottegiants.domain.RosterMove
 import com.bossxor.lottegiants.domain.StadiumWeather
@@ -368,14 +370,15 @@ class GiantsRepository private constructor(context: Context) {
         seasonGames: List<KboOfficialGame>,
         kbo: KboOfficialGame? = null,
     ): LotteGameInfo {
-        val previewDto = if (base.status != GameStatus.ENDED) {
+        val previewDto = if (base.status != GameStatus.CANCELED) {
             runCatching { api.getPreview(base.gameId).result?.previewData }.getOrNull()
         } else {
             null
         }
         val standings = runCatching { fetchStandings() }.getOrDefault(emptyList())
         val preview = buildGamePreview(base, previewDto, standings, seasonGames, kbo)
-        val withSeason = fillMissingSeasonStats(base)
+        val filled = fillLineupFromPreview(base, previewDto)
+        val withSeason = fillMissingSeasonStats(filled)
         val keyPlays = if (withSeason.keyPlays.isNotEmpty()) {
             withSeason.keyPlays
         } else {
@@ -515,6 +518,16 @@ class GiantsRepository private constructor(context: Context) {
                 },
             ),
             recentMatchups = matchups.take(5).map { it.toMiniGame() },
+            lotteRecentForm = toRecentForm(
+                if (game.isHome) dto?.homeTeamPreviousGames else dto?.awayTeamPreviousGames,
+                LOTTE_TEAM_CODE,
+            ),
+            opponentRecentForm = toRecentForm(
+                if (game.isHome) dto?.awayTeamPreviousGames else dto?.homeTeamPreviousGames,
+                game.opponentCode,
+            ),
+            hotColdAvailable = lotteTop?.hotColdZone.orEmpty().isNotEmpty() ||
+                oppTop?.hotColdZone.orEmpty().isNotEmpty(),
         )
     }
 
@@ -554,7 +567,81 @@ class GiantsRepository private constructor(context: Context) {
             vsOpponentAvg = vsOpp?.hra.orEmpty(),
             vsOpponentHits = vsOpp?.hit ?: 0,
             vsOpponentHr = vsOpp?.hr ?: 0,
+            hotCold = block?.hotColdZone.orEmpty().map { it.toDomain() },
         )
+    }
+
+    private fun HotColdZoneDto.toDomain() = HotColdZone(
+        zone = zone,
+        avg = hra.orEmpty(),
+        heat = hraStep?.toIntOrNull()?.coerceIn(1, 5) ?: 3,
+        kRate = kk,
+    )
+
+    /** 중계 라인업이 아직 없으면 네이버 프리뷰 fullLineUp(타순)으로 채운다. */
+    private fun fillLineupFromPreview(game: LotteGameInfo, dto: PreviewData?): LotteGameInfo {
+        if (dto == null) return game
+        val homeSlots = lineupSlotsFromPreview(dto.homeTeamLineUp)
+        val awaySlots = lineupSlotsFromPreview(dto.awayTeamLineUp)
+        val lotteSlots = if (game.isHome) homeSlots else awaySlots
+        val oppSlots = if (game.isHome) awaySlots else homeSlots
+        val lotteLineup = if (game.lotteLineup.size >= 9) game.lotteLineup else lotteSlots.ifEmpty { game.lotteLineup }
+        val oppLineup = if (game.opponentLineup.size >= 9) game.opponentLineup else oppSlots.ifEmpty { game.opponentLineup }
+        if (lotteLineup === game.lotteLineup && oppLineup === game.opponentLineup) return game
+        return game.copy(
+            lotteLineup = lotteLineup,
+            opponentLineup = oppLineup,
+            lineupAnnounced = game.lineupAnnounced || lotteLineup.size >= 9,
+        )
+    }
+
+    private fun lineupSlotsFromPreview(block: PreviewTeamLineUp?): List<LineupSlot> {
+        val batters = block?.fullLineUp.orEmpty().filter { p ->
+            p.position != "1" && p.positionName != "선발투수"
+        }
+        if (batters.size < 9) return emptyList()
+        return batters.take(9).mapIndexed { i, p ->
+            LineupSlot(
+                batOrder = i + 1,
+                name = p.playerName.orEmpty(),
+                position = p.positionName.orEmpty().ifBlank { previewPosName(p.position) },
+                playerCode = p.playerCode.orEmpty(),
+                backNumber = p.backnum.orEmpty(),
+                hitType = p.hitType.orEmpty().ifBlank { p.batsThrows.orEmpty() },
+            )
+        }
+    }
+
+    private fun previewPosName(pos: String?): String = when (pos) {
+        "0" -> "지명타자"
+        "2" -> "포수"
+        "3" -> "1루수"
+        "4" -> "2루수"
+        "5" -> "3루수"
+        "6" -> "유격수"
+        "7" -> "좌익수"
+        "8" -> "중견수"
+        "9" -> "우익수"
+        else -> ""
+    }
+
+    private fun toRecentForm(games: List<PreviewPreviousGame>?, teamCode: String): List<RecentFormGame> {
+        if (games.isNullOrEmpty() || teamCode.isBlank()) return emptyList()
+        return games.map { g ->
+            val home = g.hCode.equals(teamCode, ignoreCase = true)
+            val date = g.gdate.takeIf { it > 0 }?.toString().orEmpty().let { raw ->
+                if (raw.length == 8) "${raw.substring(0, 4)}-${raw.substring(4, 6)}-${raw.substring(6, 8)}" else raw
+            }
+            RecentFormGame(
+                gameId = g.gameId.orEmpty(),
+                date = date,
+                opponentName = if (home) g.aName.orEmpty() else g.hName.orEmpty(),
+                isHome = home,
+                teamScore = if (home) g.hScore else g.aScore,
+                oppScore = if (home) g.aScore else g.hScore,
+                result = g.result.orEmpty(),
+            )
+        }
     }
 
     private fun extractKeyPlays(texts: List<RelayText>): List<KeyPlay> {
@@ -1024,6 +1111,7 @@ class GiantsRepository private constructor(context: Context) {
             pitcherSo = stats?.kk ?: 0,
             pitcherInn = stats?.inn.orEmpty(),
             isPitcher = isPitcher || base.isPitcher,
+            hotCold = block.hotColdZone.map { it.toDomain() }.ifEmpty { base.hotCold },
         )
     }
 

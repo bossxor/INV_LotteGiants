@@ -208,6 +208,8 @@ data class PlayerDetail(
     val isPitcher: Boolean = false,
     val todayLine: String = "",
     val photoUrl: String = "",
+    /** 네이버 프리뷰 키 타자의 존별 타율 (없으면 빈 목록) */
+    val hotCold: List<HotColdZone> = emptyList(),
 )
 
 @Serializable
@@ -467,7 +469,9 @@ data class GamePreview(
     val seasonMatchup: MatchupRecord = MatchupRecord(),
     val recentMatchups: List<MiniGame> = emptyList(),
     val weather: StadiumWeather? = null,
-    /** 루타 API 고급 기능 자리 (미연결 시 false) */
+    val lotteRecentForm: List<RecentFormGame> = emptyList(),
+    val opponentRecentForm: List<RecentFormGame> = emptyList(),
+    /** 네이버 프리뷰 핫/콜드 존이 있으면 true */
     val hotColdAvailable: Boolean = false,
     val pitchAnalysisAvailable: Boolean = false,
     val winProbAvailable: Boolean = false,
@@ -504,6 +508,7 @@ data class PreviewBatter(
     val vsOpponentAvg: String = "",
     val vsOpponentHits: Int = 0,
     val vsOpponentHr: Int = 0,
+    val hotCold: List<HotColdZone> = emptyList(),
 )
 
 @Serializable
@@ -515,6 +520,27 @@ data class PreviewTeamLine(
     val draw: Int = 0,
     val lose: Int = 0,
     val wra: Double = 0.0,
+)
+
+@Serializable
+data class RecentFormGame(
+    val gameId: String = "",
+    val date: String = "",
+    val opponentName: String = "",
+    val isHome: Boolean = true,
+    val teamScore: Int = 0,
+    val oppScore: Int = 0,
+    /** 승 / 패 / 무 */
+    val result: String = "",
+)
+
+@Serializable
+data class HotColdZone(
+    val zone: Int = 0,
+    val avg: String = "",
+    val heat: Int = 3,
+    /** 해당 존 삼진 비율(%) */
+    val kRate: Double = 0.0,
 )
 
 @Serializable

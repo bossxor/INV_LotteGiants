@@ -256,6 +256,10 @@ data class PreviewData(
     val homeTopPlayer: PreviewPlayerBlock? = null,
     val awayTopPlayer: PreviewPlayerBlock? = null,
     val gameInfo: PreviewGameInfo? = null,
+    val homeTeamLineUp: PreviewTeamLineUp? = null,
+    val awayTeamLineUp: PreviewTeamLineUp? = null,
+    val homeTeamPreviousGames: List<PreviewPreviousGame> = emptyList(),
+    val awayTeamPreviousGames: List<PreviewPreviousGame> = emptyList(),
 )
 
 @Serializable
@@ -271,6 +275,44 @@ data class PreviewPlayerBlock(
     val currentSeasonStats: PreviewSeasonStats? = null,
     val recentFiveGamesStats: PreviewSeasonStats? = null,
     val currentSeasonStatsOnOpponents: PreviewSeasonStats? = null,
+    val hotColdZone: List<HotColdZoneDto> = emptyList(),
+)
+
+@Serializable
+data class HotColdZoneDto(
+    val zone: Int = 0,
+    val hra: String? = null,
+    val hraStep: String? = null,
+    val kk: Double = 0.0,
+)
+
+@Serializable
+data class PreviewTeamLineUp(
+    val fullLineUp: List<PreviewLineupPlayer> = emptyList(),
+)
+
+@Serializable
+data class PreviewLineupPlayer(
+    val playerName: String? = null,
+    val playerCode: String? = null,
+    val position: String? = null,
+    val positionName: String? = null,
+    val backnum: String? = null,
+    val hitType: String? = null,
+    val batsThrows: String? = null,
+)
+
+@Serializable
+data class PreviewPreviousGame(
+    val gameId: String? = null,
+    val result: String? = null,
+    val hScore: Int = 0,
+    val aScore: Int = 0,
+    val aName: String? = null,
+    val hName: String? = null,
+    val aCode: String? = null,
+    val hCode: String? = null,
+    val gdate: Int = 0,
 )
 
 @Serializable
