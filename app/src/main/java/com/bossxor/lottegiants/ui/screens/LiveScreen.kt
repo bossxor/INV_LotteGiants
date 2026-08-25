@@ -134,6 +134,8 @@ fun LiveScreen(
                 }
                 CompactRefresh(secondsUntilRefresh, isRefreshing, onRefresh)
             }
+            Spacer(Modifier.height(10.dp))
+            QuickLinks(onOpenTeamHistory, onOpenEntryBoard, onOpenLeaders)
             Spacer(Modifier.height(12.dp))
 
             val game = snapshot?.lotteGame ?: snapshot?.nextLotteGame
@@ -237,9 +239,6 @@ fun LiveScreen(
                                     weather = weather,
                                     batterLeaders = batterLeaders,
                                     onKeyPlayerClick = onKeyPlayerClick,
-                                    onOpenTeamHistory = onOpenTeamHistory,
-                                    onOpenEntryBoard = onOpenEntryBoard,
-                                    onOpenLeaders = onOpenLeaders,
                                     onRetry = onRefresh,
                                 )
                                 3 -> RelayTab(game, snapshot, onRefresh)
@@ -294,7 +293,6 @@ fun LiveScreen(
                             WeatherLine(it)
                             Spacer(Modifier.height(12.dp))
                         }
-                        QuickLinks(onOpenTeamHistory, onOpenEntryBoard, onOpenLeaders)
                         if (error != null) {
                             Spacer(Modifier.height(8.dp))
                             Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -719,9 +717,6 @@ private fun SummaryTab(
     weather: StadiumWeather? = null,
     batterLeaders: List<com.bossxor.lottegiants.domain.LeaderPlayer> = emptyList(),
     onKeyPlayerClick: (String, String) -> Unit = { _, _ -> },
-    onOpenTeamHistory: () -> Unit = {},
-    onOpenEntryBoard: () -> Unit = {},
-    onOpenLeaders: () -> Unit = {},
     onRetry: () -> Unit = {},
 ) {
     DetailLoadError(g.detailError, onRetry)
@@ -901,7 +896,6 @@ private fun SummaryTab(
         WeatherLine(it)
         Spacer(Modifier.height(12.dp))
     }
-    QuickLinks(onOpenTeamHistory, onOpenEntryBoard, onOpenLeaders)
 }
 
 @Composable
