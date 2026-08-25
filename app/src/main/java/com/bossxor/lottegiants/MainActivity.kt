@@ -68,6 +68,8 @@ import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LeaderPlayer
 import com.bossxor.lottegiants.domain.LineupSlot
 import com.bossxor.lottegiants.domain.LotteTeamCard
+import com.bossxor.lottegiants.domain.LotteGameInfo
+import com.bossxor.lottegiants.domain.focusName
 import com.bossxor.lottegiants.domain.RosterMove
 import com.bossxor.lottegiants.domain.ThemeMode
 import com.bossxor.lottegiants.domain.inningLabel
@@ -130,6 +132,8 @@ class MainActivity : ComponentActivity() {
                 val playerLoading by vm.playerLoading.collectAsState()
                 val favoriteCodes by vm.favoriteCodes.collectAsState()
                 val favoritePlayers by vm.favoritePlayers.collectAsState()
+                val viewingGame by vm.viewingGame.collectAsState()
+                val viewingLoading by vm.viewingLoading.collectAsState()
                 val scope = rememberCoroutineScope()
                 var updateStatus by remember { mutableStateOf<String?>(null) }
                 var autoUpdateRan by remember { mutableStateOf(false) }
@@ -285,7 +289,7 @@ class MainActivity : ComponentActivity() {
                     favoriteCodes = favoriteCodes,
                     favoritePlayers = favoritePlayers,
                     onPlayerClick = { slot ->
-                        vm.loadPlayerDetail(slot, snapshot?.lotteGame?.gameId)
+                        vm.loadPlayerDetail(slot, viewingGame?.gameId ?: snapshot?.lotteGame?.gameId)
                     },
                     onPitcherClick = { p -> vm.loadPitcherDetail(p) },
                     onLeaderPlayerClick = { p -> vm.loadPlayerFromLeader(p) },
@@ -293,6 +297,10 @@ class MainActivity : ComponentActivity() {
                     onRemoveFavorite = vm::removeFavorite,
                     onClearPlayer = vm::clearPlayerDetail,
                     onSelectLiveGame = vm::selectLiveGame,
+                    viewingGame = viewingGame,
+                    viewingLoading = viewingLoading,
+                    onOpenGame = vm::openGame,
+                    onBackToLotte = vm::backToLotte,
                     onExit = { finish() },
                 )
             }
@@ -376,6 +384,10 @@ private fun AppScaffold(
     onRemoveFavorite: (String) -> Unit,
     onClearPlayer: () -> Unit,
     onSelectLiveGame: (String) -> Unit,
+    viewingGame: LotteGameInfo?,
+    viewingLoading: Boolean,
+    onOpenGame: (String) -> Unit,
+    onBackToLotte: () -> Unit,
     onExit: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -405,6 +417,7 @@ private fun AppScaffold(
                 onClearPlayer()
             }
             overlay != Overlay.None -> overlay = Overlay.None
+            viewingGame != null -> onBackToLotte()
             tab != 0 -> tab = 0
             else -> {
                 val now = System.currentTimeMillis()
@@ -531,7 +544,7 @@ private fun AppScaffold(
                             }
                         },
                         onShare = { g ->
-                            val text = "롯데 ${g.lotteScore}:${g.opponentScore} ${g.opponentName} · ${g.inningLabel}\n#사직스코어"
+                            val text = "${g.focusName()} ${g.lotteScore}:${g.opponentScore} ${g.opponentName} · ${g.inningLabel}\n#사직스코어"
                             val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                 type = "text/plain"
                                 putExtra(android.content.Intent.EXTRA_TEXT, text)
@@ -539,6 +552,10 @@ private fun AppScaffold(
                             context.startActivity(android.content.Intent.createChooser(send, "공유"))
                         },
                         onSelectLiveGame = onSelectLiveGame,
+                        viewingGame = viewingGame,
+                        viewingLoading = viewingLoading,
+                        onOpenGame = onOpenGame,
+                        onBackToLotte = onBackToLotte,
                     )
                     1 -> ResultsScreen(
                         selectedDate = selectedDate,
@@ -550,6 +567,11 @@ private fun AppScaffold(
                         onSelectMonth = onSelectMonth,
                         onRefresh = onRefreshDayGames,
                         refreshing = isRefreshing,
+                        onOpenGame = { id ->
+                            tab = 0
+                            overlay = Overlay.None
+                            onOpenGame(id)
+                        },
                     )
                     2 -> StandingsScreen(
                         standings = standings,

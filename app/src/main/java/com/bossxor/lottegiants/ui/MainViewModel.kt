@@ -115,6 +115,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    private val _viewingGame = MutableStateFlow<LotteGameInfo?>(null)
+    val viewingGame: StateFlow<LotteGameInfo?> = _viewingGame.asStateFlow()
+
+    private val _viewingLoading = MutableStateFlow(false)
+    val viewingLoading: StateFlow<Boolean> = _viewingLoading.asStateFlow()
+
+    private var viewingGameId: String? = null
+
     private var pollJob: Job? = null
     private var dayGamesJob: Job? = null
     private var monthJob: Job? = null
@@ -179,6 +187,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun selectLiveGame(gameId: String) {
         if (gameId.isBlank()) return
+        viewingGameId = null
+        _viewingGame.value = null
         viewModelScope.launch {
             repo.store.setPreferredLiveGameId(gameId)
             refreshNow()
@@ -343,8 +353,59 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     syncTodayGamesFromSnapshot(it)
                 }
                 refreshWeatherFromSnapshot(it)
+                refreshViewingGame(it)
             }
             .onFailure { _error.value = it.message }
+    }
+
+    /** 결과·다른 구장에서 경기 상세. 오늘 롯데 경기는 기존 라이브 선택, 그 외는 오버레이. */
+    fun openGame(gameId: String) {
+        if (gameId.isBlank()) return
+        val snap = _snapshot.value
+        if (isTodayLotteGame(gameId, snap)) {
+            selectLiveGame(gameId)
+            return
+        }
+        viewingGameId = gameId
+        viewModelScope.launch {
+            _viewingLoading.value = true
+            try {
+                val fetched = runCatching { repo.fetchGameDetail(gameId) }.getOrNull()
+                if (fetched != null) {
+                    _viewingGame.value = fetched
+                    _error.value = null
+                } else if (_viewingGame.value == null) {
+                    viewingGameId = null
+                    _error.value = "경기를 불러오지 못했습니다."
+                }
+            } finally {
+                _viewingLoading.value = false
+            }
+        }
+    }
+
+    fun backToLotte() {
+        viewingGameId = null
+        _viewingGame.value = null
+        _viewingLoading.value = false
+    }
+
+    private fun isTodayLotteGame(gameId: String, snap: LiveSnapshot?): Boolean {
+        if (snap == null) return false
+        if (snap.lotteGame?.gameId == gameId) return true
+        return snap.todayLotteGames.any { it.gameId == gameId }
+    }
+
+    private suspend fun refreshViewingGame(snap: LiveSnapshot) {
+        val id = viewingGameId ?: return
+        if (isTodayLotteGame(id, snap)) {
+            viewingGameId = null
+            _viewingGame.value = null
+            return
+        }
+        runCatching { repo.fetchGameDetail(id) }.onSuccess { g ->
+            if (g != null) _viewingGame.value = g
+        }
     }
 
     fun selectDate(date: LocalDate) {

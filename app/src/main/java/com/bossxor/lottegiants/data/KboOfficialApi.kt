@@ -3,6 +3,7 @@ package com.bossxor.lottegiants.data
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LotteGameInfo
+import com.bossxor.lottegiants.domain.teamCodeToName
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.cancelDisplayLabel
 import com.bossxor.lottegiants.domain.kboCancelReasonById
@@ -195,6 +196,11 @@ data class KboOfficialGame(
     fun involvesLotte(): Boolean =
         awayId.equals(LOTTE_TEAM_CODE, true) || homeId.equals(LOTTE_TEAM_CODE, true)
 
+    fun involvesTeam(code: String): Boolean {
+        val c = code.trim()
+        return c.isNotBlank() && (awayId.equals(c, true) || homeId.equals(c, true))
+    }
+
     /** 이 경기의 진행 상태를 사람이 읽는 한 줄로 (예: "7회말", "취소 (폭염)") */
     fun statusText(): String = when (status()) {
         GameStatus.BEFORE -> startTime
@@ -246,9 +252,12 @@ data class KboOfficialGame(
             gameDate
         }
 
-    fun toLotteBase(): LotteGameInfo {
-        val isHome = homeId.equals(LOTTE_TEAM_CODE, true)
+    fun toLotteBase(focusTeamCode: String = LOTTE_TEAM_CODE): LotteGameInfo {
+        val focus = focusTeamCode.trim().uppercase().ifBlank { LOTTE_TEAM_CODE }
+        val isHome = homeId.equals(focus, true)
         val oppCode = (if (isHome) awayId else homeId).trim().uppercase()
+        val focusName = (if (isHome) homeName else awayName).trim()
+            .ifBlank { teamCodeToName(focus) }
         val state = status()
         val live = state == GameStatus.LIVE
         val reason = if (state == GameStatus.CANCELED) {
@@ -270,7 +279,7 @@ data class KboOfficialGame(
             opponentCode = oppCode,
             opponentName = (if (isHome) awayName else homeName).trim(),
             opponentLogoUrl = resolveTeamLogoUrl(oppCode, season = seasonId),
-            lotteLogoUrl = resolveTeamLogoUrl(LOTTE_TEAM_CODE, season = seasonId),
+            lotteLogoUrl = resolveTeamLogoUrl(focus, season = seasonId),
             lotteRank = if (isHome) homeRank else awayRank,
             opponentRank = if (isHome) awayRank else homeRank,
             doubleHeaderNo = headerNo,
@@ -302,6 +311,8 @@ data class KboOfficialGame(
             winPitcherName = winPitcher.trim(),
             losePitcherName = losePitcher.trim(),
             savePitcherName = savePitcher.trim(),
+            focusTeamCode = focus,
+            focusTeamName = focusName.ifBlank { "롯데" },
         )
     }
 }

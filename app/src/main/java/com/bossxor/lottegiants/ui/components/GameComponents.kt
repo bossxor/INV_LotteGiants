@@ -251,6 +251,7 @@ fun ScoreBoard(
     oppH: Int,
     lotteE: Int,
     oppE: Int,
+    focusTeamName: String = "롯데",
 ) {
     val innings = maxOf(lotteScores.size, oppScores.size, 9)
     Column(
@@ -274,13 +275,13 @@ fun ScoreBoard(
         Spacer(Modifier.height(6.dp))
         val rows = if (lotteFirst) {
             listOf(
-                Triple("롯데", lotteScores, Triple(lotteR, lotteH, lotteE)) to true,
+                Triple(focusTeamName, lotteScores, Triple(lotteR, lotteH, lotteE)) to true,
                 Triple(opponentName, oppScores, Triple(oppR, oppH, oppE)) to false,
             )
         } else {
             listOf(
                 Triple(opponentName, oppScores, Triple(oppR, oppH, oppE)) to false,
-                Triple("롯데", lotteScores, Triple(lotteR, lotteH, lotteE)) to true,
+                Triple(focusTeamName, lotteScores, Triple(lotteR, lotteH, lotteE)) to true,
             )
         }
         rows.forEachIndexed { idx, (data, highlight) ->

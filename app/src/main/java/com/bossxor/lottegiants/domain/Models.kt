@@ -343,6 +343,20 @@ fun teamNameToCode(team: String): String = when {
     else -> ""
 }
 
+fun teamCodeToName(code: String): String = when (code.trim().uppercase()) {
+    "LT" -> "롯데"
+    "SS" -> "삼성"
+    "HT" -> "KIA"
+    "OB" -> "두산"
+    "LG" -> "LG"
+    "SK" -> "SSG"
+    "HH" -> "한화"
+    "WO" -> "키움"
+    "NC" -> "NC"
+    "KT" -> "KT"
+    else -> ""
+}
+
 @Serializable
 data class RankPoint(val date: String, val rank: Int)
 
@@ -451,7 +465,19 @@ data class LotteGameInfo(
     val pitchLocations: List<PitchLocation> = emptyList(),
     /** 라인업·중계·기록 보강 실패 시 사용자에게 보여줄 메시지 */
     val detailError: String = "",
+    /**
+     * 이 화면에서 기준이 되는 팀. 위젯·알림의 오늘 경기는 항상 롯데.
+     * 다른 팀 경기를 볼 때만 홈팀 코드가 들어간다.
+     */
+    val focusTeamCode: String = LOTTE_TEAM_CODE,
+    val focusTeamName: String = "롯데",
 )
+
+fun LotteGameInfo.focusName(): String =
+    focusTeamName.ifBlank { teamCodeToName(focusTeamCode) }.ifBlank { "롯데" }
+
+fun LotteGameInfo.isFocusLotte(): Boolean =
+    focusTeamCode.isBlank() || focusTeamCode.equals(LOTTE_TEAM_CODE, ignoreCase = true)
 
 /** 루타식 프리뷰 묶음 */
 @Serializable

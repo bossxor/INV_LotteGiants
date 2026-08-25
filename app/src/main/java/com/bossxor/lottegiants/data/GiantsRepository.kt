@@ -11,6 +11,7 @@ import com.bossxor.lottegiants.domain.LeaderPlayer
 import com.bossxor.lottegiants.domain.LineupSlot
 import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.LotteGameInfo
+import com.bossxor.lottegiants.domain.focusName
 import com.bossxor.lottegiants.domain.LotteTeamCard
 import com.bossxor.lottegiants.domain.MatchupRecord
 import com.bossxor.lottegiants.domain.MiniGame
@@ -32,6 +33,7 @@ import com.bossxor.lottegiants.domain.isPitcherPosition
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.runnerOccupied
 import com.bossxor.lottegiants.domain.resolveStadiumCoord
+import com.bossxor.lottegiants.domain.teamCodeToName
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.doubleHeaderNoFromGameId
 import com.bossxor.lottegiants.domain.KBO_ZONE
@@ -264,6 +266,69 @@ class GiantsRepository private constructor(context: Context) {
         return snapshot
     }
 
+    /**
+     * 특정 경기 상세. 위젯·알림 스냅샷은 건드리지 않는다.
+     * 롯데가 나오면 롯데 기준, 아니면 홈팀 기준으로 같은 화면 모델을 채운다.
+     */
+    suspend fun fetchGameDetail(gameId: String): LotteGameInfo? {
+        if (gameId.isBlank()) return null
+        val date = parseNaverGameIdDate(gameId) ?: kboToday()
+        val dayGames = fetchKboGames(date)
+        val kbo = dayGames.firstOrNull { it.naverGameId() == gameId || it.gameId == gameId }
+        if (kbo != null) {
+            val focus = if (kbo.involvesLotte()) {
+                LOTTE_TEAM_CODE
+            } else {
+                kbo.homeId.trim().uppercase()
+            }
+            var info = kbo.toLotteBase(focus)
+            info = enrichFromKboDetail(info, kbo)
+            val wantRelay = info.status == GameStatus.LIVE ||
+                info.status == GameStatus.ENDED ||
+                info.status == GameStatus.BEFORE
+            if (wantRelay) {
+                val relayResult = runCatching { fetchFullRelay(kbo.naverGameId()) }
+                val relay = relayResult.getOrNull()
+                if (relay != null) {
+                    info = mergeRelay(info, relay)
+                } else if (
+                    relayResult.isFailure &&
+                    info.lotteLineup.isEmpty() &&
+                    info.recentTexts.isEmpty()
+                ) {
+                    info = info.copy(detailError = "상세 기록을 불러오지 못했습니다.")
+                }
+            }
+            val season = fetchKboGamesCached(date.minusDays(45), date.plusDays(1))
+            return enrichGameSummary(info, season, kbo)
+        }
+        val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val dto = runCatching {
+            api.getGames(fromDate = dateStr, toDate = dateStr)
+                .result?.games.orEmpty()
+                .firstOrNull { it.gameId == gameId }
+        }.getOrNull() ?: return null
+        val focus = if (dto.involvesLotte()) {
+            LOTTE_TEAM_CODE
+        } else {
+            dto.homeTeamCode.trim().uppercase().ifBlank { LOTTE_TEAM_CODE }
+        }
+        var info = dto.toLotteBase(focusTeamCode = focus)
+        runCatching { fetchFullRelay(gameId) }.getOrNull()?.let { relay ->
+            info = mergeRelay(info, relay)
+        }
+        val season = fetchKboGamesCached(date.minusDays(45), date.plusDays(1))
+        return enrichGameSummary(info, season, null)
+    }
+
+    private fun parseNaverGameIdDate(gameId: String): LocalDate? {
+        val ymd = gameId.take(8)
+        if (ymd.length < 8 || ymd.any { !it.isDigit() }) return null
+        return runCatching {
+            LocalDate.parse(ymd, DateTimeFormatter.BASIC_ISO_DATE)
+        }.getOrNull()
+    }
+
     private suspend fun tryConnectRuta(): Boolean = runCatching {
         val deviceId = UUID.nameUUIDFromBytes(
             (android.provider.Settings.Secure.getString(
@@ -452,12 +517,14 @@ class GiantsRepository private constructor(context: Context) {
         val lotteTop = if (game.isHome) dto?.homeTopPlayer else dto?.awayTopPlayer
         val oppTop = if (game.isHome) dto?.awayTopPlayer else dto?.homeTopPlayer
 
-        val lotteSt = standings.firstOrNull { it.teamId == LOTTE_TEAM_CODE }
+        val focus = game.focusTeamCode.ifBlank { LOTTE_TEAM_CODE }
+        val focusName = game.focusName()
+        val lotteSt = standings.firstOrNull { it.teamId.equals(focus, true) }
         val oppSt = standings.firstOrNull { it.teamId == game.opponentCode }
 
         val matchups = seasonGames
             .filter {
-                it.involvesLotte() &&
+                it.involvesTeam(focus) &&
                     (it.homeId.equals(game.opponentCode, true) || it.awayId.equals(game.opponentCode, true)) &&
                     it.status() == GameStatus.ENDED
             }
@@ -466,7 +533,7 @@ class GiantsRepository private constructor(context: Context) {
         var d = 0
         var l = 0
         matchups.forEach { m ->
-            val lotteHome = m.homeId.equals(LOTTE_TEAM_CODE, true)
+            val lotteHome = m.homeId.equals(focus, true)
             val ls = if (lotteHome) m.homeScore else m.awayScore
             val os = if (lotteHome) m.awayScore else m.homeScore
             when {
@@ -489,8 +556,8 @@ class GiantsRepository private constructor(context: Context) {
             lotteKeyBatter = toPreviewBatter(lotteTop),
             opponentKeyBatter = toPreviewBatter(oppTop),
             lotteStanding = PreviewTeamLine(
-                teamCode = LOTTE_TEAM_CODE,
-                teamName = "롯데",
+                teamCode = focus,
+                teamName = focusName,
                 rank = lotteRank,
                 win = lotteSt?.win ?: 0,
                 draw = lotteSt?.draw ?: 0,
@@ -520,7 +587,7 @@ class GiantsRepository private constructor(context: Context) {
             recentMatchups = matchups.take(5).map { it.toMiniGame() },
             lotteRecentForm = toRecentForm(
                 if (game.isHome) dto?.homeTeamPreviousGames else dto?.awayTeamPreviousGames,
-                LOTTE_TEAM_CODE,
+                focus,
             ),
             opponentRecentForm = toRecentForm(
                 if (game.isHome) dto?.awayTeamPreviousGames else dto?.homeTeamPreviousGames,
@@ -1245,9 +1312,15 @@ class GiantsRepository private constructor(context: Context) {
         )
     }
 
-    private fun GameDto.toLotteBase(kboCancelLabel: String? = null): LotteGameInfo {
-        val isHome = homeTeamCode == LOTTE_TEAM_CODE
+    private fun GameDto.toLotteBase(
+        kboCancelLabel: String? = null,
+        focusTeamCode: String = LOTTE_TEAM_CODE,
+    ): LotteGameInfo {
+        val focus = focusTeamCode.trim().uppercase().ifBlank { LOTTE_TEAM_CODE }
+        val isHome = homeTeamCode.equals(focus, true)
         val oppCode = if (isHome) awayTeamCode else homeTeamCode
+        val focusName = (if (isHome) homeTeamName else awayTeamName)
+            .ifBlank { teamCodeToName(focus) }
         val cancelReason = if (status() == GameStatus.CANCELED) {
             resolveCancelReason(kboCancelLabel?.takeIf { it.isNotBlank() } ?: statusInfo).orEmpty()
         } else {
@@ -1262,6 +1335,7 @@ class GiantsRepository private constructor(context: Context) {
             opponentCode = oppCode,
             opponentName = if (isHome) awayTeamName else homeTeamName,
             opponentLogoUrl = teamLogoUrl(oppCode),
+            lotteLogoUrl = teamLogoUrl(focus),
             lotteScore = if (isHome) homeTeamScore else awayTeamScore,
             opponentScore = if (isHome) awayTeamScore else homeTeamScore,
             status = status(),
@@ -1277,6 +1351,8 @@ class GiantsRepository private constructor(context: Context) {
             winPitcherName = winPitcherName.orEmpty(),
             losePitcherName = losePitcherName.orEmpty(),
             doubleHeaderNo = doubleHeaderNoFromGameId(gameId),
+            focusTeamCode = focus,
+            focusTeamName = focusName.ifBlank { "롯데" },
         )
     }
 
@@ -1432,8 +1508,7 @@ class GiantsRepository private constructor(context: Context) {
                     val yRaw = pts.crossPlateY
                     val yFromPhysics = estimatePlateHeightFt(pts)
                     // 네이버 일부 경기는 crossPlateY가 고정값(0.7083)으로 깨져 있음 → 궤적 추정값 사용
-                    val yBroken = yRaw == null || yRaw < 1.0 || yRaw > 5.0 ||
-                        (yRaw in 0.70..0.72)
+                    val yBroken = yRaw == null || yRaw < 1.0 || yRaw > 5.0
                     val y = when {
                         !yBroken && yRaw != null -> yRaw.toFloat()
                         yFromPhysics != null -> yFromPhysics

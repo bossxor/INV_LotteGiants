@@ -99,6 +99,7 @@ fun ResultsScreen(
     onSelectMonth: (YearMonth) -> Unit,
     onRefresh: () -> Unit = {},
     refreshing: Boolean = false,
+    onOpenGame: (String) -> Unit = {},
 ) {
     var mode by remember { mutableIntStateOf(0) } // 0 list, 1 calendar
     val today = remember { kboToday() }
@@ -158,6 +159,12 @@ fun ResultsScreen(
                     "결과",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Black,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "카드를 누르면 상세",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
                 )
                 ModeChip("리스트", mode == 0) { mode = 0 }
@@ -274,7 +281,7 @@ fun ResultsScreen(
                                 if (lotteGames.size >= 2 && dhIndex >= 0) {
                                     Text("${dhIndex + 1}경기", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                 }
-                                ResultGameCard(g)
+                                ResultGameCard(g, onOpen = { onOpenGame(g.gameId) })
                             }
                             item { Spacer(Modifier.height(16.dp)) }
                         }
@@ -293,6 +300,7 @@ fun ResultsScreen(
                     onRetry = onRefresh,
                     onSwipeDay = { delta -> withSwipeLock { shiftDay(delta) } },
                     swipeEnabled = !swipeLock,
+                    onOpenGame = onOpenGame,
                 )
             }
         }
@@ -419,6 +427,7 @@ private fun CalendarMonthView(
     onRetry: () -> Unit,
     onSwipeDay: (Long) -> Unit = {},
     swipeEnabled: Boolean = true,
+    onOpenGame: (String) -> Unit = {},
 ) {
     val byDate = remember(monthGames) {
         monthGames.groupBy { it.gameDate.takeIf { d -> d.isNotBlank() } ?: "" }
@@ -527,7 +536,7 @@ private fun CalendarMonthView(
                 item { EmptyRetry(message = "경기가 없습니다.", onRetry = onRetry) }
             } else {
                 items(games, key = { it.gameId }) { g ->
-                    ResultGameCard(g)
+                    ResultGameCard(g, onOpen = { onOpenGame(g.gameId) })
                 }
             }
             item { Spacer(Modifier.height(16.dp)) }
@@ -654,13 +663,18 @@ private fun RowScope.CalendarDayCell(
 }
 
 @Composable
-private fun ResultGameCard(g: MiniGame) {
+private fun ResultGameCard(g: MiniGame, onOpen: () -> Unit = {}) {
     val lotte = g.isLotteGame()
     val won = g.lotteResult()
     val lotteHome = g.isLotteHome()
     val canceled = g.isCanceledGame()
     SectionCard {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onOpen),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TeamLogo(g.awayLogoUrl, size = 22)
