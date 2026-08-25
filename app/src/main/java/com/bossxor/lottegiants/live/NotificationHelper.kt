@@ -36,7 +36,8 @@ object NotificationHelper {
     const val CHANNEL_EXTRA = "event_extra"
     const val CHANNEL_GAME = "event_game"
     const val CHANNEL_PREGAME = "event_pregame"
-    const val CHANNEL_LINEUP = "event_lineup"
+    // v2: 기존 채널은 중요도가 낮아 헤드업으로 뜨지 않았다. 채널 중요도는 생성 후 코드로 못 바꾼다.
+    const val CHANNEL_LINEUP = "event_lineup_v2"
     const val CHANNEL_CANCEL = "event_cancel"
     const val CHANNEL_FAVORITE = "event_favorite"
     const val CHANNEL_ROSTER = "event_roster"
@@ -66,10 +67,12 @@ object NotificationHelper {
         ch(CHANNEL_EXTRA, "연장", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_GAME, "경기 시작/종료", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_PREGAME, "경기 30분 전")
-        ch(CHANNEL_LINEUP, "선발 라인업")
+        ch(CHANNEL_LINEUP, "선발 라인업", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_CANCEL, "경기 취소", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_FAVORITE, "즐겨찾기 선수", NotificationManager.IMPORTANCE_DEFAULT)
         ch(CHANNEL_ROSTER, "엔트리 등말소", NotificationManager.IMPORTANCE_HIGH)
+
+        runCatching { nm.deleteNotificationChannel("event_lineup") }
     }
 
     fun buildLiveNotification(

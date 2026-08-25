@@ -6,8 +6,22 @@ import com.bossxor.lottegiants.data.SnapshotStore
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.PitcherLine
+import com.bossxor.lottegiants.domain.RosterMove
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.inningLabel
+import com.bossxor.lottegiants.domain.kboToday
+
+private const val LINEUP_STAGE_FLAG = "flag"
+private const val LINEUP_STAGE_FULL = "full"
+
+private const val ID_LINEUP_FLAG = 2010
+private const val ID_LINEUP_FULL = 2011
+private const val ID_ROSTER_DIGEST = 5_000_000
+private const val ID_ROSTER_BASE = 5_100_000
+private const val ID_FAVORITE_ROSTER_BASE = 5_200_000
+
+/** 등말소 중복 방지 키를 보관할 기간 */
+private const val ROSTER_KEY_KEEP_DAYS = 60L
 
 /**
  * 이전 스냅샷과 비교해 이벤트 알림을 발생시킨다.
@@ -22,7 +36,7 @@ class EventDetector(private val store: SnapshotStore) {
     private var lastTop: Boolean? = null
     private var lastStatus: GameStatus? = null
     private var lastBasesKey: String = ""
-    private var lineupAnnouncedFor: String = ""
+    private var lineupNotifiedState: String = ""
     private var eighthNotifiedFor: String = ""
     private var extraNotifiedFor: String = ""
     private var lastFavoriteBatterCode: String = ""
@@ -41,12 +55,13 @@ class EventDetector(private val store: SnapshotStore) {
         if (!initialized) {
             seed(game)
             initialized = true
-            if (game.lotteLineup.isNotEmpty()) lineupAnnouncedFor = game.gameId
             // 스케줄러는 매 실행 새 detector → 이미 끝난/취소된 경기도 DataStore 중복 방지 하에 1회 알림
             if (game.status == GameStatus.CANCELED) {
                 notifyCanceled(context, game)
             } else if (game.status == GameStatus.ENDED) {
                 notifyEnded(context, game)
+            } else {
+                maybeNotifyLineup(context, game)
             }
             return
         }
@@ -65,22 +80,7 @@ class EventDetector(private val store: SnapshotStore) {
         }
         lastStatus = game.status
 
-        if (game.lotteLineup.size >= 9 && lineupAnnouncedFor != game.gameId) {
-            val lineup = game.lotteLineup.joinToString(" ") { "${it.batOrder}${it.name}" }
-            maybeNotify(
-                context, NotificationType.LINEUP, 2010,
-                "선발 라인업", "투수 ${game.lotteStartingPitcher.ifBlank { "미정" }} · $lineup"
-            )
-            lineupAnnouncedFor = game.gameId
-        } else if (game.lineupAnnounced && game.lotteLineup.isEmpty() && lineupAnnouncedFor != game.gameId) {
-            maybeNotify(
-                context, NotificationType.LINEUP, 2010,
-                "라인업 발표",
-                "선발 ${game.lotteStartingPitcher.ifBlank { "미정" }}" +
-                    if (game.opponentStartingPitcher.isNotBlank()) " vs ${game.opponentStartingPitcher}" else "",
-            )
-            lineupAnnouncedFor = game.gameId
-        }
+        maybeNotifyLineup(context, game)
 
         if (game.status != GameStatus.LIVE && game.status != GameStatus.ENDED) {
             seedScores(game)
@@ -301,9 +301,64 @@ class EventDetector(private val store: SnapshotStore) {
         return codes
     }
 
+    /**
+     * 라인업은 경기 1~2시간 전에 올라오는데 그때는 라이브 폴링 서비스가 아직 없다.
+     * 15분 워커가 매번 새 detector를 만들어도 한 번만 알리도록 단계를 DataStore에 남긴다.
+     * 발표 여부만 확인된 단계(flag)에서 알린 뒤 타순이 채워지면(full) 한 번 더 알린다.
+     */
+    private suspend fun maybeNotifyLineup(context: Context, game: LotteGameInfo) {
+        if (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED) return
+        val today = kboToday().toString()
+        if (game.gameDate.isNotBlank() && game.gameDate != today) return
+
+        val order = game.lotteLineup
+            .filterNot { it.isSubstitute }
+            .filter { it.batOrder in 1..9 && it.name.isNotBlank() }
+            .distinctBy { it.batOrder }
+        val hasOrder = order.size >= 9
+        if (!hasOrder && !game.lineupAnnounced) return
+
+        val fullKey = "${game.gameId}:$LINEUP_STAGE_FULL"
+        val key = if (hasOrder) fullKey else "${game.gameId}:$LINEUP_STAGE_FLAG"
+        if (lineupNotifiedState == key || lineupNotifiedState == fullKey) return
+        val stored = store.notifiedLineupState()
+        if (stored == key || stored == fullKey) {
+            lineupNotifiedState = stored
+            return
+        }
+
+        val matchup = buildString {
+            append("vs ${game.opponentName}")
+            if (game.startTime.isNotBlank()) append(" · ${game.startTime}")
+            if (game.stadium.isNotBlank()) append(" · ${game.stadium}")
+        }
+        val pitchers = buildString {
+            append("선발 ${game.lotteStartingPitcher.ifBlank { "미정" }}")
+            if (game.opponentStartingPitcher.isNotBlank()) {
+                append(" vs ${game.opponentStartingPitcher}")
+            }
+        }
+        if (hasOrder) {
+            val lines = order.sortedBy { it.batOrder }.joinToString("\n") {
+                "${it.batOrder}. ${it.name}" + if (it.position.isNotBlank()) " (${it.position})" else ""
+            }
+            maybeNotify(
+                context, NotificationType.LINEUP, ID_LINEUP_FULL,
+                "선발 라인업 등록", "$matchup\n$pitchers\n$lines",
+            )
+        } else {
+            maybeNotify(
+                context, NotificationType.LINEUP, ID_LINEUP_FLAG,
+                "라인업 발표", "$matchup\n$pitchers",
+            )
+        }
+        lineupNotifiedState = key
+        store.setNotifiedLineupState(key)
+    }
+
     private suspend fun notifyEnded(context: Context, game: LotteGameInfo) {
         if (store.notifiedEndGameId() == game.gameId) return
-        val today = com.bossxor.lottegiants.domain.kboToday().toString()
+        val today = kboToday().toString()
         if (game.gameDate.isNotBlank() && game.gameDate != today) return
         val result = when {
             game.lotteScore > game.opponentScore -> "롯데 승리!"
@@ -334,43 +389,88 @@ class EventDetector(private val store: SnapshotStore) {
         store.setNotifiedCancelGameId(game.gameId)
     }
 
-    suspend fun processRosterMoves(context: Context, moves: List<com.bossxor.lottegiants.domain.RosterMove>) {
+    /**
+     * 등말소 공시 알림. 새 공시만 골라 알리고, 이미 알린 키는 DataStore에 남겨 중복을 막는다.
+     * 여러 명이 한꺼번에 공시되면 알림이 쏟아지지 않게 한 건으로 묶는다.
+     */
+    suspend fun processRosterMoves(context: Context, moves: List<RosterMove>) {
         if (moves.isEmpty()) return
-        fun keyOf(m: com.bossxor.lottegiants.domain.RosterMove) =
-            "${m.moveDate}:${m.playerCode}:${m.moveType}:${m.playerName}"
         val stored = store.notifiedRosterKeys().toMutableSet()
         if (stored.isEmpty()) {
-            store.setNotifiedRosterKeys(moves.map(::keyOf).toSet())
+            // 설치 직후엔 과거 공시가 한꺼번에 뜨지 않게 기준선만 저장한다.
+            store.setNotifiedRosterKeys(pruneRosterKeys(moves.map(::rosterKeyOf).toSet()))
             return
         }
-        val from = java.time.LocalDate.now().minusDays(1).toString()
-        val favorites = store.favoritePlayers()
-        val byCode = favorites.associateBy { it.code }
-        val byName = favorites.filter { it.name.isNotBlank() }.associateBy { it.name }
+
+        val cutoff = kboToday().minusDays(1).toString()
+        val fresh = mutableListOf<RosterMove>()
         var changed = false
         for (m in moves) {
-            val key = keyOf(m)
-            if (key in stored) continue
-            stored.add(key)
+            if (!stored.add(rosterKeyOf(m))) continue
             changed = true
-            if (m.moveDate < from) continue
-            val label = if (m.isRegister) "등록" else "말소"
-            val name = m.playerName
-            val fav = m.playerCode.takeIf { it.isNotBlank() }?.let { byCode[it] }
-                ?: byName[name]
-            if (fav != null) {
-                maybeNotify(
-                    context, NotificationType.FAVORITE_ROSTER, 2800 + (key.hashCode() and 0xFF),
-                    "즐겨찾기 등말소", "${fav.name.ifBlank { name }} $label · ${m.moveDate}",
-                )
-            } else {
-                maybeNotify(
-                    context, NotificationType.ROSTER, 2820 + (key.hashCode() and 0xFF),
-                    "엔트리 $label", "$name $label · ${m.moveDate}",
-                )
-            }
+            if (m.moveDate >= cutoff) fresh.add(m)
         }
-        if (changed) store.setNotifiedRosterKeys(stored)
+        if (changed) store.setNotifiedRosterKeys(pruneRosterKeys(stored))
+        if (fresh.isEmpty()) return
+
+        val favorites = store.favoritePlayers()
+        val byCode = favorites.filter { it.code.isNotBlank() }.associateBy { it.code }
+        val byName = favorites.filter { it.name.isNotBlank() }.associateBy { it.name }
+        val others = mutableListOf<RosterMove>()
+        for (m in fresh) {
+            val fav = m.playerCode.takeIf { it.isNotBlank() }?.let { byCode[it] } ?: byName[m.playerName]
+            if (fav == null) {
+                others.add(m)
+                continue
+            }
+            val label = moveLabel(m)
+            maybeNotify(
+                context, NotificationType.FAVORITE_ROSTER,
+                ID_FAVORITE_ROSTER_BASE + (rosterKeyOf(m).hashCode() and 0xFFFF),
+                "즐겨찾기 $label",
+                "${fav.name.ifBlank { m.playerName }} $label · ${m.moveDate}",
+            )
+        }
+        if (others.isEmpty()) return
+
+        if (others.size == 1) {
+            val m = others.first()
+            val label = moveLabel(m)
+            maybeNotify(
+                context, NotificationType.ROSTER,
+                ID_ROSTER_BASE + (rosterKeyOf(m).hashCode() and 0xFFFF),
+                "엔트리 $label", "${m.playerName} $label · ${m.moveDate}",
+            )
+            return
+        }
+        val body = others.groupBy { it.moveDate }
+            .entries
+            .sortedByDescending { it.key }
+            .joinToString("\n") { (date, list) ->
+                val registered = list.filter { it.isRegister }.map { it.playerName }
+                val removed = list.filterNot { it.isRegister }.map { it.playerName }
+                buildString {
+                    append(date)
+                    if (registered.isNotEmpty()) append("\n등록  ${registered.joinToString(" · ")}")
+                    if (removed.isNotEmpty()) append("\n말소  ${removed.joinToString(" · ")}")
+                }
+            }
+        maybeNotify(
+            context, NotificationType.ROSTER, ID_ROSTER_DIGEST,
+            "엔트리 등말소 ${others.size}건", body,
+        )
+    }
+
+    private fun rosterKeyOf(m: RosterMove) =
+        "${m.moveDate}:${m.playerCode}:${m.moveType}:${m.playerName}"
+
+    private fun moveLabel(m: RosterMove) = if (m.isRegister) "등록" else "말소"
+
+    /** 시즌 내내 키가 쌓이지 않게 최근 공시만 남긴다. */
+    private fun pruneRosterKeys(keys: Set<String>): Set<String> {
+        val cutoff = kboToday().minusDays(ROSTER_KEY_KEEP_DAYS).toString()
+        val kept = keys.filterTo(mutableSetOf()) { it.substringBefore(':') >= cutoff }
+        return if (kept.isEmpty()) keys else kept
     }
 
     private fun resetInMemory() {
@@ -382,7 +482,7 @@ class EventDetector(private val store: SnapshotStore) {
         lastTop = null
         lastStatus = null
         lastBasesKey = ""
-        lineupAnnouncedFor = ""
+        lineupNotifiedState = ""
         eighthNotifiedFor = ""
         extraNotifiedFor = ""
         lastFavoriteBatterCode = ""

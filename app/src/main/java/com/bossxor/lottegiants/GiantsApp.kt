@@ -29,7 +29,12 @@ class GiantsApp : Application(), ImageLoaderFactory {
                 val repo = GiantsRepository.get(this@GiantsApp)
                 val snap = repo.refreshSnapshot()
                 WidgetUpdater.updateAll(this@GiantsApp)
-                EventDetector(repo.store).process(this@GiantsApp, snap.lotteGame)
+                val detector = EventDetector(repo.store)
+                detector.process(this@GiantsApp, snap.lotteGame)
+                // 워커가 도는 15분을 기다리지 않고 앱을 열자마자 새 공시를 알린다
+                runCatching {
+                    detector.processRosterMoves(this@GiantsApp, repo.fetchRecentRosterMoves(3))
+                }
                 if (snap.lotteGame?.status == GameStatus.LIVE) {
                     LiveScoreService.start(this@GiantsApp)
                 }
