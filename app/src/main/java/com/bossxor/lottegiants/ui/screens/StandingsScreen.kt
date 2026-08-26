@@ -1,6 +1,5 @@
 package com.bossxor.lottegiants.ui.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -237,25 +236,16 @@ fun StandingsScreen(
 @Composable
 private fun SectionHeader(title: String, subtitle: String) {
     Column(Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .padding(end = 8.dp)
-                    .width(3.dp)
-                    .height(12.dp)
-                    .background(LotteRed, RoundedCornerShape(2.dp)),
-            )
-            Text(
-                title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onBackground,
-            )
-        }
+        Text(
+            title.uppercase(),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         Text(
             subtitle,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 11.dp, top = 2.dp),
+            modifier = Modifier.padding(top = 2.dp),
         )
     }
 }
@@ -430,21 +420,13 @@ private fun StandingRow(
     compact: Boolean = false,
 ) {
     val gb = gamesBehindVsBase(t, base)
-    val accent = MaterialTheme.colorScheme.primary
-
-    val border = BorderStroke(
-        0.5.dp,
-        if (isBase) accent.copy(alpha = 0.4f)
-        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
-    )
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(if (compact) 14.dp else 18.dp),
-        color = if (isBase) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-        border = border,
+        shape = RoundedCornerShape(if (compact) 12.dp else 14.dp),
+        color = if (isBase) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
     ) {
@@ -454,7 +436,7 @@ private fun StandingRow(
                 .padding(horizontal = 10.dp, vertical = if (compact) 8.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val textColor = if (isBase) accent else MaterialTheme.colorScheme.onSurface
+            val textColor = if (isLotte) LotteRed else MaterialTheme.colorScheme.onSurface
             val weight = when {
                 isBase || isLotte -> FontWeight.Bold
                 else -> FontWeight.Medium

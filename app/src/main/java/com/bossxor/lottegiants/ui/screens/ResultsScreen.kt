@@ -82,7 +82,6 @@ import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.LoseRed
 import com.bossxor.lottegiants.ui.WinGreen
 import com.bossxor.lottegiants.ui.components.ScreenTitle
-import com.bossxor.lottegiants.ui.components.SectionCard
 import com.bossxor.lottegiants.ui.components.TeamLogo
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -167,7 +166,7 @@ fun ResultsScreen(
             ) {
                 ScreenTitle(
                     title = "결과",
-                    subtitle = "카드를 누르면 상세",
+                    subtitle = "경기를 누르면 상세",
                     modifier = Modifier.weight(1f),
                 )
                 ModeChip("리스트", mode == 0) { mode = 0 }
@@ -426,18 +425,14 @@ fun EmptyRetry(message: String, onRetry: (() -> Unit)? = null) {
 
 @Composable
 private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) LotteRed else MaterialTheme.colorScheme.surfaceVariant
-    val fg = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
     Text(
         label,
         modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(bg)
             .clickable(onClick = onClick)
-            .padding(horizontal = 13.dp, vertical = 7.dp),
-        color = fg,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 12.sp,
+            .padding(horizontal = 8.dp, vertical = 7.dp),
+        color = if (selected) LotteRed else MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+        fontSize = 13.sp,
     )
 }
 
@@ -449,12 +444,12 @@ private fun DateChip(
     onClick: () -> Unit,
 ) {
     val targetBg = when {
-        selected -> LotteRed
-        isToday -> MaterialTheme.colorScheme.primaryContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant
+        selected -> MaterialTheme.colorScheme.onBackground
+        isToday -> MaterialTheme.colorScheme.surface
+        else -> Color.Transparent
     }
     val targetFg = when {
-        selected -> Color.White
+        selected -> MaterialTheme.colorScheme.background
         else -> MaterialTheme.colorScheme.onSurface
     }
     val bg by animateColorAsState(targetBg, animationSpec = tween(180), label = "date_chip_bg")
@@ -747,13 +742,13 @@ private fun ResultGameCard(
     val teamHome = g.isTeamHome(focusTeamCode)
     val focusName = teamCodeToName(focusTeamCode).ifBlank { "롯데" }
     val canceled = g.isCanceledGame()
-    SectionCard {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onOpen),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TeamLogo(g.awayLogoUrl, size = 22)
@@ -829,7 +824,7 @@ private fun ResultGameCard(
             if (!canceled && g.status != GameStatus.BEFORE) {
                 Text(
                     "${g.awayScore} : ${g.homeScore}",
-                    fontSize = 20.sp,
+                    fontSize = 26.sp,
                     fontWeight = FontWeight.Black,
                     color = when {
                         won == true -> WinGreen
@@ -838,7 +833,6 @@ private fun ResultGameCard(
                     },
                 )
             }
-        }
     }
 }
 

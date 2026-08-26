@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -36,6 +37,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -52,7 +54,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -692,50 +693,58 @@ private fun CompactBottomBar(selectedTab: Int, onSelectTab: (Int) -> Unit) {
         BottomTab("순위", Icons.Default.Star),
         BottomTab("설정", Icons.Default.Settings),
     )
-    Column(
+    Box(
         Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
-            .windowInsetsPadding(WindowInsets.navigationBars),
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = 18.dp, vertical = 10.dp),
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(0.5.dp)
-                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        )
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = 16.dp,
+            tonalElevation = 0.dp,
         ) {
-            tabs.forEachIndexed { index, item ->
-                val selected = selectedTab == index
-                val tint = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(if (selected) LotteRed else Color.Transparent)
-                        .clickable { onSelectTab(index) }
-                        .padding(vertical = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Icon(
-                        item.icon,
-                        contentDescription = item.label,
-                        modifier = Modifier.size(20.dp),
-                        tint = tint,
-                    )
-                    Spacer(Modifier.height(3.dp))
-                    Text(
-                        item.label,
-                        fontSize = 10.sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                        color = tint,
-                    )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                tabs.forEachIndexed { index, item ->
+                    val selected = selectedTab == index
+                    val tint = if (selected) LotteRed else MaterialTheme.colorScheme.onSurfaceVariant
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .clickable { onSelectTab(index) }
+                            .padding(vertical = 2.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(
+                            item.icon,
+                            contentDescription = item.label,
+                            modifier = Modifier.size(20.dp),
+                            tint = tint,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        if (selected) {
+                            Box(
+                                Modifier
+                                    .size(4.dp)
+                                    .clip(CircleShape)
+                                    .background(LotteRed),
+                            )
+                        } else {
+                            Text(
+                                item.label,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = tint,
+                            )
+                        }
+                    }
                 }
             }
         }

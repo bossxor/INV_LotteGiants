@@ -479,18 +479,14 @@ fun SettingsScreen(
 
 @Composable
 private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) LotteRed else MaterialTheme.colorScheme.surfaceVariant
-    val fg = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
     Text(
         label,
         modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(bg)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-        color = fg,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 12.sp,
+            .padding(horizontal = 8.dp, vertical = 7.dp),
+        color = if (selected) LotteRed else MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+        fontSize = 13.sp,
     )
 }
 

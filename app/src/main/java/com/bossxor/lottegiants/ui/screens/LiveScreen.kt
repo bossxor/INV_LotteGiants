@@ -79,7 +79,6 @@ import com.bossxor.lottegiants.ui.components.ScoreBoard
 import com.bossxor.lottegiants.ui.components.SectionCard
 import com.bossxor.lottegiants.ui.components.SectionHeader
 import com.bossxor.lottegiants.ui.components.PlayerAvatar
-import com.bossxor.lottegiants.ui.components.ScreenTitle
 import com.bossxor.lottegiants.ui.components.TeamLogo
 import com.bossxor.lottegiants.ui.heroGradient
 
@@ -138,48 +137,53 @@ fun LiveScreen(
         onRefresh = onRefresh,
         modifier = Modifier.fillMaxSize(),
     ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp)
-                .padding(top = 16.dp),
-        ) {
+        Column(Modifier.fillMaxSize()) {
             val game = viewingGame ?: snapshot?.lotteGame ?: snapshot?.nextLotteGame
             val viewingOther = viewingGame != null
             val viewingOtherTeam = viewingOther && game?.isFocusLotte() == false
-            val headerLogo = when {
-                viewingOther && game != null ->
-                    game.lotteLogoUrl.ifBlank { if (game.isFocusLotte()) LOTTE_LOGO_URL else "" }
-                else -> LOTTE_LOGO_URL
-            }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TeamLogo(
-                    headerLogo,
-                    size = 36,
-                    modifier = if (viewingOther) {
-                        Modifier.clickable(onClick = onBackToLotte)
-                    } else {
-                        Modifier
-                    },
-                )
-                Spacer(Modifier.width(10.dp))
-                ScreenTitle(
-                    title = "사직스코어",
-                    subtitle = if (viewingOtherTeam) game?.focusName() else "실시간",
-                    modifier = Modifier.weight(1f),
-                    trailing = {
-                        CompactRefresh(secondsUntilRefresh, isRefreshing, onRefresh)
-                    },
-                )
-            }
             val focusTeam = game?.focusTeamCode?.ifBlank { LOTTE_TEAM_CODE } ?: LOTTE_TEAM_CODE
-            Spacer(Modifier.height(10.dp))
+            val showHero = viewingOther || snapshot?.lotteGame != null || snapshot?.nextLotteGame != null
+
+            if (game != null && showHero) {
+                HeroCard(
+                    g = game,
+                    onShare = { onShare(game) },
+                    onBackToLotte = if (viewingOther) onBackToLotte else null,
+                    secondsUntilRefresh = secondsUntilRefresh,
+                    isRefreshing = isRefreshing,
+                    onRefresh = onRefresh,
+                    viewingLabel = if (viewingOtherTeam) game.focusName() else null,
+                )
+            } else {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "사직스코어",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    CompactRefresh(secondsUntilRefresh, isRefreshing, onRefresh)
+                }
+            }
+
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+            ) {
+            Spacer(Modifier.height(12.dp))
             QuickLinks(
                 onHistory = { onOpenTeamHistory(focusTeam) },
                 onEntry = { onOpenEntryBoard(focusTeam) },
                 onLeaders = { onOpenLeaders(focusTeam) },
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(4.dp))
 
             val showSpinner = (loading && snapshot == null && viewingGame == null) ||
                 (viewingLoading && viewingGame == null)
@@ -219,42 +223,43 @@ fun LiveScreen(
                     if (!viewingOther && snapshot?.lotteGame != null) {
                         val liveChoices = snapshot.todayLotteGames
                         if (liveChoices.size >= 2) {
+                            Spacer(Modifier.height(8.dp))
                             DhGameSwitcher(
                                 games = liveChoices,
                                 selectedId = game.gameId,
                                 onSelect = onSelectLiveGame,
                             )
-                            Spacer(Modifier.height(8.dp))
                         }
-                        HeroCard(game, onShare = { onShare(game) })
-                    } else if (!viewingOther) {
-                        NextGameContent(game)
-                    } else {
-                        HeroCard(game, onShare = { onShare(game) })
                     }
-                    Spacer(Modifier.height(10.dp))
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(vertical = 2.dp),
-                    ) {
-                        items(DETAIL_TABS.size) { i ->
-                            val label = DETAIL_TABS[i]
+                    Spacer(Modifier.height(8.dp))
+                    Row(Modifier.fillMaxWidth()) {
+                        DETAIL_TABS.forEachIndexed { i, label ->
                             val selected = pagerState.currentPage == i
-                            Text(
-                                label,
+                            Column(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(50))
-                                    .background(
-                                        if (selected) LotteRed
-                                        else MaterialTheme.colorScheme.surfaceVariant,
-                                    )
+                                    .weight(1f)
                                     .clickable { scope.launch { pagerState.animateScrollToPage(i) } }
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                color = if (selected) Color.White
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
-                                fontSize = 13.sp,
-                            )
+                                    .padding(top = 6.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Text(
+                                    label,
+                                    color = if (selected) MaterialTheme.colorScheme.onBackground
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 13.sp,
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .height(2.dp)
+                                        .background(
+                                            if (selected) LotteRed else Color.Transparent,
+                                            RoundedCornerShape(1.dp),
+                                        ),
+                                )
+                            }
                         }
                     }
                     HorizontalPager(
@@ -352,6 +357,7 @@ fun LiveScreen(
                     }
                 }
             }
+            }
         }
     }
 }
@@ -400,7 +406,6 @@ private fun ScoreTicker(
                 onClick = { onOpenGame(g.gameId) },
                 shape = MaterialTheme.shapes.medium,
                 color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
             ) {
                 Row(
                     Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
@@ -483,36 +488,31 @@ private fun WeatherLine(w: StadiumWeather) {
 
 @Composable
 private fun QuickLinks(onHistory: () -> Unit, onEntry: () -> Unit, onLeaders: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        QuickLinkChip("팀 히스토리", Modifier.weight(1f), onHistory)
-        QuickLinkChip("엔트리", Modifier.weight(1f), onEntry)
-        QuickLinkChip("타이틀", Modifier.weight(1f), onLeaders)
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        QuickLinkText("히스토리", onHistory)
+        Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 13.sp)
+        QuickLinkText("엔트리", onEntry)
+        Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 13.sp)
+        QuickLinkText("타이틀", onLeaders)
+        Spacer(Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun QuickLinkChip(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.surface,
-        onClick = onClick,
-        modifier = modifier,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
-        ),
-    ) {
-        Text(
-            label,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 10.dp),
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
+private fun QuickLinkText(label: String, onClick: () -> Unit) {
+    Text(
+        label,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp, horizontal = 2.dp),
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable
@@ -1209,17 +1209,13 @@ private fun LineupPlayerRow(
 
 @Composable
 private fun LineupTeamChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) LotteRed else MaterialTheme.colorScheme.surfaceVariant
-    val fg = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
     Text(
         label,
         modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(bg)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 7.dp),
-        color = fg,
-        fontWeight = FontWeight.SemiBold,
+            .padding(horizontal = 8.dp, vertical = 7.dp),
+        color = if (selected) LotteRed else MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         fontSize = 13.sp,
     )
 }
@@ -1772,72 +1768,95 @@ private fun RecentFiveCard(games: List<LotteGameInfo>) {
 }
 
 @Composable
-private fun CompactRefresh(secondsUntilRefresh: Int, isRefreshing: Boolean, onRefresh: () -> Unit) {
+private fun CompactRefresh(
+    secondsUntilRefresh: Int,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    onDark: Boolean = false,
+) {
+    val fg = if (onDark) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f))
             .clickable(enabled = !isRefreshing, onClick = onRefresh)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
+            .padding(horizontal = 4.dp, vertical = 4.dp),
     ) {
         if (isRefreshing) {
-            Text("...", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            Text("...", fontSize = 11.sp, color = fg, fontWeight = FontWeight.Bold)
         } else {
             Text(
                 "${secondsUntilRefresh}초",
                 fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Medium,
+                color = fg,
             )
             Spacer(Modifier.width(4.dp))
-            Icon(Icons.Default.Refresh, contentDescription = "새로고침", modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+            Icon(Icons.Default.Refresh, contentDescription = "새로고침", modifier = Modifier.size(14.dp), tint = fg)
         }
-    }
-}
-
-private data class ChipSpec(val text: String, val color: Color)
-
-@Composable
-private fun StatusChip(text: String, color: Color) {
-    Box(
-        Modifier
-            .background(color.copy(alpha = 0.18f), RoundedCornerShape(50))
-            .padding(horizontal = 10.dp, vertical = 3.dp)
-    ) {
-        Text(
-            text,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = color,
-            maxLines = 1,
-            softWrap = false,
-        )
     }
 }
 
 @Composable
 private fun HeroTeam(name: String, logoUrl: String, score: Int, showScore: Boolean, highlight: Boolean, modifier: Modifier = Modifier) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
-        TeamLogo(logoUrl, size = 52)
-        Spacer(Modifier.height(6.dp))
-        Text(name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White, maxLines = 1)
+        TeamLogo(logoUrl, size = 56)
+        Spacer(Modifier.height(8.dp))
+        Text(name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White.copy(alpha = 0.78f), maxLines = 1)
         if (showScore) {
-            Text("$score", fontSize = 42.sp, fontWeight = FontWeight.Black, color = if (highlight) LotteGold else Color.White)
+            Text(
+                "$score",
+                fontSize = 56.sp,
+                fontWeight = FontWeight.Black,
+                color = if (highlight) LotteGold else Color.White,
+                lineHeight = 58.sp,
+            )
         }
     }
 }
 
 @Composable
-private fun HeroCard(g: LotteGameInfo, onShare: () -> Unit = {}) {
+private fun HeroCard(
+    g: LotteGameInfo,
+    onShare: () -> Unit = {},
+    onBackToLotte: (() -> Unit)? = null,
+    secondsUntilRefresh: Int = 10,
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
+    viewingLabel: String? = null,
+) {
     val showScore = g.status == GameStatus.LIVE || g.status == GameStatus.ENDED
     Column(
         Modifier
             .fillMaxWidth()
-            .background(heroGradient(), RoundedCornerShape(24.dp))
-            .padding(horizontal = 20.dp, vertical = 22.dp),
+            .background(
+                heroGradient(),
+                RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            if (onBackToLotte != null) {
+                Text(
+                    if (viewingLabel.isNullOrBlank()) "← 롯데" else "← $viewingLabel · 롯데로",
+                    modifier = Modifier.clickable(onClick = onBackToLotte).padding(vertical = 4.dp),
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            } else {
+                Text(
+                    "SAJIK",
+                    color = Color.White.copy(alpha = 0.45f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp,
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            CompactRefresh(secondsUntilRefresh, isRefreshing, onRefresh, onDark = true)
+        }
+        Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             HeroTeam(
                 name = if (g.isHome) g.opponentName else g.focusName(),
@@ -1847,56 +1866,38 @@ private fun HeroCard(g: LotteGameInfo, onShare: () -> Unit = {}) {
                 highlight = if (g.isHome) g.opponentScore > g.lotteScore else g.lotteScore > g.opponentScore,
                 modifier = Modifier.weight(1f),
             )
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                val heroChips = buildList {
-                    if (g.doubleHeaderNo > 0) add(ChipSpec("DH${g.doubleHeaderNo}", LotteGold))
-                    if (g.lotteRank > 0 || g.opponentRank > 0) {
-                        add(
-                            ChipSpec(
-                                "${if (g.isHome) g.opponentRank else g.lotteRank}·${if (g.isHome) g.lotteRank else g.opponentRank}위",
-                                Color.White.copy(alpha = 0.75f),
-                            ),
-                        )
-                    }
-                    if (g.lineupAnnounced && g.status == GameStatus.BEFORE) {
-                        add(ChipSpec("라인업", WinGreen))
-                    }
-                }
-                if (heroChips.isNotEmpty()) {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        contentPadding = PaddingValues(horizontal = 2.dp),
-                    ) {
-                        items(heroChips) { chip -> StatusChip(chip.text, chip.color) }
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 4.dp)) {
                 when (g.status) {
                     GameStatus.LIVE -> {
-                        StatusChip("LIVE", LotteRed)
+                        Text("LIVE", fontWeight = FontWeight.Black, fontSize = 11.sp, color = LotteRed, letterSpacing = 1.4.sp)
                         Spacer(Modifier.height(6.dp))
-                        Text(g.inningLabel, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = LotteGold)
+                        Text(g.inningLabel, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
                     }
                     GameStatus.ENDED -> {
-                        StatusChip("경기종료", Color(0xFF9AA7C4))
-                        Spacer(Modifier.height(6.dp))
                         val (label, color) = when {
-                            g.lotteScore > g.opponentScore -> "${g.focusName()} 승" to WinGreen
-                            g.lotteScore < g.opponentScore -> "${g.focusName()} 패" to LoseRed
-                            else -> "무승부" to LotteGold
+                            g.lotteScore > g.opponentScore -> "승" to WinGreen
+                            g.lotteScore < g.opponentScore -> "패" to LoseRed
+                            else -> "무" to LotteGold
                         }
-                        Text(label, fontWeight = FontWeight.Black, fontSize = 18.sp, color = color)
+                        Text("종료", fontSize = 11.sp, color = Color.White.copy(alpha = 0.55f), letterSpacing = 1.sp)
+                        Spacer(Modifier.height(6.dp))
+                        Text(label, fontWeight = FontWeight.Black, fontSize = 22.sp, color = color)
                     }
                     GameStatus.BEFORE -> {
-                        StatusChip("오늘 ${g.startTime}", LotteGold)
+                        Text(g.startTime.ifBlank { "예정" }, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = LotteGold)
                         Spacer(Modifier.height(6.dp))
-                        Text("VS", fontWeight = FontWeight.Black, fontSize = 20.sp, color = Color.White.copy(alpha = 0.85f))
+                        Text("VS", fontWeight = FontWeight.Black, fontSize = 18.sp, color = Color.White.copy(alpha = 0.7f))
                     }
-                    GameStatus.CANCELED -> StatusChip(g.cancelLabel, LoseRed)
+                    GameStatus.CANCELED -> {
+                        Text(g.cancelLabel, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = LoseRed)
+                    }
                 }
                 if (g.stadium.isNotBlank()) {
                     Spacer(Modifier.height(6.dp))
-                    Text(g.stadium, fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+                    Text(g.stadium, fontSize = 11.sp, color = Color.White.copy(alpha = 0.5f))
+                }
+                if (g.doubleHeaderNo > 0) {
+                    Text("DH${g.doubleHeaderNo}", fontSize = 10.sp, color = LotteGold, fontWeight = FontWeight.Bold)
                 }
             }
             HeroTeam(
@@ -1909,17 +1910,13 @@ private fun HeroCard(g: LotteGameInfo, onShare: () -> Unit = {}) {
             )
         }
         if (g.status == GameStatus.LIVE || g.status == GameStatus.ENDED) {
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(10.dp))
             Text(
-                "공유하기",
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(Color.White.copy(alpha = 0.12f))
-                    .clickable(onClick = onShare)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                color = Color.White.copy(alpha = 0.92f),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
+                "공유",
+                modifier = Modifier.clickable(onClick = onShare).padding(horizontal = 8.dp, vertical = 6.dp),
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
             )
         }
     }
@@ -2003,9 +2000,15 @@ private fun NextGameContent(g: LotteGameInfo) {
 
 @Composable
 private fun InfoLine(label: String, value: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(label, Modifier.weight(0.3f), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, Modifier.weight(0.7f), fontWeight = FontWeight.SemiBold)
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        Text(
+            label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            letterSpacing = 0.6.sp,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(value, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
     }
 }
 

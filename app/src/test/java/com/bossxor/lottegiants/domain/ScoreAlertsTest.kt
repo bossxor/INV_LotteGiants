@@ -43,4 +43,12 @@ class ScoreAlertsTest {
         )
         assertEquals("전준우 중전 안타 득점", pickScoringRelay(texts)?.text)
     }
+
+    @Test
+    fun notificationOpensRelayTab() {
+        assertEquals(3, detailTabIndex("relay"))
+        assertEquals(3, detailTabIndex("중계"))
+        assertEquals(2, detailTabIndex("요약"))
+        assertEquals(0, detailTabIndex(null))
+    }
 }

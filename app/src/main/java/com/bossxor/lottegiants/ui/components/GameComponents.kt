@@ -97,7 +97,7 @@ fun PlayerAvatar(
     }
 }
 
-/** 카드 — 배경과 층을 분명히 나눈다 */
+/** 카드 — 테두리 없이 배경만 한 겹 */
 @Composable
 fun SectionCard(
     modifier: Modifier = Modifier,
@@ -109,11 +109,7 @@ fun SectionCard(
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
-        shadowElevation = 2.dp,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
-        ),
+        shadowElevation = 0.dp,
     ) {
         Box(Modifier.padding(padding)) { content() }
     }
@@ -129,18 +125,10 @@ fun ScreenTitle(
 ) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         leading?.invoke()
-        Box(
-            Modifier
-                .padding(end = 10.dp)
-                .width(4.dp)
-                .height(22.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(LotteRed),
-        )
         Column(Modifier.weight(1f)) {
             Text(
                 title,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
             )
             if (!subtitle.isNullOrBlank()) {
@@ -167,18 +155,10 @@ fun SectionHeader(
         modifier.fillMaxWidth().padding(bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier
-                .padding(end = 10.dp)
-                .width(4.dp)
-                .height(14.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(LotteRed),
-        )
         Text(
-            title,
+            title.uppercase(),
             style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
         trailing?.invoke()
