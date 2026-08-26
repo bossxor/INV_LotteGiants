@@ -1,6 +1,7 @@
 package com.bossxor.lottegiants.live
 
 import android.content.Context
+import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.inningLabel
 import com.google.android.gms.wearable.PutDataMapRequest
@@ -37,6 +38,7 @@ object WearBridge {
                 dataMap.putString("starterOpp", game?.opponentStartingPitcher.orEmpty())
             }.asPutDataRequest().setUrgent()
             Wearable.getDataClient(context).putDataItem(req).await()
+            GiantsRepository.get(context).store.setWearLastSync(System.currentTimeMillis())
         }
     }
 

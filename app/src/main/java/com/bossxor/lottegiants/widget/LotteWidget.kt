@@ -55,6 +55,7 @@ import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.teamNameToCode
 import com.bossxor.lottegiants.domain.parseKboStartMillis
+import com.bossxor.lottegiants.live.WearBridge
 
 private val Red = Color(0xFFC8102E)
 private val Pink = Color(0xFFFF6B7A)
@@ -73,10 +74,13 @@ class LotteWidget : GlanceAppWidget() {
     )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val snap = GiantsRepository.get(context).store.loadSnapshot()
+        val repo = GiantsRepository.get(context)
+        val snap = repo.store.loadSnapshot()
+        val opacityPct = repo.store.widgetOpacity()
+        val showOppLogo = repo.store.widgetShowOppLogo()
         val game = snap?.lotteGame ?: snap?.nextLotteGame
         val lotteLogo = WidgetAssets.logoProvider(context, LOTTE_TEAM_CODE, LOTTE_LOGO_URL)
-        val oppLogo = if (game != null) {
+        val oppLogo = if (showOppLogo && game != null) {
             val oppCode = game.opponentCode.ifBlank { teamNameToCode(game.opponentName) }
             WidgetAssets.logoProvider(
                 context,
@@ -85,7 +89,9 @@ class LotteWidget : GlanceAppWidget() {
                 game.opponentName,
             )
         } else {
-            ImageProvider(R.drawable.ic_notification)
+            ImageProvider(
+                android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888),
+            )
         }
         val pitcherPhoto = if (game != null && game.status == GameStatus.LIVE) {
             WidgetAssets.playerProvider(
@@ -111,7 +117,15 @@ class LotteWidget : GlanceAppWidget() {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         provideContent {
             GlanceTheme {
-                WidgetRoot(snap, lotteLogo, oppLogo, pitcherPhoto, batterPhoto, openIntent)
+                WidgetRoot(
+                    snap,
+                    lotteLogo,
+                    oppLogo,
+                    pitcherPhoto,
+                    batterPhoto,
+                    openIntent,
+                    opacityPct,
+                )
             }
         }
     }
@@ -125,13 +139,22 @@ private fun WidgetRoot(
     pitcherPhoto: ImageProvider,
     batterPhoto: ImageProvider,
     openIntent: Intent,
+    opacityPct: Int = 100,
 ) {
     val size = LocalSize.current
     val compact = size.width < 180.dp
+    val bgAlpha = (opacityPct.coerceIn(20, 100) / 100f)
+    val bgColor = Color(0xFF18243A).copy(alpha = bgAlpha)
     Box(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(ImageProvider(R.drawable.widget_card_bg))
+            .let { m ->
+                if (opacityPct >= 100) {
+                    m.background(ImageProvider(R.drawable.widget_card_bg))
+                } else {
+                    m.background(ColorProvider(bgColor, bgColor))
+                }
+            }
             .cornerRadius(22.dp),
     ) {
         Column(
@@ -619,6 +642,7 @@ class WidgetRefreshAction : ActionCallback {
     ) {
         val snap = runCatching { GiantsRepository.get(context).refreshSnapshot() }.getOrNull()
         WidgetUpdater.updateAll(context)
+        WearBridge.syncSnapshot(context, snap)
         if (snap?.lotteGame?.status == GameStatus.LIVE) {
             com.bossxor.lottegiants.live.LiveScoreService.start(context)
         }

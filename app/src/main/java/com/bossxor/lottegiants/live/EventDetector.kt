@@ -4,6 +4,7 @@ import android.content.Context
 import com.bossxor.lottegiants.data.NotificationType
 import com.bossxor.lottegiants.data.SnapshotStore
 import com.bossxor.lottegiants.domain.GameStatus
+import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.PitcherLine
 import com.bossxor.lottegiants.domain.RosterMove
@@ -15,6 +16,8 @@ import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.leadChangeTitle
 import com.bossxor.lottegiants.domain.pickScoringRelay
+import com.bossxor.lottegiants.domain.shouldEmitAlert
+import java.time.LocalTime
 
 private const val LINEUP_STAGE_FLAG = "flag"
 private const val LINEUP_STAGE_FULL = "full"
@@ -47,9 +50,11 @@ class EventDetector(private val store: SnapshotStore) {
     private var lastFavoriteBatterCode: String = ""
     private var lastGameId: String = ""
     private var initialized = false
+    private var emittingForLive = false
 
     suspend fun process(context: Context, game: LotteGameInfo?) {
         if (game == null) return
+        emittingForLive = game.status == GameStatus.LIVE
 
         if (lastGameId.isNotBlank() && lastGameId != game.gameId) {
             // 새 경기: 인메모리 상태만 리셋 (취소 알림 DataStore 키는 유지)
@@ -559,7 +564,17 @@ class EventDetector(private val store: SnapshotStore) {
         gameId: String = "",
         detailTab: String? = null,
     ) {
-        if (store.isNotificationEnabled(type)) {
+        val allow = shouldEmitAlert(
+            typeEnabled = store.isNotificationEnabled(type),
+            liveOnly = store.alertsLiveOnly(),
+            gameIsLive = emittingForLive,
+            quietEnabled = store.quietHoursEnabled(),
+            quietStartHour = store.quietStartHour(),
+            quietEndHour = store.quietEndHour(),
+            now = LocalTime.now(KBO_ZONE),
+            type = type,
+        )
+        if (allow) {
             NotificationHelper.notifyEvent(context, type, title, text, id, gameId, detailTab)
         }
     }

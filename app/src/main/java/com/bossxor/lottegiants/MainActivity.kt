@@ -106,15 +106,21 @@ class MainActivity : ComponentActivity() {
 
     private val notifPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { /* ignore */ }
+    ) { granted ->
+        if (!granted) {
+            Toast.makeText(
+                this,
+                "알림을 허용해야 득점·Now Bar가 표시됩니다. 설정에서 켤 수 있습니다.",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestNotifIfNeeded()
-        openTabExtra.value = intent.getStringExtra(EXTRA_OPEN_TAB)
-        openGameIdExtra.value = intent.getStringExtra(EXTRA_GAME_ID)
-        openDetailTabExtra.value = intent.getStringExtra(EXTRA_DETAIL_TAB)
+        applyOpenIntent(intent)
 
         setContent {
             val themeMode by vm.themeMode.collectAsState()
@@ -336,10 +342,23 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        openTabExtra.value = intent.getStringExtra(EXTRA_OPEN_TAB)
-        openGameIdExtra.value = intent.getStringExtra(EXTRA_GAME_ID)
-        openDetailTabExtra.value = intent.getStringExtra(EXTRA_DETAIL_TAB)
+        applyOpenIntent(intent)
         openTabNonce.intValue++
+    }
+
+    private fun applyOpenIntent(intent: Intent?) {
+        openTabExtra.value = intent?.getStringExtra(EXTRA_OPEN_TAB)
+        openGameIdExtra.value = intent?.getStringExtra(EXTRA_GAME_ID)
+        openDetailTabExtra.value = intent?.getStringExtra(EXTRA_DETAIL_TAB)
+        val data = intent?.data ?: return
+        if (data.scheme == "sajik" && data.host == "game") {
+            val id = data.pathSegments.firstOrNull().orEmpty()
+            if (id.isNotBlank()) {
+                openGameIdExtra.value = id
+                openTabExtra.value = "live"
+                openDetailTabExtra.value = data.getQueryParameter("tab") ?: "relay"
+            }
+        }
     }
 
     private fun requestNotifIfNeeded() {
@@ -553,6 +572,7 @@ private fun AppScaffold(
                     favoriteCodes = favoriteCodes,
                     filterTeamCode = overlayTeamCode,
                     onBack = { overlay = Overlay.None },
+                    onRetry = onRefreshStandings,
                     onPlayerClick = { p ->
                         showPlayerSheet = true
                         onLeaderPlayerClick(p)
@@ -609,12 +629,7 @@ private fun AppScaffold(
                             }
                         },
                         onShare = { g ->
-                            val text = "${g.focusName()} ${g.lotteScore}:${g.opponentScore} ${g.opponentName} · ${g.inningLabel}\n#사직스코어"
-                            val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(android.content.Intent.EXTRA_TEXT, text)
-                            }
-                            context.startActivity(android.content.Intent.createChooser(send, "공유"))
+                            com.bossxor.lottegiants.ui.ScoreShare.share(context, g)
                         },
                         onSelectLiveGame = onSelectLiveGame,
                         viewingGame = viewingGame,
@@ -660,6 +675,10 @@ private fun AppScaffold(
                         onThemeModeChange = onThemeModeChange,
                         favoritePlayers = favoritePlayers,
                         onRemoveFavorite = onRemoveFavorite,
+                        onOpenPlayerSearch = {
+                            onOpenLeadersForTeam(LOTTE_TEAM_CODE)
+                            overlay = Overlay.Leaders
+                        },
                     )
                 }
             }

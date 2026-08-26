@@ -22,7 +22,10 @@ import com.bossxor.lottegiants.domain.TeamStanding
 import com.bossxor.lottegiants.domain.ThemeMode
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.kboToday
+import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.playerPhotoUrl
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 import com.bossxor.lottegiants.domain.teamKeuboSlug
 import com.bossxor.lottegiants.live.WearBridge
 import com.bossxor.lottegiants.widget.WidgetUpdater
@@ -159,8 +162,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             runCatching { repo.fetchLotteTeamCard() }.onSuccess { _teamCard.value = it }
         }
         viewModelScope.launch {
-            runCatching { repo.fetchLeaders(false) }.onSuccess { _batterLeaders.value = it }
-            runCatching { repo.fetchLeaders(true) }.onSuccess { _pitcherLeaders.value = it }
+            runCatching { repo.fetchLeaders(false) }
+                .onSuccess { _batterLeaders.value = it }
+                .onFailure { if (_batterLeaders.value.isEmpty()) _error.value = it.message }
+            runCatching { repo.fetchLeaders(true) }
+                .onSuccess { _pitcherLeaders.value = it }
+                .onFailure { if (_pitcherLeaders.value.isEmpty()) _error.value = it.message }
         }
         viewModelScope.launch {
             runCatching { repo.fetchRecentRosterMoves(7) }.onSuccess { _recentMoves.value = it }
@@ -194,7 +201,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
-                refreshOnce()
+                refreshOnce(force = true)
                 runCatching { repo.fetchLotteTeamCard() }.onSuccess { _teamCard.value = it }
             } finally {
                 _isRefreshing.value = false
@@ -222,8 +229,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     .onSuccess { _standings.value = it }
                     .onFailure { _error.value = it.message }
                 runCatching { repo.fetchLotteTeamCard() }.onSuccess { _teamCard.value = it }
-                runCatching { repo.fetchLeaders(false) }.onSuccess { _batterLeaders.value = it }
-                runCatching { repo.fetchLeaders(true) }.onSuccess { _pitcherLeaders.value = it }
+                runCatching { repo.fetchLeaders(false) }
+                    .onSuccess { _batterLeaders.value = it }
+                    .onFailure { _error.value = it.message }
+                runCatching { repo.fetchLeaders(true) }
+                    .onSuccess { _pitcherLeaders.value = it }
+                    .onFailure { _error.value = it.message }
             } finally {
                 _isRefreshing.value = false
             }
@@ -362,8 +373,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { repo.store.removeFavorite(code) }
     }
 
-    suspend fun refreshOnce() {
-        runCatching { repo.refreshSnapshot() }
+    suspend fun refreshOnce(force: Boolean = false) {
+        runCatching { repo.refreshSnapshot(force) }
             .onSuccess {
                 _snapshot.value = it
                 _error.value = null
@@ -375,7 +386,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 refreshWeatherFromSnapshot(it)
                 refreshViewingGame(it)
             }
-            .onFailure { _error.value = it.message }
+            .onFailure { e ->
+                val last = _snapshot.value?.updatedAtMillis ?: 0L
+                _error.value = if (last > 0L) {
+                    val clock = Instant.ofEpochMilli(last).atZone(KBO_ZONE).toLocalTime()
+                        .format(DateTimeFormatter.ofPattern("HH:mm"))
+                    "새로고침 실패 · 마지막 $clock"
+                } else {
+                    e.message ?: "경기를 불러오지 못했습니다."
+                }
+            }
     }
 
     /** 결과·다른 구장에서 경기 상세. 오늘 롯데 경기는 기존 라이브 선택, 그 외는 오버레이. */
@@ -461,6 +481,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         try {
             runCatching { repo.fetchGamesForDate(date) }
                 .onSuccess { _dayGames.value = sortLotteFirst(it) }
+                .onFailure { e ->
+                    if (_dayGames.value.isEmpty()) {
+                        _error.value = e.message ?: "경기 일정을 불러오지 못했습니다."
+                    }
+                }
         } finally {
             _dayGamesLoading.value = false
         }
@@ -488,7 +513,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _seasonGames.value = it
                     seasonFetchFailed = false
                 }
-                .onFailure { seasonFetchFailed = true }
+                .onFailure {
+                    seasonFetchFailed = true
+                    _error.value = it.message ?: "시즌 일정을 불러오지 못했습니다."
+                }
             _seasonLoading.value = false
         }
     }

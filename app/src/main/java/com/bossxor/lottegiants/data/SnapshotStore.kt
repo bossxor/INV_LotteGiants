@@ -3,13 +3,17 @@ package com.bossxor.lottegiants.data
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.bossxor.lottegiants.domain.AlertPreset
 import com.bossxor.lottegiants.domain.FavoritePlayer
 import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.ThemeMode
+import com.bossxor.lottegiants.domain.typesForPreset
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -43,6 +47,15 @@ class SnapshotStore(private val context: Context) {
 
     suspend fun setNotificationEnabled(type: NotificationType, enabled: Boolean) {
         context.dataStore.edit { it[booleanPreferencesKey("notif_${type.name}")] = enabled }
+    }
+
+    suspend fun applyAlertPreset(preset: AlertPreset) {
+        val enabled = typesForPreset(preset)
+        context.dataStore.edit { prefs ->
+            NotificationType.entries.forEach { type ->
+                prefs[booleanPreferencesKey("notif_${type.name}")] = type in enabled
+            }
+        }
     }
 
     val themeModeFlow: Flow<String> = context.dataStore.data.map {
@@ -250,6 +263,75 @@ class SnapshotStore(private val context: Context) {
         }
     }
 
+    val alertsLiveOnlyFlow: Flow<Boolean> = context.dataStore.data.map {
+        it[KEY_ALERTS_LIVE_ONLY] ?: false
+    }
+
+    suspend fun alertsLiveOnly(): Boolean = alertsLiveOnlyFlow.first()
+
+    suspend fun setAlertsLiveOnly(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_ALERTS_LIVE_ONLY] = enabled }
+    }
+
+    val quietHoursEnabledFlow: Flow<Boolean> = context.dataStore.data.map {
+        it[KEY_QUIET_ENABLED] ?: false
+    }
+
+    suspend fun quietHoursEnabled(): Boolean = quietHoursEnabledFlow.first()
+
+    suspend fun setQuietHoursEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_QUIET_ENABLED] = enabled }
+    }
+
+    val quietStartHourFlow: Flow<Int> = context.dataStore.data.map {
+        it[KEY_QUIET_START] ?: 23
+    }
+
+    val quietEndHourFlow: Flow<Int> = context.dataStore.data.map {
+        it[KEY_QUIET_END] ?: 8
+    }
+
+    suspend fun quietStartHour(): Int = quietStartHourFlow.first()
+
+    suspend fun quietEndHour(): Int = quietEndHourFlow.first()
+
+    suspend fun setQuietHours(startHour: Int, endHour: Int) {
+        context.dataStore.edit {
+            it[KEY_QUIET_START] = startHour.coerceIn(0, 23)
+            it[KEY_QUIET_END] = endHour.coerceIn(0, 23)
+        }
+    }
+
+    val widgetOpacityFlow: Flow<Int> = context.dataStore.data.map {
+        (it[KEY_WIDGET_OPACITY] ?: 100).coerceIn(20, 100)
+    }
+
+    suspend fun widgetOpacity(): Int = widgetOpacityFlow.first()
+
+    suspend fun setWidgetOpacity(pct: Int) {
+        context.dataStore.edit { it[KEY_WIDGET_OPACITY] = pct.coerceIn(20, 100) }
+    }
+
+    val widgetShowOppLogoFlow: Flow<Boolean> = context.dataStore.data.map {
+        it[KEY_WIDGET_OPP_LOGO] ?: true
+    }
+
+    suspend fun widgetShowOppLogo(): Boolean = widgetShowOppLogoFlow.first()
+
+    suspend fun setWidgetShowOppLogo(show: Boolean) {
+        context.dataStore.edit { it[KEY_WIDGET_OPP_LOGO] = show }
+    }
+
+    val wearLastSyncFlow: Flow<Long> = context.dataStore.data.map {
+        it[KEY_WEAR_LAST_SYNC] ?: 0L
+    }
+
+    suspend fun wearLastSyncMillis(): Long = wearLastSyncFlow.first()
+
+    suspend fun setWearLastSync(millis: Long) {
+        context.dataStore.edit { it[KEY_WEAR_LAST_SYNC] = millis }
+    }
+
     companion object {
         private val KEY_SNAPSHOT = stringPreferencesKey("live_snapshot")
         private val KEY_THEME = stringPreferencesKey("theme_mode")
@@ -266,6 +348,13 @@ class SnapshotStore(private val context: Context) {
         private val KEY_PENDING_UPDATE_APK = stringPreferencesKey("pending_update_apk")
         private val KEY_PENDING_UPDATE_CODE = stringPreferencesKey("pending_update_code")
         private val KEY_PREFERRED_LIVE = stringPreferencesKey("preferred_live_game_id")
+        private val KEY_ALERTS_LIVE_ONLY = booleanPreferencesKey("alerts_live_only")
+        private val KEY_QUIET_ENABLED = booleanPreferencesKey("quiet_hours_enabled")
+        private val KEY_QUIET_START = intPreferencesKey("quiet_start_hour")
+        private val KEY_QUIET_END = intPreferencesKey("quiet_end_hour")
+        private val KEY_WIDGET_OPACITY = intPreferencesKey("widget_opacity_pct")
+        private val KEY_WIDGET_OPP_LOGO = booleanPreferencesKey("widget_show_opp_logo")
+        private val KEY_WEAR_LAST_SYNC = longPreferencesKey("wear_last_sync_millis")
     }
 }
 

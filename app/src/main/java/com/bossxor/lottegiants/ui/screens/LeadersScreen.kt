@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -94,11 +95,13 @@ fun LeadersScreen(
     onPlayerClick: (LeaderPlayer) -> Unit = {},
     onToggleFavorite: (LeaderPlayer) -> Unit = {},
     filterTeamCode: String = LOTTE_TEAM_CODE,
+    onRetry: (() -> Unit)? = null,
 ) {
     var tab by remember { mutableIntStateOf(0) }
     var teamOnly by remember(filterTeamCode) {
         mutableStateOf(filterTeamCode.isNotBlank() && filterTeamCode != LOTTE_TEAM_CODE)
     }
+    var query by remember { mutableStateOf("") }
     val season = remember { LocalDate.now().let { if (it.monthValue < 3) it.year - 1 else it.year } }
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
     val teamLabel = teamCodeToName(filterTeamCode).ifBlank { "롯데" }
@@ -123,7 +126,14 @@ fun LeadersScreen(
             },
         )
         Spacer(Modifier.height(12.dp))
-
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = { Text("선수 이름 검색 · ☆로 즐겨찾기") },
+        )
+        Spacer(Modifier.height(12.dp))
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -137,10 +147,16 @@ fun LeadersScreen(
         Spacer(Modifier.height(14.dp))
 
         val categories = if (tab == 0) BATTER_TITLES else PITCHER_TITLES
-        val pool = if (tab == 0) batters else pitchers
+        val pool = remember(tab, batters, pitchers, query) {
+            val raw = if (tab == 0) batters else pitchers
+            if (query.isBlank()) raw else raw.filter { it.name.contains(query.trim(), ignoreCase = true) }
+        }
 
         if (pool.isEmpty()) {
-            EmptyRetry(message = "순위 데이터를 불러오지 못했습니다.")
+            EmptyRetry(
+                message = if (query.isNotBlank()) "검색 결과가 없습니다." else "순위 데이터를 불러오지 못했습니다.",
+                onRetry = onRetry,
+            )
         } else {
             categories.forEach { cat ->
                 val key = "${tab}_${cat.key}"

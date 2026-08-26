@@ -41,8 +41,11 @@ import com.bossxor.lottegiants.domain.doubleHeaderNoFromGameId
 import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.weatherSummaryKo
+import com.bossxor.lottegiants.domain.toCell
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonObject
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -62,6 +65,10 @@ class GiantsRepository private constructor(context: Context) {
     private val rutaApi: RutaApi = RutaApi.create()
     val store = SnapshotStore(appContext)
 
+    private val refreshMutex = Mutex()
+    @Volatile private var memorySnapshot: LiveSnapshot? = null
+    @Volatile private var memorySnapshotAt = 0L
+
     /** 종료된 이닝 문자중계 캐시 (gameId → inning → relays). 현재 이닝은 매번 재조회. */
     private val relayInningCache = ConcurrentHashMap<String, ConcurrentHashMap<Int, List<TextRelayDto>>>()
 
@@ -73,8 +80,44 @@ class GiantsRepository private constructor(context: Context) {
     /**
      * KBO 공식 일정을 1차 소스로 오늘·어제·최근 21일·향후 14일을 읽고,
      * 네이버 문자중계로 라인업·투구 위치 등 KBO에 없는 항목만 보완한다.
+     *
+     * [force]가 아니면 방금 받은 스냅샷(8초 이내)을 재사용한다.
+     * 앱·서비스·위젯이 동시에 호출해도 네트워크는 한 번만 탄다.
      */
-    suspend fun refreshSnapshot(): LiveSnapshot {
+    suspend fun refreshSnapshot(force: Boolean = false): LiveSnapshot {
+        if (!force) {
+            freshMemorySnapshot()?.let { return it }
+        }
+        return refreshMutex.withLock {
+            if (!force) {
+                freshMemorySnapshot()?.let { return@withLock it }
+            }
+            fetchFreshSnapshot().also {
+                memorySnapshot = it
+                memorySnapshotAt = System.currentTimeMillis()
+            }
+        }
+    }
+
+    private suspend fun freshMemorySnapshot(): LiveSnapshot? {
+        val now = System.currentTimeMillis()
+        val mem = memorySnapshot
+        if (mem != null) {
+            val age = now - memorySnapshotAt
+            if (age in 0 until SNAPSHOT_FRESH_MS) return mem
+        } else {
+            val disk = store.loadSnapshot()
+            if (disk != null) {
+                memorySnapshot = disk
+                memorySnapshotAt = disk.updatedAtMillis
+                val age = now - disk.updatedAtMillis
+                if (age in 0 until SNAPSHOT_FRESH_MS) return disk
+            }
+        }
+        return null
+    }
+
+    private suspend fun fetchFreshSnapshot(): LiveSnapshot {
         val today = kboToday()
         val fmt = DateTimeFormatter.ISO_LOCAL_DATE
         val todayStr = today.format(fmt)
@@ -263,7 +306,7 @@ class GiantsRepository private constructor(context: Context) {
             weather = weather,
             rutaConnected = rutaExtras.connected || rutaConnected,
             winProbSeries = winProbSeries,
-            hotColdZone = emptyList(),
+            hotColdZone = hotColdCellsFor(lotteInfo),
             pitchLocations = lotteInfo?.pitchLocations.orEmpty(),
         )
         store.saveSnapshot(snapshot)
@@ -1771,10 +1814,24 @@ class GiantsRepository private constructor(context: Context) {
         return runnerOccupied(raw)
     }
 
+    private fun hotColdCellsFor(game: LotteGameInfo?): List<com.bossxor.lottegiants.domain.HotColdCell> {
+        val preview = game?.preview ?: return emptyList()
+        val currentName = game.currentBatterName
+        val keyed = listOfNotNull(preview.lotteKeyBatter, preview.opponentKeyBatter)
+        val fromCurrent = keyed.firstOrNull { currentName.isNotBlank() && it.name == currentName }?.hotCold.orEmpty()
+        val zones = fromCurrent.ifEmpty {
+            preview.lotteKeyBatter?.hotCold.orEmpty().ifEmpty {
+                preview.opponentKeyBatter?.hotCold.orEmpty()
+            }
+        }
+        return zones.map { it.toCell() }
+    }
+
     companion object {
         private const val STANDINGS_TTL_MS = 5 * 60_000L
         private const val KBO_TODAY_TTL_MS = 30_000L
         private const val KBO_PAST_TTL_MS = 10 * 60_000L
+        private const val SNAPSHOT_FRESH_MS = 8_000L
 
         @Volatile
         private var instance: GiantsRepository? = null

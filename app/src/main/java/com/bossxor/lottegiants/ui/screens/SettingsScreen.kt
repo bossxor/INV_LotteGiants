@@ -1,5 +1,6 @@
 package com.bossxor.lottegiants.ui.screens
 
+import android.app.AlarmManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -33,9 +34,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,10 +61,15 @@ import com.bossxor.lottegiants.data.InstallResult
 import com.bossxor.lottegiants.data.NotificationType
 import com.bossxor.lottegiants.data.UpdateCheckResult
 import com.bossxor.lottegiants.data.UpdateChecker
+import com.bossxor.lottegiants.domain.AlertPreset
+import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.ThemeMode
 import com.bossxor.lottegiants.live.LiveScoreService
 import com.bossxor.lottegiants.live.NotificationHelper
+import com.bossxor.lottegiants.widget.WidgetUpdater
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 import com.bossxor.lottegiants.ui.LoseRed
 import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.components.PlayerAvatar
@@ -77,6 +85,7 @@ fun SettingsScreen(
     onThemeModeChange: (ThemeMode) -> Unit,
     favoritePlayers: List<com.bossxor.lottegiants.domain.FavoritePlayer> = emptyList(),
     onRemoveFavorite: (String) -> Unit = {},
+    onOpenPlayerSearch: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val store = GiantsRepository.get(context).store
@@ -140,6 +149,15 @@ fun SettingsScreen(
             fontSize = 12.sp,
         )
         Spacer(Modifier.height(8.dp))
+        Button(
+            onClick = onOpenPlayerSearch,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("선수 검색해서 즐겨찾기", fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(8.dp))
         SectionCard {
             if (favoritePlayers.isEmpty()) {
                 Text("등록된 즐겨찾기 선수가 없습니다.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
@@ -190,6 +208,68 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(24.dp))
         Text("알림", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(
+            "프리셋으로 한 번에 고르거나, 아래에서 종류별로 켤 수 있습니다.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 12.sp,
+        )
+        Spacer(Modifier.height(8.dp))
+        val liveOnly by store.alertsLiveOnlyFlow.collectAsState(initial = false)
+        val quietOn by store.quietHoursEnabledFlow.collectAsState(initial = false)
+        val quietStart by store.quietStartHourFlow.collectAsState(initial = 23)
+        val quietEnd by store.quietEndHourFlow.collectAsState(initial = 8)
+        SectionCard {
+            Column {
+                Text("프리셋", fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    AlertPreset.entries.forEach { preset ->
+                        ModeChip(preset.label, false) {
+                            scope.launch { store.applyAlertPreset(preset) }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("경기 중에만", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "라인업·등말소·취소·경기 30분 전은 예외",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = liveOnly,
+                        onCheckedChange = { on -> scope.launch { store.setAlertsLiveOnly(on) } },
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("무음 시간", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "${quietStart}시–${quietEnd}시에는 알림 없음",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = quietOn,
+                        onCheckedChange = { on -> scope.launch { store.setQuietHoursEnabled(on) } },
+                    )
+                }
+                if (quietOn) {
+                    Spacer(Modifier.height(8.dp))
+                    HourStepper("시작", quietStart) { h ->
+                        scope.launch { store.setQuietHours(h, quietEnd) }
+                    }
+                    HourStepper("끝", quietEnd) { h ->
+                        scope.launch { store.setQuietHours(quietStart, h) }
+                    }
+                }
+            }
+        }
         Spacer(Modifier.height(8.dp))
 
         SectionCard {
@@ -293,6 +373,16 @@ fun SettingsScreen(
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                val wearSync by store.wearLastSyncFlow.collectAsState(initial = 0L)
+                if (wearSync > 0L) {
+                    val clock = Instant.ofEpochMilli(wearSync).atZone(KBO_ZONE).toLocalTime()
+                        .format(DateTimeFormatter.ofPattern("HH:mm"))
+                    Text(
+                        "워치 마지막 동기화 $clock",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 if (Build.VERSION.SDK_INT >= 36 && !NotificationHelper.canPostNowBar(context)) {
                     Spacer(Modifier.height(10.dp))
                     Button(
@@ -341,6 +431,67 @@ fun SettingsScreen(
                     ) {
                         Text("알림 권한 설정 열기")
                     }
+                }
+                if (Build.VERSION.SDK_INT >= 31) {
+                    val am = context.getSystemService(AlarmManager::class.java)
+                    if (am != null && !am.canScheduleExactAlarms()) {
+                        Spacer(Modifier.height(10.dp))
+                        Text("정확한 경기 시작 알람이 꺼져 있습니다.", color = LoseRed, fontSize = 12.sp)
+                        Spacer(Modifier.height(6.dp))
+                        Button(
+                            onClick = {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                                        data = Uri.parse("package:${context.packageName}")
+                                    },
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                        ) {
+                            Text("정확한 알람 허용 열기", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Text("홈 화면 위젯", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        val widgetOpacity by store.widgetOpacityFlow.collectAsState(initial = 100)
+        val showOppLogo by store.widgetShowOppLogoFlow.collectAsState(initial = true)
+        var opacitySlide by remember { mutableStateOf(widgetOpacity.toFloat()) }
+        LaunchedEffect(widgetOpacity) { opacitySlide = widgetOpacity.toFloat() }
+        SectionCard {
+            Column {
+                Text("배경 투명도  ${opacitySlide.toInt()}%", fontWeight = FontWeight.SemiBold)
+                Slider(
+                    value = opacitySlide,
+                    onValueChange = { opacitySlide = it },
+                    onValueChangeFinished = {
+                        scope.launch {
+                            store.setWidgetOpacity(opacitySlide.toInt())
+                            WidgetUpdater.updateAll(context)
+                        }
+                    },
+                    valueRange = 20f..100f,
+                    steps = 7,
+                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("상대 팀 로고", fontWeight = FontWeight.SemiBold)
+                        Text("끄면 위젯에서 상대 엠블럼을 숨깁니다", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(
+                        checked = showOppLogo,
+                        onCheckedChange = { on ->
+                            scope.launch {
+                                store.setWidgetShowOppLogo(on)
+                                WidgetUpdater.updateAll(context)
+                            }
+                        },
+                    )
                 }
             }
         }
@@ -490,6 +641,33 @@ fun SettingsScreen(
             confirmButton = {
                 Text("잠시만요…", color = MaterialTheme.colorScheme.onSurfaceVariant)
             },
+        )
+    }
+}
+
+@Composable
+private fun HourStepper(label: String, hour: Int, onChange: (Int) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, modifier = Modifier.width(48.dp), fontSize = 13.sp)
+        Text(
+            "−",
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onChange((hour + 23) % 24) }
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            fontWeight = FontWeight.Bold,
+        )
+        Text("${hour}시", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 8.dp))
+        Text(
+            "+",
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onChange((hour + 1) % 24) }
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            fontWeight = FontWeight.Bold,
         )
     }
 }

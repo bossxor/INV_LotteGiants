@@ -56,6 +56,7 @@ import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LineupSlot
 import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.LotteGameInfo
+import com.bossxor.lottegiants.domain.toZone
 import com.bossxor.lottegiants.domain.focusName
 import com.bossxor.lottegiants.domain.isFocusLotte
 import com.bossxor.lottegiants.domain.MiniGame
@@ -220,6 +221,14 @@ fun LiveScreen(
                         )
                         Spacer(Modifier.height(10.dp))
                     }
+                        if (error != null) {
+                            Text(
+                                error,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                        }
                     if (!viewingOther && snapshot?.lotteGame != null) {
                         val liveChoices = snapshot.todayLotteGames
                         if (liveChoices.size >= 2) {
@@ -639,7 +648,13 @@ private fun PreviewTab(
                 Text("프리뷰 키플레이어 정보 없음", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
             } else {
                 if (!lb?.name.isNullOrBlank()) {
-                    KeyBatterLine(g.focusName(), lb!!, g.opponentName, onKeyPlayerClick)
+                    KeyBatterLine(
+                        g.focusName(),
+                        lb!!,
+                        g.opponentName,
+                        onKeyPlayerClick,
+                        snapshot?.hotColdZone.orEmpty(),
+                    )
                 }
                 if (!ob?.name.isNullOrBlank()) {
                     if (!lb?.name.isNullOrBlank()) Spacer(Modifier.height(10.dp))
@@ -679,6 +694,7 @@ private fun KeyBatterLine(
     batter: com.bossxor.lottegiants.domain.PreviewBatter,
     opponentName: String,
     onClick: (String, String) -> Unit = { _, _ -> },
+    fallbackCells: List<com.bossxor.lottegiants.domain.HotColdCell> = emptyList(),
 ) {
     Column(
         Modifier
@@ -703,9 +719,12 @@ private fun KeyBatterLine(
         if (detail.isNotBlank()) {
             Text(detail, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (batter.hotCold.isNotEmpty()) {
+        val zones = batter.hotCold.ifEmpty {
+            fallbackCells.map { it.toZone() }
+        }
+        if (zones.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            HotColdZoneChart(batter.hotCold)
+            HotColdZoneChart(zones)
         }
     }
 }
