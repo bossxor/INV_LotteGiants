@@ -131,25 +131,41 @@ fun LiveScreen(
                 .padding(horizontal = 16.dp)
                 .padding(top = 16.dp),
         ) {
+            val game = viewingGame ?: snapshot?.lotteGame ?: snapshot?.nextLotteGame
+            val viewingOther = viewingGame != null
+            val viewingOtherTeam = viewingOther && game?.isFocusLotte() == false
+            val headerLogo = when {
+                viewingOther && game != null ->
+                    game.lotteLogoUrl.ifBlank { if (game.isFocusLotte()) LOTTE_LOGO_URL else "" }
+                else -> LOTTE_LOGO_URL
+            }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TeamLogo(LOTTE_LOGO_URL, size = 44)
+                TeamLogo(
+                    headerLogo,
+                    size = 44,
+                    modifier = if (viewingOther) {
+                        Modifier.clickable(onClick = onBackToLotte)
+                    } else {
+                        Modifier
+                    },
+                )
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text("사직스코어", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
                     Text(
-                        if (viewingGame != null) "다른 경기" else "실시간 현황",
+                        "실시간 현황",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 CompactRefresh(secondsUntilRefresh, isRefreshing, onRefresh)
             }
-            Spacer(Modifier.height(10.dp))
-            QuickLinks(onOpenTeamHistory, onOpenEntryBoard, onOpenLeaders)
+            if (!viewingOtherTeam) {
+                Spacer(Modifier.height(10.dp))
+                QuickLinks(onOpenTeamHistory, onOpenEntryBoard, onOpenLeaders)
+            }
             Spacer(Modifier.height(12.dp))
 
-            val game = viewingGame ?: snapshot?.lotteGame ?: snapshot?.nextLotteGame
-            val viewingOther = viewingGame != null
             val showSpinner = (loading && snapshot == null && viewingGame == null) ||
                 (viewingLoading && viewingGame == null)
             when {
@@ -159,7 +175,7 @@ fun LiveScreen(
                     }
                 }
                 game != null -> {
-                    if (showPermBanner && (needNotif || needBattery)) {
+                    if (!viewingOtherTeam && showPermBanner && (needNotif || needBattery)) {
                         PermissionBanner(
                             needNotif = needNotif,
                             needBattery = needBattery,
@@ -184,12 +200,6 @@ fun LiveScreen(
                             },
                         )
                         Spacer(Modifier.height(10.dp))
-                    }
-                    if (viewingOther) {
-                        OtherGameBanner(game, onBackToLotte)
-                        Spacer(Modifier.height(8.dp))
-                        ScoreTicker(snapshot, onOpenGame = onOpenGame)
-                        Spacer(Modifier.height(8.dp))
                     }
                     if (!viewingOther && snapshot?.lotteGame != null) {
                         val liveChoices = snapshot.todayLotteGames
@@ -266,6 +276,7 @@ fun LiveScreen(
                                     onKeyPlayerClick = onKeyPlayerClick,
                                     onRetry = onRefresh,
                                     onOpenGame = onOpenGame,
+                                    viewingOther = viewingOther,
                                 )
                                 3 -> RelayTab(game, snapshot, onRefresh)
                                 4 -> RecordTab(game, onPlayerClick, onPitcherClick, onRefresh)
@@ -748,6 +759,7 @@ private fun SummaryTab(
     onKeyPlayerClick: (String, String) -> Unit = { _, _ -> },
     onRetry: () -> Unit = {},
     onOpenGame: (String) -> Unit = {},
+    viewingOther: Boolean = false,
 ) {
     DetailLoadError(g.detailError, onRetry)
     if (g.status == GameStatus.LIVE) {
@@ -922,7 +934,7 @@ private fun SummaryTab(
         }
     }
 
-    ScoreTicker(snapshot, excludeLotte = true, onOpenGame = onOpenGame)
+    ScoreTicker(snapshot, excludeLotte = !viewingOther, onOpenGame = onOpenGame)
     Spacer(Modifier.height(12.dp))
     weather?.let {
         WeatherLine(it)
@@ -1616,39 +1628,6 @@ private fun HeroTeam(name: String, logoUrl: String, score: Int, showScore: Boole
         Text(name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White, maxLines = 1)
         if (showScore) {
             Text("$score", fontSize = 42.sp, fontWeight = FontWeight.Black, color = if (highlight) LotteGold else Color.White)
-        }
-    }
-}
-
-@Composable
-private fun OtherGameBanner(g: LotteGameInfo, onBack: () -> Unit) {
-    Surface(
-        onClick = onBack,
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    if (g.isFocusLotte()) "지난 경기 보는 중" else "다른 경기 보는 중",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                )
-                Text(
-                    "${g.focusName()} vs ${g.opponentName}",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f),
-                )
-            }
-            Text(
-                "롯데로",
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-            )
         }
     }
 }
