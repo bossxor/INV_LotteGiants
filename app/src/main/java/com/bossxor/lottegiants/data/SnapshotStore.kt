@@ -286,5 +286,6 @@ enum class NotificationType(val label: String, val description: String) {
     CANCELED("경기 취소", "우천 취소·순연 알림"),
     ROSTER("엔트리 등말소", "롯데 선수 등록·말소 공시 알림"),
     FAVORITE_AT_BAT("즐겨찾기 타석", "즐겨찾기 선수가 타석에 설 때"),
+    FAVORITE_PITCHING("즐겨찾기 등판", "즐겨찾기 투수가 마운드에 오를 때"),
     FAVORITE_ROSTER("즐겨찾기 등말소", "즐겨찾기 선수 등록·말소 시"),
 }

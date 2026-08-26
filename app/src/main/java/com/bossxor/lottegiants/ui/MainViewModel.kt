@@ -69,7 +69,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _weather = MutableStateFlow<StadiumWeather?>(null)
     val weather: StateFlow<StadiumWeather?> = _weather.asStateFlow()
 
-    private val _entryDate = MutableStateFlow(LocalDate.now())
+    private val _entryDate = MutableStateFlow(kboToday())
     val entryDate: StateFlow<LocalDate> = _entryDate.asStateFlow()
 
     private val _dayEntry = MutableStateFlow<DayEntryChanges?>(null)
@@ -144,6 +144,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var monthJob: Job? = null
     private var entryJob: Job? = null
     private var seasonJob: Job? = null
+    private var seasonFetchFailed = false
 
     init {
         viewModelScope.launch {
@@ -420,6 +421,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _viewingGame.value = null
             return
         }
+        val existing = _viewingGame.value
+        if (existing != null && existing.gameId == id &&
+            (existing.status == GameStatus.ENDED || existing.status == GameStatus.CANCELED)
+        ) {
+            return
+        }
         runCatching { repo.fetchGameDetail(id) }.onSuccess { g ->
             if (g != null) _viewingGame.value = g
         }
@@ -469,11 +476,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun ensureSeasonGames() {
-        if (seasonJob?.isActive == true || _seasonGames.value.isNotEmpty()) return
+        if (seasonJob?.isActive == true) return
+        if (_seasonGames.value.isNotEmpty() && !seasonFetchFailed) return
         seasonJob = viewModelScope.launch {
             _seasonLoading.value = true
             val year = kboToday().let { if (it.monthValue < 3) it.year - 1 else it.year }
-            runCatching { repo.fetchGamesForSeason(year) }.onSuccess { _seasonGames.value = it }
+            runCatching { repo.fetchGamesForSeason(year) }
+                .onSuccess {
+                    _seasonGames.value = it
+                    seasonFetchFailed = false
+                }
+                .onFailure { seasonFetchFailed = true }
             _seasonLoading.value = false
         }
     }

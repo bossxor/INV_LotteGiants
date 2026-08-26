@@ -149,6 +149,7 @@ data class RutaGameExtras(
     val connected: Boolean = false,
     val winProbSeries: List<com.bossxor.lottegiants.domain.WinProbPoint> = emptyList(),
     val highlightText: String = "",
+    val highlightUrl: String = "",
 )
 
 fun parseRutaWinRate(obj: JsonObject?, isHome: Boolean): List<com.bossxor.lottegiants.domain.WinProbPoint> {

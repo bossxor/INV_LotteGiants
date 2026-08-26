@@ -82,7 +82,9 @@ object NotificationHelper {
     ): Notification {
         val intent = PendingIntent.getActivity(
             context, 0,
-            Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_OPEN_TAB, "live"),
+            Intent(context, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_OPEN_TAB, "live")
+                .putExtra(MainActivity.EXTRA_GAME_ID, game?.gameId.orEmpty()),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
@@ -368,6 +370,8 @@ object NotificationHelper {
         title: String,
         text: String,
         id: Int,
+        gameId: String = "",
+        detailTab: String? = null,
     ) {
         val channel = when (type) {
             NotificationType.SCORE -> CHANNEL_SCORE
@@ -384,17 +388,29 @@ object NotificationHelper {
             NotificationType.LINEUP -> CHANNEL_LINEUP
             NotificationType.CANCELED -> CHANNEL_CANCEL
             NotificationType.ROSTER -> CHANNEL_ROSTER
-            NotificationType.FAVORITE_AT_BAT, NotificationType.FAVORITE_ROSTER -> CHANNEL_FAVORITE
+            NotificationType.FAVORITE_AT_BAT,
+            NotificationType.FAVORITE_PITCHING,
+            NotificationType.FAVORITE_ROSTER,
+            -> CHANNEL_FAVORITE
         }
         val openTab = when (type) {
             NotificationType.ROSTER, NotificationType.FAVORITE_ROSTER -> "entry"
             else -> "live"
+        }
+        val tab = detailTab ?: when (type) {
+            NotificationType.SCORE, NotificationType.HOMERUN,
+            NotificationType.CONCEDING, NotificationType.LEAD_CHANGE,
+            NotificationType.PITCHER_CHANGE, NotificationType.FAVORITE_PITCHING,
+            -> "relay"
+            else -> null
         }
         val content = PendingIntent.getActivity(
             context,
             id,
             Intent(context, MainActivity::class.java)
                 .putExtra(MainActivity.EXTRA_OPEN_TAB, openTab)
+                .putExtra(MainActivity.EXTRA_GAME_ID, gameId)
+                .apply { if (!tab.isNullOrBlank()) putExtra(MainActivity.EXTRA_DETAIL_TAB, tab) }
                 .addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK or
                         Intent.FLAG_ACTIVITY_SINGLE_TOP or

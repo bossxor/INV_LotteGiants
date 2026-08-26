@@ -107,6 +107,7 @@ class LotteWidget : GlanceAppWidget() {
         }
         val openIntent = Intent(context, MainActivity::class.java)
             .putExtra(MainActivity.EXTRA_OPEN_TAB, "live")
+            .putExtra(MainActivity.EXTRA_GAME_ID, snap?.lotteGame?.gameId.orEmpty())
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         provideContent {
             GlanceTheme {

@@ -99,6 +99,8 @@ class MainActivity : ComponentActivity() {
 
     private val vm: MainViewModel by viewModels()
     private val openTabExtra = mutableStateOf<String?>(null)
+    private val openGameIdExtra = mutableStateOf<String?>(null)
+    private val openDetailTabExtra = mutableStateOf<String?>(null)
     private val openTabNonce = mutableIntStateOf(0)
 
     private val notifPermission = registerForActivityResult(
@@ -110,6 +112,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         requestNotifIfNeeded()
         openTabExtra.value = intent.getStringExtra(EXTRA_OPEN_TAB)
+        openGameIdExtra.value = intent.getStringExtra(EXTRA_GAME_ID)
+        openDetailTabExtra.value = intent.getStringExtra(EXTRA_DETAIL_TAB)
 
         setContent {
             val themeMode by vm.themeMode.collectAsState()
@@ -265,6 +269,8 @@ class MainActivity : ComponentActivity() {
                     initialTab = tabFromIntent(openTabExtra.value),
                     openEntry = isEntryIntent(openTabExtra.value),
                     openEntryNonce = openTabNonce.intValue,
+                    openGameId = openGameIdExtra.value,
+                    openDetailTab = openDetailTabExtra.value,
                     snapshot = snapshot,
                     standings = standings,
                     error = error,
@@ -330,6 +336,8 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         openTabExtra.value = intent.getStringExtra(EXTRA_OPEN_TAB)
+        openGameIdExtra.value = intent.getStringExtra(EXTRA_GAME_ID)
+        openDetailTabExtra.value = intent.getStringExtra(EXTRA_DETAIL_TAB)
         openTabNonce.intValue++
     }
 
@@ -345,6 +353,8 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_OPEN_TAB = "open_tab"
+        const val EXTRA_GAME_ID = "game_id"
+        const val EXTRA_DETAIL_TAB = "detail_tab"
 
         fun tabFromIntent(value: String?): Int = when (value?.lowercase()) {
             "results", "result", "1" -> 1
@@ -363,6 +373,8 @@ private fun AppScaffold(
     initialTab: Int,
     openEntry: Boolean,
     openEntryNonce: Int,
+    openGameId: String? = null,
+    openDetailTab: String? = null,
     snapshot: com.bossxor.lottegiants.domain.LiveSnapshot?,
     standings: List<com.bossxor.lottegiants.domain.TeamStanding>,
     error: String?,
@@ -435,6 +447,14 @@ private fun AppScaffold(
         if (openEntry) {
             overlay = Overlay.EntryBoard
             onOpenEntrySmart()
+        }
+    }
+    LaunchedEffect(openGameId, openEntryNonce) {
+        val id = openGameId?.trim().orEmpty()
+        if (id.isNotBlank()) {
+            tab = 0
+            overlay = Overlay.None
+            onOpenGame(id)
         }
     }
 
@@ -600,6 +620,7 @@ private fun AppScaffold(
                         viewingLoading = viewingLoading,
                         onOpenGame = onOpenGame,
                         onBackToLotte = onBackToLotte,
+                        initialDetailTab = openDetailTab,
                     )
                     1 -> ResultsScreen(
                         selectedDate = selectedDate,

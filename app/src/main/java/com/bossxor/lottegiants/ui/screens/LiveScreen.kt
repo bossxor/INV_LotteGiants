@@ -68,6 +68,11 @@ import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.WinGreen
 import com.bossxor.lottegiants.domain.RecentFormGame
 import com.bossxor.lottegiants.domain.RelayText
+import com.bossxor.lottegiants.domain.RelayKind
+import com.bossxor.lottegiants.domain.classifyRelay
+import com.bossxor.lottegiants.domain.detailTabIndex
+import com.bossxor.lottegiants.domain.groupRelayByOut
+import com.bossxor.lottegiants.domain.outCountLabel
 import com.bossxor.lottegiants.ui.components.DiamondView
 import com.bossxor.lottegiants.ui.components.HotColdZoneChart
 import com.bossxor.lottegiants.ui.components.ScoreBoard
@@ -103,9 +108,17 @@ fun LiveScreen(
     viewingLoading: Boolean = false,
     onOpenGame: (String) -> Unit = {},
     onBackToLotte: () -> Unit = {},
+    initialDetailTab: String? = null,
 ) {
-    val pagerState = rememberPagerState(pageCount = { DETAIL_TABS.size })
+    val pagerState = rememberPagerState(
+        initialPage = detailTabIndex(initialDetailTab),
+        pageCount = { DETAIL_TABS.size },
+    )
     val scope = rememberCoroutineScope()
+    LaunchedEffect(initialDetailTab) {
+        val page = detailTabIndex(initialDetailTab)
+        if (pagerState.currentPage != page) pagerState.scrollToPage(page)
+    }
     val context = androidx.compose.ui.platform.LocalContext.current
     val store = remember { com.bossxor.lottegiants.data.GiantsRepository.get(context).store }
     var showPermBanner by remember { mutableStateOf(true) }
@@ -804,6 +817,31 @@ private fun SummaryTab(
         Spacer(Modifier.height(10.dp))
     }
 
+    val clipText = if (!viewingOther && g.isFocusLotte()) snapshot?.mediaHighlightText.orEmpty() else ""
+    val clipUrl = if (!viewingOther && g.isFocusLotte()) snapshot?.mediaHighlightUrl.orEmpty() else ""
+    if (clipText.isNotBlank() || clipUrl.isNotBlank()) {
+        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+        SectionCard {
+            Column {
+                SectionHeader("하이라이트")
+                if (clipText.isNotBlank()) {
+                    Text(clipText, style = MaterialTheme.typography.bodySmall)
+                    if (clipUrl.isNotBlank()) Spacer(Modifier.height(8.dp))
+                }
+                if (clipUrl.isNotBlank()) {
+                    Text(
+                        "영상 열기",
+                        color = LotteRed,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        modifier = Modifier.clickable { runCatching { uriHandler.openUri(clipUrl) } },
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+    }
+
     if (g.status == GameStatus.LIVE && g.recentTexts.isNotEmpty()) {
         val inningTexts = g.recentTexts.filter {
             it.inning == g.inning && (it.isTopInning == null || it.isTopInning == g.isTopInning)
@@ -1374,83 +1412,6 @@ private fun inningHalfLabel(inning: Int, isTop: Boolean?): String = when (isTop)
     true -> "${inning}회초"
     false -> "${inning}회말"
     null -> "${inning}회"
-}
-
-private data class RelayBatterBlock(val title: String, val items: List<RelayText>)
-
-private data class RelayOutBlock(val outCount: Int, val batters: List<RelayBatterBlock>)
-
-private enum class RelayKind { Score, Hit, Walk, Out, Pitch, Other }
-
-private fun classifyRelay(text: String): RelayKind {
-    val t = text
-    return when {
-        listOf("홈런", "득점", "타점", "끝내기", "역전", "동점").any { t.contains(it) } -> RelayKind.Score
-        listOf("병살", "삼진").any { t.contains(it) } || t.contains("아웃") -> RelayKind.Out
-        listOf("2루타", "3루타", "내야안타", "안타", "희생플라이", "희생번트").any { t.contains(it) } -> RelayKind.Hit
-        listOf("볼넷", "사구", "몸에 맞는", "고의4구").any { t.contains(it) } -> RelayKind.Walk
-        listOf("스트라이크", "볼", "파울").any { t.contains(it) } -> RelayKind.Pitch
-        else -> RelayKind.Other
-    }
-}
-
-private fun isOutMakingPlay(text: String): Boolean {
-    if (text.contains("이닝 종료") || text.contains("3아웃")) return true
-    if (text.contains("병살") || text.contains("삼진")) return true
-    return text.contains("아웃")
-}
-
-private fun outDelta(text: String): Int = when {
-    text.contains("병살") -> 2
-    text.contains("이닝 종료") || text.contains("3아웃") -> 3
-    else -> 1
-}
-
-private fun outCountLabel(out: Int): String = when (out) {
-    0 -> "0아웃"
-    1 -> "1아웃"
-    2 -> "2아웃"
-    else -> "이닝 종료"
-}
-
-/** 이닝 안을 아웃카운트 → 타석 순으로 묶는다. */
-private fun groupRelayByOut(texts: List<RelayText>): List<RelayOutBlock> {
-    if (texts.isEmpty()) return emptyList()
-    val chrono = texts.sortedBy { it.seqno }
-    var outsBefore = 0
-    val tagged = chrono.map { t ->
-        val recorded = t.out
-        val before = when {
-            recorded == null -> outsBefore
-            recorded > outsBefore -> outsBefore
-            else -> recorded
-        }.coerceIn(0, 3)
-        outsBefore = when {
-            recorded != null -> recorded.coerceIn(0, 3)
-            isOutMakingPlay(t.text) -> (outsBefore + outDelta(t.text)).coerceAtMost(3)
-            else -> outsBefore
-        }
-        t to before
-    }
-    return tagged.groupBy { it.second }.toSortedMap().map { (out, pairs) ->
-        val items = pairs.map { it.first }
-        val batters = mutableListOf<RelayBatterBlock>()
-        val bucket = mutableListOf<RelayText>()
-        var currentTitle = ""
-        fun flush() {
-            if (bucket.isEmpty()) return
-            batters.add(RelayBatterBlock(currentTitle, bucket.toList()))
-            bucket.clear()
-        }
-        items.forEach { t ->
-            val title = t.batterTitle.ifBlank { currentTitle }
-            if (title.isNotBlank() && title != currentTitle && bucket.isNotEmpty()) flush()
-            if (title.isNotBlank()) currentTitle = title
-            bucket.add(t)
-        }
-        flush()
-        RelayOutBlock(out, batters)
-    }
 }
 
 @Composable

@@ -755,6 +755,8 @@ data class LiveSnapshot(
     val todayLotteGames: List<MiniGame> = emptyList(),
     val highlightText: String = "",
     val highlightUntilMillis: Long = 0L,
+    val mediaHighlightText: String = "",
+    val mediaHighlightUrl: String = "",
     val weather: StadiumWeather? = null,
     /** 루타 API 연결 여부 (고급 차트용) */
     val rutaConnected: Boolean = false,

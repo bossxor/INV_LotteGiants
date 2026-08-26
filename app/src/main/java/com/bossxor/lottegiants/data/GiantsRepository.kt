@@ -258,6 +258,8 @@ class GiantsRepository private constructor(context: Context) {
                 keepHighlight -> prev?.highlightUntilMillis ?: 0L
                 else -> 0L
             },
+            mediaHighlightText = rutaExtras.highlightText.ifBlank { prev?.mediaHighlightText.orEmpty() },
+            mediaHighlightUrl = rutaExtras.highlightUrl.ifBlank { prev?.mediaHighlightUrl.orEmpty() },
             weather = weather,
             rutaConnected = rutaExtras.connected || rutaConnected,
             winProbSeries = winProbSeries,
@@ -361,24 +363,54 @@ class GiantsRepository private constructor(context: Context) {
         val gameObj = runCatching { rutaApi.getGame(gameId, bearer) }.getOrNull()
         val highlightObj = runCatching { rutaApi.getGameHighlight(gameId, bearer) }.getOrNull()
         val series = parseRutaWinRate(winObj, isHome).ifEmpty { parseRutaWinRate(gameObj, isHome) }
-        val highlight = highlightObj?.let { extractRutaHighlight(it) }.orEmpty()
+        val highlight = highlightObj?.let { extractRutaHighlight(it) }
         val ok = winObj != null || gameObj != null || highlightObj != null
         return RutaGameExtras(
             connected = ok || bearer.isNotBlank(),
             winProbSeries = series,
-            highlightText = highlight,
+            highlightText = highlight?.text.orEmpty(),
+            highlightUrl = highlight?.url.orEmpty(),
         )
     }
 
-    private fun extractRutaHighlight(obj: JsonObject): String {
+    private data class RutaHighlightClip(val text: String, val url: String)
+
+    private fun extractRutaHighlight(obj: JsonObject): RutaHighlightClip {
         val data = obj["data"] as? JsonObject ?: obj
-        val keys = listOf("text", "message", "title", "highlight", "content")
-        for (k in keys) {
+        val textKeys = listOf("text", "message", "title", "highlight", "content")
+        val urlKeys = listOf("url", "link", "videoUrl", "video", "hls", "src")
+        var text = ""
+        var url = ""
+        for (k in textKeys) {
             val el = data[k] ?: continue
             val p = el as? kotlinx.serialization.json.JsonPrimitive ?: continue
-            p.content.takeIf { it.isNotBlank() }?.let { return it }
+            p.content.takeIf { it.isNotBlank() }?.let { text = it; break }
         }
-        return ""
+        for (k in urlKeys) {
+            val el = data[k] ?: continue
+            val p = el as? kotlinx.serialization.json.JsonPrimitive ?: continue
+            val v = p.content.trim()
+            if (v.startsWith("http")) { url = v; break }
+        }
+        if (url.isBlank()) {
+            fun walk(o: kotlinx.serialization.json.JsonObject) {
+                if (url.isNotBlank()) return
+                o.forEach { (_, v) ->
+                    when (v) {
+                        is kotlinx.serialization.json.JsonPrimitive -> {
+                            val s = v.content.trim()
+                            if (url.isBlank() && (s.startsWith("http://") || s.startsWith("https://"))) url = s
+                        }
+                        is kotlinx.serialization.json.JsonObject -> walk(v)
+                        is kotlinx.serialization.json.JsonArray -> v.forEach { el ->
+                            (el as? kotlinx.serialization.json.JsonObject)?.let { walk(it) }
+                        }
+                    }
+                }
+            }
+            walk(data)
+        }
+        return RutaHighlightClip(text, url)
     }
 
     /** 네이버 relay metricOption → 롯데 승리확률 시계열 */
@@ -1615,7 +1647,8 @@ class GiantsRepository private constructor(context: Context) {
         val battingOrder = battingLineupDto?.currentByOrder().orEmpty()
         val batterCode = state?.batter.orEmpty()
         val currentBatter = battingOrder.values.firstOrNull { it.pcode == batterCode }
-        val nextBatter = currentBatter?.let { battingOrder[(it.batOrder % 9) + 1] }
+        val nextOrder = currentBatter?.let { com.bossxor.lottegiants.domain.nextBatOrder(it.batOrder) }
+        val nextBatter = nextOrder?.let { battingOrder[it] }
 
         val inningScores = relay.inningScore
         fun Map<String, String>.ordered(): List<String> =
