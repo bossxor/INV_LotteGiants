@@ -16,9 +16,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import androidx.wear.compose.material.MaterialTheme
+import androidx.wear.compose.material.Scaffold
 import androidx.wear.compose.material.Text
+import androidx.wear.compose.material.TimeText
 import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.launch
@@ -27,11 +30,14 @@ import kotlinx.coroutines.tasks.await
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        SnapshotRepository.hydrate(this)
         lifecycleScope.launch { loadSnapshot() }
         setContent {
             MaterialTheme {
                 val snap by SnapshotRepository.snapshot.collectAsState()
-                SajikSummaryScreen(snap)
+                Scaffold(timeText = { TimeText() }) {
+                    SajikSummaryScreen(snap)
+                }
             }
         }
     }
@@ -44,7 +50,10 @@ class MainActivity : ComponentActivity() {
                 .use { buffer ->
                     buffer.forEach { item ->
                         if (item.uri.path == WearPaths.SNAPSHOT) {
-                            SnapshotRepository.updateFromDataMap(DataMapItem.fromDataItem(item).dataMap)
+                            SnapshotRepository.updateFromDataMap(
+                                this,
+                                DataMapItem.fromDataItem(item).dataMap,
+                            )
                         }
                     }
                 }
@@ -57,7 +66,7 @@ private fun SajikSummaryScreen(snap: SajikSnapshot) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 20.dp, vertical = 22.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -65,29 +74,46 @@ private fun SajikSummaryScreen(snap: SajikSnapshot) {
             Text(
                 text = stringResource(R.string.no_game),
                 textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.body1,
             )
             return@Column
         }
         Text(
+            text = if (snap.opponent.isBlank()) "롯데" else "롯데 vs ${snap.opponent}",
+            style = MaterialTheme.typography.caption1,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
             text = snap.scoreLine,
-            style = MaterialTheme.typography.display1,
+            fontSize = 34.sp,
             textAlign = TextAlign.Center,
         )
         Text(
-            text = snap.inning.ifBlank { snap.status },
+            text = snap.inning.ifBlank {
+                when (snap.status) {
+                    "BEFORE" -> snap.startTime.ifBlank { "예정" }
+                    "ENDED" -> "종료"
+                    "CANCELED" -> "취소"
+                    else -> snap.status.ifBlank { "—" }
+                }
+            },
             style = MaterialTheme.typography.title3,
             textAlign = TextAlign.Center,
         )
-        Text(
-            text = "${snap.bsoLine}  주${snap.basesLine}",
-            style = MaterialTheme.typography.body2,
-            textAlign = TextAlign.Center,
-        )
+        if (snap.status == "LIVE") {
+            Text(
+                text = "${snap.bsoLine}  ${snap.basesLine}",
+                style = MaterialTheme.typography.body2,
+                textAlign = TextAlign.Center,
+            )
+        }
         val matchup = snap.matchupLine
         if (matchup.isNotBlank()) {
             Text(
                 text = matchup,
-                style = MaterialTheme.typography.caption1,
+                style = MaterialTheme.typography.caption2,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,

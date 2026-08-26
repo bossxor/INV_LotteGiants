@@ -25,6 +25,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         val repo = GiantsRepository.get(applicationContext)
         val snap = runCatching { repo.refreshSnapshot() }.getOrElse { return Result.retry() }
         WidgetUpdater.updateAll(applicationContext)
+        WearBridge.syncSnapshot(applicationContext, snap)
 
         val game = snap.lotteGame
         // 라이브 폴링이 없어도 취소·시작 등 상태 전이 알림

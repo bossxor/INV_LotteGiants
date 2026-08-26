@@ -19,6 +19,11 @@ class SajikComplicationService : ComplicationDataSourceService() {
     override fun getPreviewData(type: ComplicationType): ComplicationData? =
         if (type == ComplicationType.SHORT_TEXT) buildData(preview = true) else null
 
+    override fun onCreate() {
+        super.onCreate()
+        SnapshotRepository.hydrate(this)
+    }
+
     private fun buildData(preview: Boolean = false): ShortTextComplicationData {
         val snap = if (preview) {
             SajikSnapshot(lotteScore = 3, oppScore = 2, inning = "7회말")

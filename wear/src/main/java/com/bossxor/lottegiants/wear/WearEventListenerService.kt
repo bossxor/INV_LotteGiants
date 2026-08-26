@@ -14,6 +14,11 @@ import java.nio.charset.Charset
 
 class WearEventListenerService : WearableListenerService() {
 
+    override fun onCreate() {
+        super.onCreate()
+        SnapshotRepository.hydrate(this)
+    }
+
     override fun onMessageReceived(messageEvent: MessageEvent) {
         if (messageEvent.path != WearPaths.EVENT) return
         val text = messageEvent.data.toString(Charset.forName("UTF-8"))
@@ -25,8 +30,7 @@ class WearEventListenerService : WearableListenerService() {
             if (event.type != DataEvent.TYPE_CHANGED) return@forEach
             if (event.dataItem.uri.path != WearPaths.SNAPSHOT) return@forEach
             val map = DataMapItem.fromDataItem(event.dataItem).dataMap
-            SnapshotRepository.updateFromDataMap(map)
-            SnapshotRepository.notifyWearUi(this)
+            SnapshotRepository.updateFromDataMap(this, map)
         }
     }
 

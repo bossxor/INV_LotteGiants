@@ -25,6 +25,8 @@ import kotlinx.coroutines.runBlocking
 object NotificationHelper {
 
     const val CHANNEL_LIVE = "live_score"
+    /** Now Bar/Live Update용. 기존 live_score는 IMPORTANCE_LOW라 승격이 막힐 수 있다. */
+    const val CHANNEL_LIVE_NOW = "live_score_nowbar"
     const val CHANNEL_SCORE = "event_score"
     const val CHANNEL_CONCEDE = "event_concede"
     const val CHANNEL_PITCHER = "event_pitcher"
@@ -56,6 +58,7 @@ object NotificationHelper {
             NotificationChannel(id, name, importance).also { nm.createNotificationChannel(it) }
 
         ch(CHANNEL_LIVE, "실시간 스코어", NotificationManager.IMPORTANCE_LOW)
+        ch(CHANNEL_LIVE_NOW, "Now Bar 스코어", NotificationManager.IMPORTANCE_DEFAULT)
         ch(CHANNEL_SCORE, "득점", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_CONCEDE, "실점", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_PITCHER, "투수 교체")
@@ -95,10 +98,10 @@ object NotificationHelper {
         }
         val summary = gameSummary(game)
         val compactLine = gameCompactLine(game)
-        val chipText = if (game == null) {
-            "대기"
-        } else {
-            "롯데 ${game.lotteScore}:${game.opponentScore} · ${game.inningLabel}"
+        val chipText = when {
+            game == null -> "대기"
+            game.status == GameStatus.BEFORE -> game.startTime.ifBlank { "예정" }
+            else -> "${game.lotteScore}:${game.opponentScore}"
         }
         val headerLine = if (game != null && game.status == GameStatus.LIVE) {
             buildString {
@@ -129,7 +132,7 @@ object NotificationHelper {
             LiveDisplayMode.FULL, LiveDisplayMode.LOCK_NOW -> scoreTitle to headerLine
         }
 
-        val builder = NotificationCompat.Builder(context, CHANNEL_LIVE)
+        val builder = NotificationCompat.Builder(context, CHANNEL_LIVE_NOW)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
@@ -137,11 +140,11 @@ object NotificationHelper {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
-            .setShowWhen(mode != LiveDisplayMode.STATUS_SCORE)
-            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
+            .setShowWhen(false)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setSubText(if (mode == LiveDisplayMode.STATUS_SCORE) chipText else null)
+            .setSubText(chipText)
             .setShortCriticalText(chipText)
             .setColor(COLOR_LOTTE)
 
@@ -161,11 +164,11 @@ object NotificationHelper {
                 .setCustomBigContentView(buildLiveRemoteViews(context, game, big = true))
                 .setStyle(NotificationCompat.DecoratedCustomViewStyle())
 
-            // 진행 중 경기는 이닝 진행 바로 — Now Bar에서 구글/네이버 스포츠처럼 크게 뜬다
-            game != null && game.status == GameStatus.LIVE && mode != LiveDisplayMode.STATUS_SCORE ->
+            // Now Bar/상태 칩은 ProgressStyle이어야 승격된다. 라이브 바가 아니어도 점수는 올린다.
+            mode != LiveDisplayMode.FULL ->
                 builder.setStyle(liveProgressStyle(context, game, countBmp))
 
-            mode != LiveDisplayMode.STATUS_SCORE -> builder.setStyle(
+            else -> builder.setStyle(
                 NotificationCompat.BigTextStyle()
                     .setBigContentTitle(scoreTitle)
                     .bigText(summary),
@@ -185,13 +188,18 @@ object NotificationHelper {
      */
     private fun liveProgressStyle(
         context: Context,
-        game: LotteGameInfo,
+        game: LotteGameInfo?,
         countBmp: Bitmap? = null,
     ): NotificationCompat.ProgressStyle {
-        val innings = maxOf(REGULATION_INNINGS, game.inning)
+        val innings = maxOf(REGULATION_INNINGS, game?.inning ?: REGULATION_INNINGS)
         val total = innings * 2
-        val current = ((game.inning - 1).coerceAtLeast(0) * 2 + if (game.isTopInning) 1 else 2)
-            .coerceIn(0, total)
+        val current = when (game?.status) {
+            GameStatus.LIVE ->
+                ((game.inning - 1).coerceAtLeast(0) * 2 + if (game.isTopInning) 1 else 2)
+                    .coerceIn(0, total)
+            GameStatus.ENDED -> total
+            else -> 0
+        }
 
         fun scoringPoints(scores: List<String>, isBottomHalf: Boolean, color: Int) =
             scores.mapIndexedNotNull { i, raw ->
@@ -205,8 +213,12 @@ object NotificationHelper {
                 List(innings) { NotificationCompat.ProgressStyle.Segment(2).setColor(COLOR_TRACK) },
             )
             .setProgressPoints(
-                scoringPoints(game.lotteInningScores, game.isHome, COLOR_LOTTE) +
-                    scoringPoints(game.opponentInningScores, !game.isHome, COLOR_OPPONENT),
+                if (game == null) {
+                    emptyList()
+                } else {
+                    scoringPoints(game.lotteInningScores, game.isHome, COLOR_LOTTE) +
+                        scoringPoints(game.opponentInningScores, !game.isHome, COLOR_OPPONENT)
+                },
             )
             .setProgress(current)
             .setStyledByProgress(false)
@@ -215,6 +227,27 @@ object NotificationHelper {
             style.setProgressStartIcon(IconCompat.createWithBitmap(countBmp))
         }
         return style
+    }
+
+    fun canPostNowBar(context: Context): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < 36) return false
+        return runCatching {
+            context.getSystemService(NotificationManager::class.java).canPostPromotedNotifications()
+        }.getOrDefault(false)
+    }
+
+    fun openNowBarSettings(context: Context) {
+        val pkg = android.net.Uri.parse("package:${context.packageName}")
+        val promoted = android.content.Intent("android.settings.MANAGE_APP_PROMOTED_NOTIFICATIONS")
+            .setData(pkg)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { context.startActivity(promoted) }.onFailure {
+            context.startActivity(
+                android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
     }
 
     /** 알림 접힘 상태용 한 줄 */

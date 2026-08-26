@@ -15,8 +15,8 @@ android {
         applicationId = "com.bossxor.lottegiants"
         minSdk = 31
         targetSdk = 36
-        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1035
-        versionName = (project.findProperty("versionName") as String?) ?: "1.3.28"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1036
+        versionName = (project.findProperty("versionName") as String?) ?: "1.3.29"
 
         // private GitHub 저장소 업데이트용 (local.properties 또는 env GITHUB_TOKEN)
         val localProps = Properties().apply {
@@ -105,5 +105,6 @@ dependencies {
     implementation("com.google.android.gms:play-services-wearable:19.0.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
     implementation("androidx.fragment:fragment-ktx:1.8.6")
+    wearApp(project(":wear"))
     testImplementation("junit:junit:4.13.2")
 }

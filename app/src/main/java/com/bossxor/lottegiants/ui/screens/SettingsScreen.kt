@@ -278,15 +278,32 @@ fun SettingsScreen(
                 Text(
                     when (liveMode) {
                         LiveDisplayMode.LOCK_NOW ->
-                            "이닝 진행 바와 볼카운트 점(B/S/O)을 함께 표시합니다. Now Bar를 지원하는 기기에서는 잠금화면·상태바에도 올라갑니다."
+                            "점수 칩이 Now Bar·잠금화면에 올라갑니다. 지원 폰에서만 보이며, 시스템에서 Now Bar를 켠 뒤 이 앱을 허용해야 합니다."
                         LiveDisplayMode.FULL ->
                             "선수 사진과 루상 다이아몬드까지 담은 상세 카드입니다. 대신 Now Bar에는 올라가지 않습니다."
                         LiveDisplayMode.STATUS_SCORE ->
-                            "점수·이닝·볼카운트를 한 줄로 간단히 표시합니다."
+                            "점수만 짧게 표시합니다. Now Bar가 되는 폰에서는 점수 칩으로도 올라갑니다."
                     },
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "워치4 등 Wear OS는 폰과 페어링되면 워치 앱·타일·컴플리케이션에 같은 점수가 갑니다.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (Build.VERSION.SDK_INT >= 36 && !NotificationHelper.canPostNowBar(context)) {
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = { NotificationHelper.openNowBarSettings(context) },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Now Bar 허용 열기", fontWeight = FontWeight.Bold)
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 Button(
                     onClick = {

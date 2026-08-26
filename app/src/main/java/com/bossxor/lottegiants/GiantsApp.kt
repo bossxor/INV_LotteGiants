@@ -11,6 +11,7 @@ import com.bossxor.lottegiants.live.EventDetector
 import com.bossxor.lottegiants.live.GameSchedulerWorker
 import com.bossxor.lottegiants.live.LiveScoreService
 import com.bossxor.lottegiants.live.NotificationHelper
+import com.bossxor.lottegiants.live.WearBridge
 import com.bossxor.lottegiants.widget.WidgetUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +32,7 @@ class GiantsApp : Application(), ImageLoaderFactory {
                 val repo = GiantsRepository.get(this@GiantsApp)
                 val snap = repo.refreshSnapshot()
                 WidgetUpdater.updateAll(this@GiantsApp)
+                WearBridge.syncSnapshot(this@GiantsApp, snap)
                 val detector = EventDetector(repo.store)
                 detector.process(this@GiantsApp, snap.lotteGame)
                 // 워커가 도는 15분을 기다리지 않고 앱을 열자마자 새 공시를 알린다
