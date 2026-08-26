@@ -385,6 +385,91 @@ fun teamCodeToName(code: String): String = when (code.trim().uppercase()) {
     else -> ""
 }
 
+/** 결과 필터·Keubo 팀카드/등말소용 10개 구단 */
+data class KboTeamRef(
+    val code: String,
+    val shortName: String,
+    val keuboSlug: String,
+    val keuboId: Int,
+)
+
+val KBO_TEAMS: List<KboTeamRef> = listOf(
+    KboTeamRef("LT", "롯데", "lotte", 7),
+    KboTeamRef("SS", "삼성", "samsung", 8),
+    KboTeamRef("HT", "KIA", "kia", 6),
+    KboTeamRef("LG", "LG", "lg", 1),
+    KboTeamRef("KT", "KT", "kt", 3),
+    KboTeamRef("OB", "두산", "doosan", 2),
+    KboTeamRef("HH", "한화", "hanwha", 9),
+    KboTeamRef("NC", "NC", "nc", 5),
+    KboTeamRef("SK", "SSG", "ssg", 4),
+    KboTeamRef("WO", "키움", "kiwoom", 10),
+)
+
+fun teamKeuboSlug(code: String): String =
+    KBO_TEAMS.firstOrNull { it.code.equals(code, true) }?.keuboSlug ?: "lotte"
+
+fun teamKeuboId(code: String): Int =
+    KBO_TEAMS.firstOrNull { it.code.equals(code, true) }?.keuboId ?: 7
+
+fun MiniGame.involvesTeam(code: String): Boolean {
+    val c = code.trim()
+    if (c.isBlank()) return true
+    val name = teamCodeToName(c)
+    return homeTeamCode.equals(c, true) || awayTeamCode.equals(c, true) ||
+        (name.isNotBlank() && (homeName.contains(name) || awayName.contains(name)))
+}
+
+fun MiniGame.isTeamHome(code: String): Boolean? {
+    if (!involvesTeam(code)) return null
+    val name = teamCodeToName(code)
+    return homeTeamCode.equals(code, true) || (name.isNotBlank() && homeName.contains(name))
+}
+
+fun MiniGame.teamWon(code: String): Boolean? {
+    if (status != GameStatus.ENDED || isCanceledGame() || !involvesTeam(code)) return null
+    if (homeScore == awayScore) return null
+    val home = isTeamHome(code) == true
+    val teamScore = if (home) homeScore else awayScore
+    val oppScore = if (home) awayScore else homeScore
+    return teamScore > oppScore
+}
+
+fun teamFullName(code: String): String = when (code.trim().uppercase()) {
+    "LT" -> "롯데 자이언츠"
+    "SS" -> "삼성 라이온즈"
+    "HT" -> "KIA 타이거즈"
+    "LG" -> "LG 트윈스"
+    "OB" -> "두산 베어스"
+    "KT" -> "KT 위즈"
+    "HH" -> "한화 이글스"
+    "NC" -> "NC 다이노스"
+    "SK" -> "SSG 랜더스"
+    "WO" -> "키움 히어로즈"
+    else -> teamCodeToName(code)
+}
+
+fun teamHomeLabel(code: String): String = when (code.trim().uppercase()) {
+    "LT" -> "부산 · 사직야구장"
+    "SS" -> "대구 · 라이온즈파크"
+    "HT" -> "광주 · 챔피언스필드"
+    "LG" -> "서울 · 잠실야구장"
+    "OB" -> "서울 · 잠실야구장"
+    "KT" -> "수원 · KT위즈파크"
+    "HH" -> "대전 · 한화생명이글스파크"
+    "NC" -> "창원 · NC파크"
+    "SK" -> "인천 · 랜더스필드"
+    "WO" -> "서울 · 고척스카이돔"
+    else -> ""
+}
+
+fun LeaderPlayer.matchesTeam(code: String): Boolean {
+    val c = code.trim().uppercase()
+    if (c.isBlank()) return false
+    if (isLotte && c == LOTTE_TEAM_CODE) return true
+    return teamNameToCode(team).equals(c, true)
+}
+
 @Serializable
 data class RankPoint(val date: String, val rank: Int)
 

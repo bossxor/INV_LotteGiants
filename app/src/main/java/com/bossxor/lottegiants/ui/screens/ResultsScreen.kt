@@ -66,12 +66,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bossxor.lottegiants.domain.GameStatus
+import com.bossxor.lottegiants.domain.KBO_TEAMS
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.cancelShortLabel
+import com.bossxor.lottegiants.domain.involvesTeam
 import com.bossxor.lottegiants.domain.isCanceledGame
+import com.bossxor.lottegiants.domain.isTeamHome
 import com.bossxor.lottegiants.domain.kboToday
+import com.bossxor.lottegiants.domain.teamCodeToName
+import com.bossxor.lottegiants.domain.teamWon
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.LoseRed
@@ -100,6 +105,10 @@ fun ResultsScreen(
     onRefresh: () -> Unit = {},
     refreshing: Boolean = false,
     onOpenGame: (String) -> Unit = {},
+    resultsTeamCode: String = "",
+    onSelectResultsTeam: (String) -> Unit = {},
+    seasonGames: List<MiniGame> = emptyList(),
+    seasonLoading: Boolean = false,
 ) {
     var mode by remember { mutableIntStateOf(0) } // 0 list, 1 calendar
     val today = remember { kboToday() }
@@ -114,8 +123,8 @@ fun ResultsScreen(
     var lastSyncedMonth by remember { mutableStateOf(listMonth) }
     var firstDateSync by remember { mutableStateOf(true) }
 
-    LaunchedEffect(selectedDate, mode, monthDates) {
-        if (mode != 0 || monthDates.isEmpty()) return@LaunchedEffect
+    LaunchedEffect(selectedDate, mode, monthDates, resultsTeamCode) {
+        if (mode != 0 || resultsTeamCode.isNotBlank() || monthDates.isEmpty()) return@LaunchedEffect
         val index = (selectedDate.dayOfMonth - 1).coerceIn(0, monthDates.lastIndex)
         val monthNow = YearMonth.from(selectedDate)
         // 첫 진입·월 이동은 애니메이션 없이 바로 중앙에 놓는다.
@@ -172,14 +181,33 @@ fun ResultsScreen(
                 ModeChip("캘린더", mode == 1) { mode = 1 }
             }
             Spacer(Modifier.height(10.dp))
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(vertical = 2.dp),
+            ) {
+                item {
+                    ModeChip("전체", resultsTeamCode.isBlank()) { onSelectResultsTeam("") }
+                }
+                items(KBO_TEAMS, key = { it.code }) { team ->
+                    ModeChip(team.shortName, resultsTeamCode == team.code) {
+                        onSelectResultsTeam(team.code)
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
 
             if (mode == 0) {
-                var lotteOnly by remember { mutableStateOf(false) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ModeChip("전체", !lotteOnly) { lotteOnly = false }
-                    ModeChip("롯데만", lotteOnly) { lotteOnly = true }
-                }
-                Spacer(Modifier.height(8.dp))
+                if (resultsTeamCode.isNotBlank()) {
+                    TeamSeasonList(
+                        teamCode = resultsTeamCode,
+                        seasonGames = seasonGames,
+                        monthGames = monthGames,
+                        loading = seasonLoading && seasonGames.isEmpty() && monthGames.none { it.involvesTeam(resultsTeamCode) },
+                        onOpenGame = onOpenGame,
+                        onRetry = onRefresh,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { shiftDay(-1) }) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "이전 날")
@@ -232,19 +260,8 @@ fun ResultsScreen(
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                val visibleGames = remember(games, lotteOnly) {
-                    val filtered = if (lotteOnly) {
-                        games.filter {
-                            it.homeTeamCode == LOTTE_TEAM_CODE || it.awayTeamCode == LOTTE_TEAM_CODE ||
-                                it.homeName.contains("롯데") || it.awayName.contains("롯데")
-                        }
-                    } else games
-                    filtered.sortedWith(lotteFirstComparator())
-                }
-                val lotteGames = visibleGames.filter {
-                    it.homeTeamCode == LOTTE_TEAM_CODE || it.awayTeamCode == LOTTE_TEAM_CODE ||
-                        it.homeName.contains("롯데") || it.awayName.contains("롯데")
-                }
+                val visibleGames = remember(games) { games.sortedWith(teamFirstComparator(LOTTE_TEAM_CODE)) }
+                val lotteGames = visibleGames.filter { it.involvesTeam(LOTTE_TEAM_CODE) }
                 val swipeModifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
@@ -281,11 +298,12 @@ fun ResultsScreen(
                                 if (lotteGames.size >= 2 && dhIndex >= 0) {
                                     Text("${dhIndex + 1}경기", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                 }
-                                ResultGameCard(g, onOpen = { onOpenGame(g.gameId) })
+                                ResultGameCard(g, focusTeamCode = LOTTE_TEAM_CODE, onOpen = { onOpenGame(g.gameId) })
                             }
                             item { Spacer(Modifier.height(16.dp)) }
                         }
                     }
+                }
                 }
             } else {
                 CalendarMonthView(
@@ -301,7 +319,63 @@ fun ResultsScreen(
                     onSwipeDay = { delta -> withSwipeLock { shiftDay(delta) } },
                     swipeEnabled = !swipeLock,
                     onOpenGame = onOpenGame,
+                    focusTeamCode = resultsTeamCode.ifBlank { LOTTE_TEAM_CODE },
+                    filterTeamCode = resultsTeamCode,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TeamSeasonList(
+    teamCode: String,
+    seasonGames: List<MiniGame>,
+    monthGames: List<MiniGame>,
+    loading: Boolean,
+    onOpenGame: (String) -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val name = teamCodeToName(teamCode)
+    val teamGames = remember(seasonGames, monthGames, teamCode) {
+        val src = if (seasonGames.isNotEmpty()) seasonGames else monthGames
+        src.filter { it.involvesTeam(teamCode) }
+            .sortedWith(compareByDescending<MiniGame> { it.gameDate }.thenByDescending { it.startTime })
+    }
+    val ended = teamGames.filter { it.status == GameStatus.ENDED && !it.isCanceledGame() }
+    val wins = ended.count { it.teamWon(teamCode) == true }
+    val losses = ended.count { it.teamWon(teamCode) == false }
+    val draws = ended.count { it.teamWon(teamCode) == null }
+    val grouped = remember(teamGames) { teamGames.groupBy { it.gameDate }.toList() }
+
+    Column(modifier.fillMaxWidth()) {
+        Text(
+            "$name 시즌  ${wins}승 ${losses}패 ${draws}무",
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+        )
+        Spacer(Modifier.height(8.dp))
+        when {
+            loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            }
+            teamGames.isEmpty() -> EmptyRetry(message = "${name} 경기가 없습니다.", onRetry = onRetry)
+            else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                grouped.forEach { (date, dayGames) ->
+                    item(key = "h-$date") {
+                        Text(
+                            date.ifBlank { "날짜 미정" },
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    items(dayGames, key = { it.gameId }) { g ->
+                        ResultGameCard(g, focusTeamCode = teamCode, onOpen = { onOpenGame(g.gameId) })
+                    }
+                }
+                item { Spacer(Modifier.height(16.dp)) }
             }
         }
     }
@@ -428,6 +502,8 @@ private fun CalendarMonthView(
     onSwipeDay: (Long) -> Unit = {},
     swipeEnabled: Boolean = true,
     onOpenGame: (String) -> Unit = {},
+    focusTeamCode: String = LOTTE_TEAM_CODE,
+    filterTeamCode: String = "",
 ) {
     val byDate = remember(monthGames) {
         monthGames.groupBy { it.gameDate.takeIf { d -> d.isNotBlank() } ?: "" }
@@ -499,6 +575,7 @@ private fun CalendarMonthView(
                             selectedDate = selectedDate,
                             today = today,
                             onSelectDate = onSelectDate,
+                            focusTeamCode = focusTeamCode,
                         )
                     }
                 }
@@ -524,7 +601,9 @@ private fun CalendarMonthView(
             fontSize = 14.sp,
         )
         Spacer(Modifier.height(8.dp))
-        val games = selectedGames.sortedWith(lotteFirstComparator())
+        val games = selectedGames
+            .filter { filterTeamCode.isBlank() || it.involvesTeam(filterTeamCode) }
+            .sortedWith(teamFirstComparator(focusTeamCode))
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
@@ -536,7 +615,7 @@ private fun CalendarMonthView(
                 item { EmptyRetry(message = "경기가 없습니다.", onRetry = onRetry) }
             } else {
                 items(games, key = { it.gameId }) { g ->
-                    ResultGameCard(g, onOpen = { onOpenGame(g.gameId) })
+                    ResultGameCard(g, focusTeamCode = focusTeamCode, onOpen = { onOpenGame(g.gameId) })
                 }
             }
             item { Spacer(Modifier.height(16.dp)) }
@@ -551,23 +630,24 @@ private fun RowScope.CalendarDayCell(
     selectedDate: LocalDate,
     today: LocalDate,
     onSelectDate: (LocalDate) -> Unit,
+    focusTeamCode: String = LOTTE_TEAM_CODE,
 ) {
     Box(Modifier.weight(1f).aspectRatio(0.85f)) {
         if (date != null) {
-            val lotteGames = cellGames.filter { it.isLotteGame() }
-            val lotte = lotteGames.firstOrNull()
-            val dh = lotteGames.size >= 2
-            val lotteHome = lotte?.isLotteHome()
-            val endedGames = lotteGames.filter { it.status == GameStatus.ENDED && !it.isCanceledGame() }
-            val canceled = !dh && lotte?.isCanceledGame() == true
-            val ended = if (dh) endedGames.size == lotteGames.count { !it.isCanceledGame() } && endedGames.isNotEmpty()
-            else lotte?.status == GameStatus.ENDED
-            val wins = endedGames.count { it.lotteResult() == true }
-            val losses = endedGames.count { it.lotteResult() == false }
+            val teamGames = cellGames.filter { it.involvesTeam(focusTeamCode) }
+            val focus = teamGames.firstOrNull()
+            val dh = teamGames.size >= 2
+            val teamHome = focus?.isTeamHome(focusTeamCode)
+            val endedGames = teamGames.filter { it.status == GameStatus.ENDED && !it.isCanceledGame() }
+            val canceled = !dh && focus?.isCanceledGame() == true
+            val ended = if (dh) endedGames.size == teamGames.count { !it.isCanceledGame() } && endedGames.isNotEmpty()
+            else focus?.status == GameStatus.ENDED
+            val wins = endedGames.count { it.teamWon(focusTeamCode) == true }
+            val losses = endedGames.count { it.teamWon(focusTeamCode) == false }
             val draws = endedGames.count { it.status == GameStatus.ENDED && it.homeScore == it.awayScore }
-            val lotteWon = !dh && lotte?.lotteResult() == true
-            val lotteLost = !dh && lotte?.lotteResult() == false
-            val draw = !dh && ended && lotte != null && lotte.homeScore == lotte.awayScore
+            val teamWon = !dh && focus?.teamWon(focusTeamCode) == true
+            val teamLost = !dh && focus?.teamWon(focusTeamCode) == false
+            val draw = !dh && ended && focus != null && focus.homeScore == focus.awayScore
             val cellLabel = when {
                 dh && ended -> buildString {
                     if (wins > 0) append("${wins}승")
@@ -575,12 +655,12 @@ private fun RowScope.CalendarDayCell(
                     if (draws > 0) append("${draws}무")
                 }.ifBlank { "DH" }
                 dh -> "DH"
-                canceled -> lotte?.cancelShortLabel
-                ended && lotteWon -> "승"
-                ended && lotteLost -> "패"
+                canceled -> focus?.cancelShortLabel
+                ended && teamWon -> "승"
+                ended && teamLost -> "패"
                 ended && draw -> "무"
-                lotteHome == true -> "홈"
-                lotteHome == false -> "원정"
+                teamHome == true -> "홈"
+                teamHome == false -> "원정"
                 else -> null
             }
             val cellLabelColor = when {
@@ -588,10 +668,10 @@ private fun RowScope.CalendarDayCell(
                 dh && ended && losses > 0 && wins == 0 && draws == 0 -> LoseRed
                 dh -> LotteGold
                 canceled -> MaterialTheme.colorScheme.onSurfaceVariant
-                ended && lotteWon -> WinGreen
-                ended && lotteLost -> LoseRed
+                ended && teamWon -> WinGreen
+                ended && teamLost -> LoseRed
                 ended && draw -> LotteGold
-                lotteHome == true -> MaterialTheme.colorScheme.primary
+                teamHome == true -> MaterialTheme.colorScheme.primary
                 else -> MaterialTheme.colorScheme.onSurfaceVariant
             }
             val border = when {
@@ -605,11 +685,11 @@ private fun RowScope.CalendarDayCell(
                 dh && ended && losses > 0 && wins == 0 && draws == 0 -> LoseRed.copy(alpha = 0.10f)
                 dh -> LotteGold.copy(alpha = 0.10f)
                 canceled -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                ended && lotteWon -> WinGreen.copy(alpha = 0.10f)
-                ended && lotteLost -> LoseRed.copy(alpha = 0.10f)
+                ended && teamWon -> WinGreen.copy(alpha = 0.10f)
+                ended && teamLost -> LoseRed.copy(alpha = 0.10f)
                 ended && draw -> LotteGold.copy(alpha = 0.12f)
-                lotteHome == true -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                lotteHome == false -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                teamHome == true -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                teamHome == false -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
                 else -> Color.Transparent
             }
             Column(
@@ -663,10 +743,15 @@ private fun RowScope.CalendarDayCell(
 }
 
 @Composable
-private fun ResultGameCard(g: MiniGame, onOpen: () -> Unit = {}) {
-    val lotte = g.isLotteGame()
-    val won = g.lotteResult()
-    val lotteHome = g.isLotteHome()
+private fun ResultGameCard(
+    g: MiniGame,
+    focusTeamCode: String = LOTTE_TEAM_CODE,
+    onOpen: () -> Unit = {},
+) {
+    val involved = g.involvesTeam(focusTeamCode)
+    val won = g.teamWon(focusTeamCode)
+    val teamHome = g.isTeamHome(focusTeamCode)
+    val focusName = teamCodeToName(focusTeamCode).ifBlank { "롯데" }
     val canceled = g.isCanceledGame()
     SectionCard {
         Row(
@@ -679,20 +764,34 @@ private fun ResultGameCard(g: MiniGame, onOpen: () -> Unit = {}) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TeamLogo(g.awayLogoUrl, size = 22)
                     Spacer(Modifier.width(6.dp))
-                    Text(g.awayName, fontWeight = if (g.awayName.contains("롯데")) FontWeight.Bold else FontWeight.Medium)
+                    Text(
+                        g.awayName,
+                        fontWeight = if (g.awayTeamCode.equals(focusTeamCode, true) || g.awayName.contains(focusName)) {
+                            FontWeight.Bold
+                        } else {
+                            FontWeight.Medium
+                        },
+                    )
                     Spacer(Modifier.width(8.dp))
                     Text("vs", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.width(8.dp))
-                    Text(g.homeName, fontWeight = if (g.homeName.contains("롯데")) FontWeight.Bold else FontWeight.Medium)
+                    Text(
+                        g.homeName,
+                        fontWeight = if (g.homeTeamCode.equals(focusTeamCode, true) || g.homeName.contains(focusName)) {
+                            FontWeight.Bold
+                        } else {
+                            FontWeight.Medium
+                        },
+                    )
                     Spacer(Modifier.width(6.dp))
                     TeamLogo(g.homeLogoUrl, size = 22)
                 }
                 Spacer(Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (lotteHome != null) {
+                    if (teamHome != null) {
                         StatusPill(
-                            if (lotteHome) "홈" else "원정",
-                            if (lotteHome) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            if (teamHome) "홈" else "원정",
+                            if (teamHome) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     if (g.doubleHeaderNo > 0) {
@@ -709,9 +808,9 @@ private fun ResultGameCard(g: MiniGame, onOpen: () -> Unit = {}) {
                         )
                         g.status == GameStatus.ENDED -> {
                             when {
-                                won == true -> StatusPill("롯데 승", WinGreen)
-                                won == false -> StatusPill("롯데 패", LoseRed)
-                                lotte && g.homeScore == g.awayScore -> StatusPill("무승부", LotteGold)
+                                won == true -> StatusPill("$focusName 승", WinGreen)
+                                won == false -> StatusPill("$focusName 패", LoseRed)
+                                involved && g.homeScore == g.awayScore -> StatusPill("무승부", LotteGold)
                                 else -> StatusPill("경기종료", MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
@@ -765,27 +864,8 @@ private fun StatusPill(text: String, color: Color) {
     )
 }
 
-private fun MiniGame.isLotteGame(): Boolean =
-    homeName.contains("롯데") || awayName.contains("롯데") ||
-        homeTeamCode == LOTTE_TEAM_CODE || awayTeamCode == LOTTE_TEAM_CODE
-
-/** 롯데 경기면 홈 여부, 아니면 null */
-private fun MiniGame.isLotteHome(): Boolean? {
-    if (!isLotteGame()) return null
-    return homeName.contains("롯데") || homeTeamCode == LOTTE_TEAM_CODE
-}
-
-private fun MiniGame.lotteResult(): Boolean? {
-    if (status != GameStatus.ENDED || !isLotteGame()) return null
-    if (homeScore == awayScore) return null
-    val lotteHome = homeName.contains("롯데") || homeTeamCode == LOTTE_TEAM_CODE
-    val lotteScore = if (lotteHome) homeScore else awayScore
-    val oppScore = if (lotteHome) awayScore else homeScore
-    return lotteScore > oppScore
-}
-
-private fun lotteFirstComparator(): Comparator<MiniGame> =
-    compareByDescending<MiniGame> { it.isLotteGame() }.thenBy { it.startTime }
+private fun teamFirstComparator(code: String): Comparator<MiniGame> =
+    compareByDescending<MiniGame> { it.involvesTeam(code) }.thenBy { it.startTime }
 
 private fun koreanDow(d: DayOfWeek): String = when (d) {
     DayOfWeek.MONDAY -> "월"

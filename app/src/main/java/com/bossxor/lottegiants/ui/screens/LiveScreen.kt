@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LOTTE_LOGO_URL
+import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LineupSlot
 import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.LotteGameInfo
@@ -91,9 +92,9 @@ fun LiveScreen(
     onRefresh: () -> Unit = {},
     weather: StadiumWeather? = null,
     batterLeaders: List<com.bossxor.lottegiants.domain.LeaderPlayer> = emptyList(),
-    onOpenTeamHistory: () -> Unit = {},
-    onOpenEntryBoard: () -> Unit = {},
-    onOpenLeaders: () -> Unit = {},
+    onOpenTeamHistory: (String) -> Unit = {},
+    onOpenEntryBoard: (String) -> Unit = {},
+    onOpenLeaders: (String) -> Unit = {},
     onPlayerClick: (LineupSlot) -> Unit = {},
     onPitcherClick: (com.bossxor.lottegiants.domain.PitcherLine) -> Unit = {},
     onKeyPlayerClick: (String, String) -> Unit = { _, _ -> },
@@ -160,10 +161,13 @@ fun LiveScreen(
                 }
                 CompactRefresh(secondsUntilRefresh, isRefreshing, onRefresh)
             }
-            if (!viewingOtherTeam) {
-                Spacer(Modifier.height(10.dp))
-                QuickLinks(onOpenTeamHistory, onOpenEntryBoard, onOpenLeaders)
-            }
+            val focusTeam = game?.focusTeamCode?.ifBlank { LOTTE_TEAM_CODE } ?: LOTTE_TEAM_CODE
+            Spacer(Modifier.height(10.dp))
+            QuickLinks(
+                onHistory = { onOpenTeamHistory(focusTeam) },
+                onEntry = { onOpenEntryBoard(focusTeam) },
+                onLeaders = { onOpenLeaders(focusTeam) },
+            )
             Spacer(Modifier.height(12.dp))
 
             val showSpinner = (loading && snapshot == null && viewingGame == null) ||

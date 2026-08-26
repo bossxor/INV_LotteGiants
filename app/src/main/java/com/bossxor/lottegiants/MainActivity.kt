@@ -65,11 +65,13 @@ import com.bossxor.lottegiants.data.InstallResult
 import com.bossxor.lottegiants.data.UpdateCheckResult
 import com.bossxor.lottegiants.data.UpdateChecker
 import com.bossxor.lottegiants.domain.GameStatus
+import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LeaderPlayer
 import com.bossxor.lottegiants.domain.LineupSlot
 import com.bossxor.lottegiants.domain.LotteTeamCard
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.focusName
+import com.bossxor.lottegiants.domain.teamCodeToName
 import com.bossxor.lottegiants.domain.RosterMove
 import com.bossxor.lottegiants.domain.ThemeMode
 import com.bossxor.lottegiants.domain.inningLabel
@@ -134,6 +136,11 @@ class MainActivity : ComponentActivity() {
                 val favoritePlayers by vm.favoritePlayers.collectAsState()
                 val viewingGame by vm.viewingGame.collectAsState()
                 val viewingLoading by vm.viewingLoading.collectAsState()
+                val resultsTeamCode by vm.resultsTeamCode.collectAsState()
+                val seasonGames by vm.seasonGames.collectAsState()
+                val seasonLoading by vm.seasonLoading.collectAsState()
+                val overlayTeamCode by vm.overlayTeamCode.collectAsState()
+                val overlayTeamCard by vm.overlayTeamCard.collectAsState()
                 val scope = rememberCoroutineScope()
                 var updateStatus by remember { mutableStateOf<String?>(null) }
                 var autoUpdateRan by remember { mutableStateOf(false) }
@@ -301,6 +308,15 @@ class MainActivity : ComponentActivity() {
                     viewingLoading = viewingLoading,
                     onOpenGame = vm::openGame,
                     onBackToLotte = vm::backToLotte,
+                    resultsTeamCode = resultsTeamCode,
+                    onSelectResultsTeam = vm::setResultsTeam,
+                    seasonGames = seasonGames,
+                    seasonLoading = seasonLoading,
+                    overlayTeamCode = overlayTeamCode,
+                    overlayTeamCard = overlayTeamCard,
+                    onOpenTeamHistory = vm::openTeamHistory,
+                    onOpenEntryForTeam = vm::openEntryForTeam,
+                    onOpenLeadersForTeam = vm::openLeadersForTeam,
                     onExit = { finish() },
                 )
             }
@@ -388,6 +404,15 @@ private fun AppScaffold(
     viewingLoading: Boolean,
     onOpenGame: (String) -> Unit,
     onBackToLotte: () -> Unit,
+    resultsTeamCode: String,
+    onSelectResultsTeam: (String) -> Unit,
+    seasonGames: List<com.bossxor.lottegiants.domain.MiniGame>,
+    seasonLoading: Boolean,
+    overlayTeamCode: String,
+    overlayTeamCard: LotteTeamCard?,
+    onOpenTeamHistory: (String) -> Unit,
+    onOpenEntryForTeam: (String) -> Unit,
+    onOpenLeadersForTeam: (String) -> Unit,
     onExit: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -465,7 +490,11 @@ private fun AppScaffold(
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when (overlay) {
-                Overlay.TeamHistory -> TeamHistoryScreen(onBack = { overlay = Overlay.None })
+                Overlay.TeamHistory -> TeamHistoryScreen(
+                    onBack = { overlay = Overlay.None },
+                    teamCode = overlayTeamCode,
+                    teamCard = overlayTeamCard,
+                )
                 Overlay.EntryBoard -> EntryBoardScreen(
                     selectedDate = entryDate,
                     dayEntry = dayEntry,
@@ -474,6 +503,7 @@ private fun AppScaffold(
                     changeDates = entryChangeDates,
                     onSelectDate = onSelectEntryDate,
                     onBack = { overlay = Overlay.None },
+                    teamName = teamCodeToName(overlayTeamCode).ifBlank { "롯데" },
                     onPlayerClick = { p ->
                         showPlayerSheet = true
                         onPlayerClick(
@@ -493,6 +523,7 @@ private fun AppScaffold(
                     batters = batterLeaders,
                     pitchers = pitcherLeaders,
                     favoriteCodes = favoriteCodes,
+                    filterTeamCode = overlayTeamCode,
                     onBack = { overlay = Overlay.None },
                     onPlayerClick = { p ->
                         showPlayerSheet = true
@@ -512,12 +543,18 @@ private fun AppScaffold(
                         onRefresh = onRefresh,
                         weather = weather,
                         batterLeaders = batterLeaders,
-                        onOpenTeamHistory = { overlay = Overlay.TeamHistory },
-                        onOpenEntryBoard = {
-                            onOpenEntrySmart()
+                        onOpenTeamHistory = { code ->
+                            onOpenTeamHistory(code)
+                            overlay = Overlay.TeamHistory
+                        },
+                        onOpenEntryBoard = { code ->
+                            onOpenEntryForTeam(code)
                             overlay = Overlay.EntryBoard
                         },
-                        onOpenLeaders = { overlay = Overlay.Leaders },
+                        onOpenLeaders = { code ->
+                            onOpenLeadersForTeam(code)
+                            overlay = Overlay.Leaders
+                        },
                         onPlayerClick = { slot ->
                             showPlayerSheet = true
                             onPlayerClick(slot)
@@ -572,13 +609,20 @@ private fun AppScaffold(
                             overlay = Overlay.None
                             onOpenGame(id)
                         },
+                        resultsTeamCode = resultsTeamCode,
+                        onSelectResultsTeam = onSelectResultsTeam,
+                        seasonGames = seasonGames,
+                        seasonLoading = seasonLoading,
                     )
                     2 -> StandingsScreen(
                         standings = standings,
                         teamCard = teamCard,
                         batterLeaders = batterLeaders,
                         pitcherLeaders = pitcherLeaders,
-                        onOpenLeaders = { overlay = Overlay.Leaders },
+                        onOpenLeaders = {
+                            onOpenLeadersForTeam(LOTTE_TEAM_CODE)
+                            overlay = Overlay.Leaders
+                        },
                         onRefresh = onRefreshStandings,
                         refreshing = isRefreshing,
                     )

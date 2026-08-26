@@ -40,7 +40,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bossxor.lottegiants.domain.LeaderPlayer
+import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.TitleRankEntry
+import com.bossxor.lottegiants.domain.matchesTeam
+import com.bossxor.lottegiants.domain.teamCodeToName
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.teamNameToCode
 import com.bossxor.lottegiants.ui.LotteGold
@@ -88,11 +91,15 @@ fun LeadersScreen(
     onBack: (() -> Unit)? = null,
     onPlayerClick: (LeaderPlayer) -> Unit = {},
     onToggleFavorite: (LeaderPlayer) -> Unit = {},
+    filterTeamCode: String = LOTTE_TEAM_CODE,
 ) {
     var tab by remember { mutableIntStateOf(0) }
-    var lotteOnly by remember { mutableStateOf(false) }
+    var teamOnly by remember(filterTeamCode) {
+        mutableStateOf(filterTeamCode.isNotBlank() && filterTeamCode != LOTTE_TEAM_CODE)
+    }
     val season = remember { LocalDate.now().let { if (it.monthValue < 3) it.year - 1 else it.year } }
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
+    val teamLabel = teamCodeToName(filterTeamCode).ifBlank { "롯데" }
 
     Column(
         Modifier
@@ -118,7 +125,7 @@ fun LeadersScreen(
             TitleTabChip("타자 타이틀", selected = tab == 0) { tab = 0 }
             TitleTabChip("투수 타이틀", selected = tab == 1) { tab = 1 }
             Spacer(Modifier.weight(1f))
-            TitleTabChip("롯데만", selected = lotteOnly) { lotteOnly = !lotteOnly }
+            TitleTabChip("${teamLabel}만", selected = teamOnly) { teamOnly = !teamOnly }
         }
         Spacer(Modifier.height(14.dp))
 
@@ -132,17 +139,18 @@ fun LeadersScreen(
                 val key = "${tab}_${cat.key}"
                 val showAll = expanded[key] == true
                 val allEntries = remember(pool, cat.key) { buildTitleRanks(pool, cat).take(20) }
-                val entries = if (lotteOnly) allEntries.filter { it.player.isLotte } else allEntries
+                val entries = if (teamOnly) allEntries.filter { it.player.matchesTeam(filterTeamCode) } else allEntries
                 TitleSectionCard(
                     title = "${cat.title} ($season)",
                     entries = if (showAll) entries else entries.take(5),
                     expanded = showAll,
                     canExpand = entries.size > 5,
-                    emptyMessage = if (lotteOnly && entries.isEmpty()) "롯데 선수 없음" else null,
+                    emptyMessage = if (teamOnly && entries.isEmpty()) "${teamLabel} 선수 없음" else null,
                     favoriteCodes = favoriteCodes,
                     onToggle = { expanded[key] = !showAll },
                     onPlayerClick = onPlayerClick,
                     onToggleFavorite = onToggleFavorite,
+                    highlightTeamCode = filterTeamCode,
                 )
                 Spacer(Modifier.height(10.dp))
             }
@@ -179,6 +187,7 @@ private fun TitleSectionCard(
     onToggle: () -> Unit,
     onPlayerClick: (LeaderPlayer) -> Unit,
     onToggleFavorite: (LeaderPlayer) -> Unit = {},
+    highlightTeamCode: String = LOTTE_TEAM_CODE,
 ) {
     SectionCard(padding = 0.dp) {
         Column {
@@ -200,6 +209,7 @@ private fun TitleSectionCard(
                 TitlePlayerRow(
                     e,
                     isFavorite = e.player.playerCode in favoriteCodes,
+                    highlight = e.player.matchesTeam(highlightTeamCode),
                     onClick = { onPlayerClick(e.player) },
                     onToggleFavorite = { onToggleFavorite(e.player) },
                 )
@@ -235,11 +245,12 @@ private fun TitleSectionCard(
 private fun TitlePlayerRow(
     e: TitleRankEntry,
     isFavorite: Boolean = false,
+    highlight: Boolean = false,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit = {},
 ) {
     val p = e.player
-    val bg = if (p.isLotte) LotteGold.copy(alpha = 0.10f) else Color.Transparent
+    val bg = if (highlight) LotteGold.copy(alpha = 0.10f) else Color.Transparent
     Row(
         Modifier
             .fillMaxWidth()
@@ -298,7 +309,7 @@ private fun TitlePlayerRow(
             e.valueLabel,
             fontWeight = FontWeight.Black,
             fontSize = 18.sp,
-            color = if (p.isLotte) MaterialTheme.colorScheme.primary
+            color = if (highlight) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.onSurface,
         )
     }

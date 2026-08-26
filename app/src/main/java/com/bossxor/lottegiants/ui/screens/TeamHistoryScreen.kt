@@ -23,18 +23,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.bossxor.lottegiants.domain.LOTTE_LOGO_URL
+import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LotteHistory
+import com.bossxor.lottegiants.domain.LotteTeamCard
+import com.bossxor.lottegiants.domain.teamFullName
+import com.bossxor.lottegiants.domain.teamHomeLabel
+import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.ui.components.SectionCard
 import com.bossxor.lottegiants.ui.components.TeamLogo
 
 @Composable
-fun TeamHistoryScreen(onBack: () -> Unit) {
+fun TeamHistoryScreen(
+    onBack: () -> Unit,
+    teamCode: String = LOTTE_TEAM_CODE,
+    teamCard: LotteTeamCard? = null,
+) {
+    val code = teamCode.ifBlank { LOTTE_TEAM_CODE }
+    val isLotte = code.equals(LOTTE_TEAM_CODE, true)
     Column(
         Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp)
+            .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
@@ -45,27 +55,50 @@ fun TeamHistoryScreen(onBack: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         SectionCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TeamLogo(LOTTE_LOGO_URL, size = 48)
+                TeamLogo(teamLogoUrl(code), size = 48)
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
-                        "롯데 자이언츠",
+                        teamFullName(code),
                         fontWeight = FontWeight.Black,
                         fontSize = 18.sp,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    Text("부산 · 사직야구장", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                    Text(
+                        teamHomeLabel(code),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 13.sp,
+                    )
                 }
             }
         }
-        Spacer(Modifier.height(12.dp))
-        LotteHistory.sections.forEach { section ->
-            SectionCard(modifier = Modifier.padding(bottom = 10.dp)) {
-                Column {
-                    Text(section.title, style = MaterialTheme.typography.titleSmall)
-                    Spacer(Modifier.height(8.dp))
-                    section.items.forEach { item ->
-                        Text("·  $item", fontSize = 14.sp, modifier = Modifier.padding(vertical = 3.dp))
+        if (teamCard != null && (teamCard.currentRank > 0 || teamCard.streak.isNotBlank())) {
+            Spacer(Modifier.height(12.dp))
+            SectionCard {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("시즌 현황", fontWeight = FontWeight.Bold)
+                    if (teamCard.currentRank > 0) {
+                        Text("${teamCard.currentRank}위", fontSize = 14.sp)
+                    }
+                    if (teamCard.streak.isNotBlank()) {
+                        Text(teamCard.streak, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (teamCard.gamesBehind != 0.0) {
+                        Text("게임차 ${teamCard.gamesBehind}", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+        if (isLotte) {
+            Spacer(Modifier.height(12.dp))
+            LotteHistory.sections.forEach { section ->
+                SectionCard(modifier = Modifier.padding(bottom = 10.dp)) {
+                    Column {
+                        Text(section.title, style = MaterialTheme.typography.titleSmall)
+                        Spacer(Modifier.height(8.dp))
+                        section.items.forEach { item ->
+                            Text("·  $item", fontSize = 14.sp, modifier = Modifier.padding(vertical = 3.dp))
+                        }
                     }
                 }
             }

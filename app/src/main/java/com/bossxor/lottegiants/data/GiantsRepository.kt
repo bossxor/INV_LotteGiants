@@ -34,7 +34,9 @@ import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.runnerOccupied
 import com.bossxor.lottegiants.domain.resolveStadiumCoord
 import com.bossxor.lottegiants.domain.teamCodeToName
+import com.bossxor.lottegiants.domain.teamKeuboId
 import com.bossxor.lottegiants.domain.teamLogoUrl
+import com.bossxor.lottegiants.domain.matchesTeam
 import com.bossxor.lottegiants.domain.doubleHeaderNoFromGameId
 import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.kboToday
@@ -811,6 +813,35 @@ class GiantsRepository private constructor(context: Context) {
         }
     }
 
+    suspend fun fetchGamesForSeason(year: Int): List<MiniGame> {
+        val today = kboToday()
+        val from = LocalDate.of(year, 3, 1)
+        val cap = LocalDate.of(year, 11, 15)
+        val to = today.plusDays(14).let { if (it.isAfter(cap)) cap else it }
+        val out = mutableListOf<MiniGame>()
+        var cursor = from
+        while (!cursor.isAfter(to)) {
+            val end = cursor.plusDays(9).let { if (it.isAfter(to)) to else it }
+            val kbo = fetchKboGamesCached(cursor, end)
+            if (kbo.isNotEmpty()) {
+                kbo.groupBy { it.isoDate() }.forEach { (dayStr, dayGames) ->
+                    val date = runCatching { LocalDate.parse(dayStr) }.getOrDefault(cursor)
+                    out += kboToMiniGames(date, dayGames)
+                }
+            }
+            cursor = end.plusDays(1)
+        }
+        if (out.isEmpty()) {
+            var ym = YearMonth.from(from)
+            val endYm = YearMonth.from(to)
+            while (!ym.isAfter(endYm)) {
+                out += fetchGamesForMonth(ym)
+                ym = ym.plusMonths(1)
+            }
+        }
+        return out
+    }
+
     private suspend fun kboToMiniGames(date: LocalDate, games: List<KboOfficialGame>): List<MiniGame> =
         games.map { g ->
             if (g.status() != GameStatus.CANCELED) return@map g.toMiniGame()
@@ -873,17 +904,22 @@ class GiantsRepository private constructor(context: Context) {
      * KBO 공식 선수등록현황(날짜별 등록/말소).
      * 출처: m.koreabaseball.com GetRoster
      */
-    suspend fun fetchDayEntryChanges(date: LocalDate, resolveCodes: Boolean = true): DayEntryChanges {
+    suspend fun fetchDayEntryChanges(
+        date: LocalDate,
+        resolveCodes: Boolean = true,
+        teamCode: String = LOTTE_TEAM_CODE,
+    ): DayEntryChanges {
+        val code = teamCode.ifBlank { LOTTE_TEAM_CODE }
         val season = date.year.toString()
         val gDt = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
         val res = kboApi.getRoster(
-            KboRosterRequest(season_id = season, g_dt = gDt, t_id = LOTTE_TEAM_CODE),
+            KboRosterRequest(season_id = season, g_dt = gDt, t_id = code),
         )
         val codeByName = if (resolveCodes) {
             runCatching {
-                val batters = fetchLeaders(false).filter { it.isLotte }
-                val pitchers = fetchLeaders(true).filter { it.isLotte }
-                val moves = fetchAllRosterMoves()
+                val batters = fetchLeaders(false).filter { it.matchesTeam(code) }
+                val pitchers = fetchLeaders(true).filter { it.matchesTeam(code) }
+                val moves = fetchAllRosterMoves(code)
                     .filter { it.playerCode.isNotBlank() && it.playerName.isNotBlank() }
                     .associate { it.playerName to it.playerCode }
                 Triple(
@@ -917,7 +953,7 @@ class GiantsRepository private constructor(context: Context) {
         val kboReg = toPlayers(res.tableKboY)
         val kboRem = toPlayers(res.tableKboN)
         val keuboDay = if (resolveCodes) {
-            runCatching { fetchAllRosterMoves() }.getOrDefault(emptyList())
+            runCatching { fetchAllRosterMoves(code) }.getOrDefault(emptyList())
                 .filter { it.moveDate == gDt }
         } else {
             emptyList()
@@ -944,37 +980,42 @@ class GiantsRepository private constructor(context: Context) {
     }
 
     /** 오늘부터 최대 lookback일 전까지 공시가 있는 가장 최근 날짜 */
-    suspend fun findLatestEntryDate(lookback: Int = 21): LocalDate {
+    suspend fun findLatestEntryDate(lookback: Int = 21, teamCode: String = LOTTE_TEAM_CODE): LocalDate {
         val today = LocalDate.now()
         for (i in 0..lookback) {
             val d = today.minusDays(i.toLong())
-            val changes = runCatching { fetchDayEntryChanges(d, resolveCodes = false) }.getOrNull()
+            val changes = runCatching {
+                fetchDayEntryChanges(d, resolveCodes = false, teamCode = teamCode)
+            }.getOrNull()
             if (changes != null && changes.hasChanges) return d
         }
         return today
     }
 
     /** 한 달 중 등말소 공시가 있는 날짜 */
-    suspend fun fetchEntryChangeDates(month: YearMonth): Set<LocalDate> {
+    suspend fun fetchEntryChangeDates(
+        month: YearMonth,
+        teamCode: String = LOTTE_TEAM_CODE,
+    ): Set<LocalDate> {
         val hits = mutableSetOf<LocalDate>()
         for (day in 1..month.lengthOfMonth()) {
             val d = month.atDay(day)
-            runCatching { fetchDayEntryChanges(d, resolveCodes = false) }
+            runCatching { fetchDayEntryChanges(d, resolveCodes = false, teamCode = teamCode) }
                 .onSuccess { if (it.hasChanges) hits.add(d) }
         }
-        runCatching { fetchAllRosterMoves() }.getOrDefault(emptyList()).forEach { m ->
+        runCatching { fetchAllRosterMoves(teamCode) }.getOrDefault(emptyList()).forEach { m ->
             val d = runCatching { LocalDate.parse(m.moveDate) }.getOrNull() ?: return@forEach
             if (YearMonth.from(d) == month) hits.add(d)
         }
         return hits
     }
 
-    suspend fun fetchAllRosterMoves(): List<RosterMove> =
-        keuboApi.getRosterMoves(KeuboApi.LOTTE_TEAM_ID).moves.map { it.toDomain() }
+    suspend fun fetchAllRosterMoves(teamCode: String = LOTTE_TEAM_CODE): List<RosterMove> =
+        keuboApi.getRosterMoves(teamKeuboId(teamCode)).moves.map { it.toDomain() }
 
-    suspend fun fetchRecentRosterMoves(days: Int = 7): List<RosterMove> {
+    suspend fun fetchRecentRosterMoves(days: Int = 7, teamCode: String = LOTTE_TEAM_CODE): List<RosterMove> {
         val from = LocalDate.now().minusDays((days - 1).toLong()).toString()
-        return fetchAllRosterMoves().filter { it.moveDate >= from }.sortedByDescending { it.moveDate }
+        return fetchAllRosterMoves(teamCode).filter { it.moveDate >= from }.sortedByDescending { it.moveDate }
     }
 
     suspend fun fetchLeaders(isPitcher: Boolean): List<LeaderPlayer> {
@@ -983,8 +1024,10 @@ class GiantsRepository private constructor(context: Context) {
         return keuboApi.getStats(type, season).stats.map { it.toLeader(isPitcher) }
     }
 
-    suspend fun fetchLotteTeamCard(): LotteTeamCard =
-        keuboApi.getTeamCard(KeuboApi.LOTTE_SLUG).toDomain()
+    suspend fun fetchTeamCard(slug: String = KeuboApi.LOTTE_SLUG): LotteTeamCard =
+        keuboApi.getTeamCard(slug).toDomain()
+
+    suspend fun fetchLotteTeamCard(): LotteTeamCard = fetchTeamCard(KeuboApi.LOTTE_SLUG)
 
     suspend fun fetchPlayerDetail(
         playerCode: String,

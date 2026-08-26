@@ -23,6 +23,7 @@ import com.bossxor.lottegiants.domain.ThemeMode
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.playerPhotoUrl
+import com.bossxor.lottegiants.domain.teamKeuboSlug
 import com.bossxor.lottegiants.widget.WidgetUpdater
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -121,12 +122,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _viewingLoading = MutableStateFlow(false)
     val viewingLoading: StateFlow<Boolean> = _viewingLoading.asStateFlow()
 
+    private val _resultsTeamCode = MutableStateFlow("")
+    val resultsTeamCode: StateFlow<String> = _resultsTeamCode.asStateFlow()
+
+    private val _seasonGames = MutableStateFlow<List<MiniGame>>(emptyList())
+    val seasonGames: StateFlow<List<MiniGame>> = _seasonGames.asStateFlow()
+
+    private val _seasonLoading = MutableStateFlow(false)
+    val seasonLoading: StateFlow<Boolean> = _seasonLoading.asStateFlow()
+
+    private val _overlayTeamCode = MutableStateFlow(LOTTE_TEAM_CODE)
+    val overlayTeamCode: StateFlow<String> = _overlayTeamCode.asStateFlow()
+
+    private val _overlayTeamCard = MutableStateFlow<LotteTeamCard?>(null)
+    val overlayTeamCard: StateFlow<LotteTeamCard?> = _overlayTeamCard.asStateFlow()
+
     private var viewingGameId: String? = null
 
     private var pollJob: Job? = null
     private var dayGamesJob: Job? = null
     private var monthJob: Job? = null
     private var entryJob: Job? = null
+    private var seasonJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -446,11 +463,57 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .onSuccess { _monthGames.value = it }
     }
 
-    fun openEntrySmart() {
+    fun setResultsTeam(code: String) {
+        _resultsTeamCode.value = code
+        if (code.isNotBlank()) ensureSeasonGames()
+    }
+
+    fun ensureSeasonGames() {
+        if (seasonJob?.isActive == true || _seasonGames.value.isNotEmpty()) return
+        seasonJob = viewModelScope.launch {
+            _seasonLoading.value = true
+            val year = kboToday().let { if (it.monthValue < 3) it.year - 1 else it.year }
+            runCatching { repo.fetchGamesForSeason(year) }.onSuccess { _seasonGames.value = it }
+            _seasonLoading.value = false
+        }
+    }
+
+    fun openTeamHistory(code: String) {
+        val c = code.ifBlank { LOTTE_TEAM_CODE }
+        _overlayTeamCode.value = c
+        if (c == LOTTE_TEAM_CODE && _teamCard.value != null) {
+            _overlayTeamCard.value = _teamCard.value
+            return
+        }
+        viewModelScope.launch {
+            runCatching { repo.fetchTeamCard(teamKeuboSlug(c)) }
+                .onSuccess { card ->
+                    _overlayTeamCard.value = card
+                    if (c == LOTTE_TEAM_CODE) _teamCard.value = card
+                }
+        }
+    }
+
+    fun openLeadersForTeam(code: String) {
+        _overlayTeamCode.value = code.ifBlank { LOTTE_TEAM_CODE }
+    }
+
+    fun openEntrySmart() = openEntryForTeam(LOTTE_TEAM_CODE)
+
+    fun openEntryForTeam(teamCode: String) {
+        val code = teamCode.ifBlank { LOTTE_TEAM_CODE }
+        if (_overlayTeamCode.value != code) {
+            _overlayTeamCode.value = code
+            _entryChangeDates.value = emptySet()
+            _dayEntry.value = null
+            _recentMoves.value = emptyList()
+        } else {
+            _overlayTeamCode.value = code
+        }
         viewModelScope.launch {
             _entryLoading.value = true
-            runCatching { repo.fetchRecentRosterMoves(7) }.onSuccess { _recentMoves.value = it }
-            val date = runCatching { repo.findLatestEntryDate(21) }.getOrDefault(LocalDate.now())
+            runCatching { repo.fetchRecentRosterMoves(7, code) }.onSuccess { _recentMoves.value = it }
+            val date = runCatching { repo.findLatestEntryDate(21, code) }.getOrDefault(LocalDate.now())
             _entryDate.value = date
             loadEntryForDate(date)
             prefetchEntryDates(YearMonth.from(date))
@@ -467,10 +530,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun loadEntryForDate(date: LocalDate) {
+        val code = _overlayTeamCode.value.ifBlank { LOTTE_TEAM_CODE }
         entryJob?.cancel()
         entryJob = viewModelScope.launch {
             _entryLoading.value = true
-            runCatching { repo.fetchDayEntryChanges(date) }
+            runCatching { repo.fetchDayEntryChanges(date, teamCode = code) }
                 .onSuccess { _dayEntry.value = it }
                 .onFailure { _dayEntry.value = DayEntryChanges(date = date.toString()) }
             _entryLoading.value = false
@@ -478,8 +542,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun prefetchEntryDates(month: YearMonth) {
+        val code = _overlayTeamCode.value.ifBlank { LOTTE_TEAM_CODE }
         viewModelScope.launch {
-            runCatching { repo.fetchEntryChangeDates(month) }
+            runCatching { repo.fetchEntryChangeDates(month, code) }
                 .onSuccess { hits ->
                     _entryChangeDates.value = _entryChangeDates.value + hits
                 }

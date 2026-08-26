@@ -68,6 +68,7 @@ fun EntryBoardScreen(
     onSelectDate: (LocalDate) -> Unit,
     onBack: () -> Unit,
     onPlayerClick: (EntryPlayer) -> Unit = {},
+    teamName: String = "롯데",
 ) {
     val today = remember { LocalDate.now() }
     var month by remember { mutableStateOf(YearMonth.from(selectedDate)) }
@@ -119,7 +120,7 @@ fun EntryBoardScreen(
             }
             Column(Modifier.weight(1f)) {
                 Text("엔트리 등말소", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-                Text("KBO 공시 · 롯데", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("KBO 공시 · $teamName", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
@@ -189,7 +190,7 @@ fun EntryBoardScreen(
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (reg.isEmpty() && rem.isEmpty()) {
                                 SectionCard {
-                                    Text("이 날 롯데 등말소 공시가 없습니다.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("이 날 ${teamName} 등말소 공시가 없습니다.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             } else {
                                 if (reg.isNotEmpty()) {
