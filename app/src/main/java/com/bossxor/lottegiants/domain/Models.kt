@@ -733,6 +733,12 @@ data class RelayText(
     val inning: Int,
     /** true=초, false=말, null=미상 */
     val isTopInning: Boolean? = null,
+    /** 해당 문구 시점의 아웃 (없으면 미상) */
+    val out: Int? = null,
+    val ball: Int? = null,
+    val strike: Int? = null,
+    /** 네이버 타석 제목. 예: `8번타자 전준우` */
+    val batterTitle: String = "",
 )
 
 /** 위젯/앱이 공유하는 전체 스냅샷 */

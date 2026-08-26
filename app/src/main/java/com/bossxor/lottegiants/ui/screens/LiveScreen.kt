@@ -30,11 +30,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -71,6 +67,7 @@ import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.WinGreen
 import com.bossxor.lottegiants.domain.RecentFormGame
+import com.bossxor.lottegiants.domain.RelayText
 import com.bossxor.lottegiants.ui.components.DiamondView
 import com.bossxor.lottegiants.ui.components.HotColdZoneChart
 import com.bossxor.lottegiants.ui.components.ScoreBoard
@@ -222,38 +219,28 @@ fun LiveScreen(
                     } else {
                         HeroCard(game, onShare = { onShare(game) })
                     }
-                    Spacer(Modifier.height(4.dp))
-                    ScrollableTabRow(
-                        selectedTabIndex = pagerState.currentPage,
-                        edgePadding = 0.dp,
-                        containerColor = Color.Transparent,
-                        divider = {},
-                        indicator = { tabPositions ->
-                            if (pagerState.currentPage < tabPositions.size) {
-                                TabRowDefaults.SecondaryIndicator(
-                                    Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
-                                    height = 2.dp,
-                                    color = LotteRed,
-                                )
-                            }
-                        },
+                    Spacer(Modifier.height(10.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(vertical = 2.dp),
                     ) {
-                        DETAIL_TABS.forEachIndexed { i, label ->
+                        items(DETAIL_TABS.size) { i ->
+                            val label = DETAIL_TABS[i]
                             val selected = pagerState.currentPage == i
-                            Tab(
-                                selected = selected,
-                                onClick = { scope.launch { pagerState.animateScrollToPage(i) } },
-                                text = {
-                                    Text(
-                                        label,
-                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (selected) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        },
+                            Text(
+                                label,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(50))
+                                    .background(
+                                        if (selected) LotteRed
+                                        else MaterialTheme.colorScheme.surfaceVariant,
                                     )
-                                },
+                                    .clickable { scope.launch { pagerState.animateScrollToPage(i) } }
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                color = if (selected) Color.White
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                                fontSize = 13.sp,
                             )
                         }
                     }
@@ -494,9 +481,13 @@ private fun QuickLinks(onHistory: () -> Unit, onEntry: () -> Unit, onLeaders: ()
 private fun QuickLinkChip(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+        color = MaterialTheme.colorScheme.surface,
         onClick = onClick,
         modifier = modifier,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
+        ),
     ) {
         Text(
             label,
@@ -813,9 +804,24 @@ private fun SummaryTab(
         Spacer(Modifier.height(10.dp))
     }
 
+    if (g.status == GameStatus.LIVE && g.recentTexts.isNotEmpty()) {
+        val inningTexts = g.recentTexts.filter {
+            it.inning == g.inning && (it.isTopInning == null || it.isTopInning == g.isTopInning)
+        }
+        if (inningTexts.isNotEmpty()) {
+            SectionCard {
+                Column {
+                    SectionHeader("${inningHalfLabel(g.inning, g.isTopInning)} 중계")
+                    GroupedRelayList(inningTexts)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+    }
+
     if (g.keyPlays.isNotEmpty()) {
         SectionCard {
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SectionHeader("주요 장면")
                 g.keyPlays.take(8).forEach { play ->
                     val half = when (play.isTop) {
@@ -823,13 +829,31 @@ private fun SummaryTab(
                         false -> "${play.inning}회말"
                         null -> "${play.inning}회"
                     }
-                    Text(
-                        "$half  ${play.text}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (play.isScoring) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 3.dp),
-                    )
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (play.isScoring) LotteGold.copy(alpha = 0.14f)
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                            )
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            half,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (play.isScoring) LotteGold else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.width(44.dp),
+                        )
+                        Text(
+                            play.text,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
         }
@@ -1147,8 +1171,8 @@ private fun LineupPlayerRow(
 
 @Composable
 private fun LineupTeamChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
-    val fg = if (selected) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onSurfaceVariant
+    val bg = if (selected) LotteRed else MaterialTheme.colorScheme.surfaceVariant
+    val fg = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
     Text(
         label,
         modifier = Modifier
@@ -1292,14 +1316,7 @@ private fun RelayTab(g: LotteGameInfo, snapshot: LiveSnapshot? = null, onRetry: 
                         fontSize = 13.sp,
                     )
                 } else {
-                    texts.forEach { t ->
-                        Text(
-                            t.text,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = 3.dp),
-                        )
-                    }
+                    GroupedRelayList(texts)
                 }
             }
         }
@@ -1357,6 +1374,199 @@ private fun inningHalfLabel(inning: Int, isTop: Boolean?): String = when (isTop)
     true -> "${inning}회초"
     false -> "${inning}회말"
     null -> "${inning}회"
+}
+
+private data class RelayBatterBlock(val title: String, val items: List<RelayText>)
+
+private data class RelayOutBlock(val outCount: Int, val batters: List<RelayBatterBlock>)
+
+private enum class RelayKind { Score, Hit, Walk, Out, Pitch, Other }
+
+private fun classifyRelay(text: String): RelayKind {
+    val t = text
+    return when {
+        listOf("홈런", "득점", "타점", "끝내기", "역전", "동점").any { t.contains(it) } -> RelayKind.Score
+        listOf("병살", "삼진").any { t.contains(it) } || t.contains("아웃") -> RelayKind.Out
+        listOf("2루타", "3루타", "내야안타", "안타", "희생플라이", "희생번트").any { t.contains(it) } -> RelayKind.Hit
+        listOf("볼넷", "사구", "몸에 맞는", "고의4구").any { t.contains(it) } -> RelayKind.Walk
+        listOf("스트라이크", "볼", "파울").any { t.contains(it) } -> RelayKind.Pitch
+        else -> RelayKind.Other
+    }
+}
+
+private fun isOutMakingPlay(text: String): Boolean {
+    if (text.contains("이닝 종료") || text.contains("3아웃")) return true
+    if (text.contains("병살") || text.contains("삼진")) return true
+    return text.contains("아웃")
+}
+
+private fun outDelta(text: String): Int = when {
+    text.contains("병살") -> 2
+    text.contains("이닝 종료") || text.contains("3아웃") -> 3
+    else -> 1
+}
+
+private fun outCountLabel(out: Int): String = when (out) {
+    0 -> "0아웃"
+    1 -> "1아웃"
+    2 -> "2아웃"
+    else -> "이닝 종료"
+}
+
+/** 이닝 안을 아웃카운트 → 타석 순으로 묶는다. */
+private fun groupRelayByOut(texts: List<RelayText>): List<RelayOutBlock> {
+    if (texts.isEmpty()) return emptyList()
+    val chrono = texts.sortedBy { it.seqno }
+    var outsBefore = 0
+    val tagged = chrono.map { t ->
+        val recorded = t.out
+        val before = when {
+            recorded == null -> outsBefore
+            recorded > outsBefore -> outsBefore
+            else -> recorded
+        }.coerceIn(0, 3)
+        outsBefore = when {
+            recorded != null -> recorded.coerceIn(0, 3)
+            isOutMakingPlay(t.text) -> (outsBefore + outDelta(t.text)).coerceAtMost(3)
+            else -> outsBefore
+        }
+        t to before
+    }
+    return tagged.groupBy { it.second }.toSortedMap().map { (out, pairs) ->
+        val items = pairs.map { it.first }
+        val batters = mutableListOf<RelayBatterBlock>()
+        val bucket = mutableListOf<RelayText>()
+        var currentTitle = ""
+        fun flush() {
+            if (bucket.isEmpty()) return
+            batters.add(RelayBatterBlock(currentTitle, bucket.toList()))
+            bucket.clear()
+        }
+        items.forEach { t ->
+            val title = t.batterTitle.ifBlank { currentTitle }
+            if (title.isNotBlank() && title != currentTitle && bucket.isNotEmpty()) flush()
+            if (title.isNotBlank()) currentTitle = title
+            bucket.add(t)
+        }
+        flush()
+        RelayOutBlock(out, batters)
+    }
+}
+
+@Composable
+private fun GroupedRelayList(texts: List<RelayText>) {
+    val blocks = remember(texts) { groupRelayByOut(texts) }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        blocks.forEach { block ->
+            OutCountHeader(block.outCount)
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                block.batters.forEach { batter ->
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                    ) {
+                        if (batter.title.isNotBlank()) {
+                            Text(
+                                batter.title,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                        }
+                        batter.items.forEach { t ->
+                            RelayPlayLine(t)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OutCountHeader(outCount: Int) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            repeat(3) { i ->
+                Box(
+                    Modifier
+                        .size(8.dp)
+                        .background(
+                            if (i < outCount.coerceIn(0, 3)) LotteRed
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.28f),
+                            CircleShape,
+                        ),
+                )
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            outCountLabel(outCount),
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun RelayPlayLine(t: RelayText) {
+    val kind = classifyRelay(t.text)
+    val color = when (kind) {
+        RelayKind.Score -> LotteGold
+        RelayKind.Hit, RelayKind.Walk -> WinGreen
+        RelayKind.Out -> LotteRed.copy(alpha = 0.9f)
+        RelayKind.Pitch -> MaterialTheme.colorScheme.onSurfaceVariant
+        RelayKind.Other -> MaterialTheme.colorScheme.onSurface
+    }
+    val weight = when (kind) {
+        RelayKind.Score, RelayKind.Hit, RelayKind.Out, RelayKind.Walk -> FontWeight.SemiBold
+        else -> FontWeight.Normal
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            Modifier
+                .padding(top = 6.dp, end = 8.dp)
+                .size(6.dp)
+                .background(color, CircleShape),
+        )
+        Text(
+            t.text,
+            style = MaterialTheme.typography.bodySmall,
+            color = color,
+            fontWeight = weight,
+            modifier = Modifier.weight(1f),
+        )
+        val bso = buildString {
+            t.ball?.let { append("B$it ") }
+            t.strike?.let { append("S$it ") }
+            t.out?.let { append("O$it") }
+        }.trim()
+        if (bso.isNotBlank() && kind != RelayKind.Pitch) {
+            Text(
+                bso,
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 6.dp, top = 1.dp),
+            )
+        }
+    }
 }
 
 @Composable
@@ -1477,16 +1687,10 @@ private fun InningAtBatCard(g: LotteGameInfo) {
                 .groupBy { it.inning }
                 .toSortedMap()
             byInning.forEach { (inn, texts) ->
-                Text("${inn}회", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
-                texts.sortedBy { it.seqno }.takeLast(6).forEach { t ->
-                    Text(
-                        t.text,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 1.dp),
-                    )
-                }
+                Text("${inn}회", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = LotteRed)
                 Spacer(Modifier.height(6.dp))
+                GroupedRelayList(texts)
+                Spacer(Modifier.height(10.dp))
             }
         }
     }

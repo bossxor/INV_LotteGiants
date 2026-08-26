@@ -63,6 +63,7 @@ import com.bossxor.lottegiants.domain.ThemeMode
 import com.bossxor.lottegiants.live.LiveScoreService
 import com.bossxor.lottegiants.live.NotificationHelper
 import com.bossxor.lottegiants.ui.LoseRed
+import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.components.PlayerAvatar
 import com.bossxor.lottegiants.ui.components.ScreenTitle
 import com.bossxor.lottegiants.ui.components.SectionCard
@@ -478,8 +479,8 @@ fun SettingsScreen(
 
 @Composable
 private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
-    val fg = if (selected) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onSurfaceVariant
+    val bg = if (selected) LotteRed else MaterialTheme.colorScheme.surfaceVariant
+    val fg = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
     Text(
         label,
         modifier = Modifier

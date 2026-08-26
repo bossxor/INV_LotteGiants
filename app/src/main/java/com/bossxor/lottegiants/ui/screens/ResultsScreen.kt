@@ -426,8 +426,8 @@ fun EmptyRetry(message: String, onRetry: (() -> Unit)? = null) {
 
 @Composable
 private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
-    val fg = if (selected) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onSurfaceVariant
+    val bg = if (selected) LotteRed else MaterialTheme.colorScheme.surfaceVariant
+    val fg = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
     Text(
         label,
         modifier = Modifier
@@ -449,12 +449,12 @@ private fun DateChip(
     onClick: () -> Unit,
 ) {
     val targetBg = when {
-        selected -> MaterialTheme.colorScheme.primary
+        selected -> LotteRed
         isToday -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
     val targetFg = when {
-        selected -> MaterialTheme.colorScheme.onPrimary
+        selected -> Color.White
         else -> MaterialTheme.colorScheme.onSurface
     }
     val bg by animateColorAsState(targetBg, animationSpec = tween(180), label = "date_chip_bg")

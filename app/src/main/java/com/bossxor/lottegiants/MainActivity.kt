@@ -79,6 +79,7 @@ import com.bossxor.lottegiants.domain.ThemeMode
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.live.LiveScoreService
 import com.bossxor.lottegiants.ui.LotteGiantsTheme
+import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.MainViewModel
 import com.bossxor.lottegiants.ui.screens.EntryBoardScreen
 import com.bossxor.lottegiants.ui.screens.LeadersScreen
@@ -685,24 +686,17 @@ private fun CompactBottomBar(selectedTab: Int, onSelectTab: (Int) -> Unit) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = 8.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             tabs.forEachIndexed { index, item ->
                 val selected = selectedTab == index
-                val tint = if (selected) {
-                    MaterialTheme.colorScheme.onBackground
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                }
+                val tint = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                 Column(
                     Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(
-                            if (selected) MaterialTheme.colorScheme.primaryContainer
-                            else Color.Transparent,
-                        )
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(if (selected) LotteRed else Color.Transparent)
                         .clickable { onSelectTab(index) }
                         .padding(vertical = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -718,7 +712,7 @@ private fun CompactBottomBar(selectedTab: Int, onSelectTab: (Int) -> Unit) {
                     Text(
                         item.label,
                         fontSize = 10.sp,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                         color = tint,
                     )
                 }

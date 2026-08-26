@@ -1630,7 +1630,18 @@ class GiantsRepository private constructor(context: Context) {
                     else -> if (tr.homeOrAway.isBlank()) null else tr.homeOrAway != "1"
                 }
                 tr.textOptions.map {
-                    RelayText(it.seqno, it.text, it.type, tr.inn, isTopInning = isTop)
+                    val st = it.currentGameState
+                    RelayText(
+                        seqno = it.seqno,
+                        text = it.text,
+                        type = it.type,
+                        inning = tr.inn,
+                        isTopInning = isTop,
+                        out = st?.out?.toIntOrNull(),
+                        ball = st?.ball?.toIntOrNull(),
+                        strike = st?.strike?.toIntOrNull(),
+                        batterTitle = tr.title.orEmpty().trim(),
+                    )
                 }
             }
             .filter { it.type != 99 && it.text.isNotBlank() }
