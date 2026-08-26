@@ -129,7 +129,8 @@ object NotificationHelper {
                 else "롯데 ${game.lotteScore}:${game.opponentScore}"
                 shortTitle to (game?.inningLabel ?: "")
             }
-            LiveDisplayMode.FULL, LiveDisplayMode.LOCK_NOW -> scoreTitle to headerLine
+            LiveDisplayMode.FULL -> scoreTitle to summary
+            LiveDisplayMode.LOCK_NOW -> scoreTitle to headerLine
         }
 
         val builder = NotificationCompat.Builder(context, CHANNEL_LIVE_NOW)
@@ -147,36 +148,12 @@ object NotificationHelper {
             .setSubText(chipText)
             .setShortCriticalText(chipText)
             .setColor(COLOR_LOTTE)
+            .setStyle(liveProgressStyle(context, game, countBmp))
+            .setRequestPromotedOngoing(true)
 
-        // 커스텀 RemoteViews가 붙은 알림은 Live Update로 승격될 수 없다 (플랫폼 제약).
-        // 따라서 '상세' 모드에서만 커스텀 뷰를 쓰고, 나머지는 승격 가능한 표준 스타일을 쓴다.
-        val useCustom = mode == LiveDisplayMode.FULL &&
-            game != null &&
-            game.status == GameStatus.LIVE
-        if (countBmp != null && !useCustom) {
+        // RemoteViews·colorized는 칩 승격을 막는다. 세 모드 모두 ProgressStyle로 점수를 올린다.
+        if (countBmp != null) {
             builder.setLargeIcon(countBmp)
-        }
-        when {
-            useCustom -> builder
-                .setColor(COLOR_NAVY)
-                .setColorized(true)
-                .setCustomContentView(buildLiveRemoteViews(context, game!!, big = false))
-                .setCustomBigContentView(buildLiveRemoteViews(context, game, big = true))
-                .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-
-            // Now Bar/상태 칩은 ProgressStyle이어야 승격된다. 라이브 바가 아니어도 점수는 올린다.
-            mode != LiveDisplayMode.FULL ->
-                builder.setStyle(liveProgressStyle(context, game, countBmp))
-
-            else -> builder.setStyle(
-                NotificationCompat.BigTextStyle()
-                    .setBigContentTitle(scoreTitle)
-                    .bigText(summary),
-            )
-        }
-
-        if (!useCustom) {
-            builder.setRequestPromotedOngoing(true)
         }
 
         return builder.build()

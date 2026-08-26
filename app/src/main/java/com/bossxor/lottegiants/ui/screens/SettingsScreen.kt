@@ -278,11 +278,11 @@ fun SettingsScreen(
                 Text(
                     when (liveMode) {
                         LiveDisplayMode.LOCK_NOW ->
-                            "점수 칩이 Now Bar·잠금화면에 올라갑니다. 지원 폰에서만 보이며, 시스템에서 Now Bar를 켠 뒤 이 앱을 허용해야 합니다."
+                            "알림은 이닝·공격 팀 위주. Now Bar 칩에는 세 모드 모두 점수가 올라갑니다."
                         LiveDisplayMode.FULL ->
-                            "선수 사진과 루상 다이아몬드까지 담은 상세 카드입니다. 대신 Now Bar에는 올라가지 않습니다."
+                            "알림 본문에 투수·타자까지 자세히. Now Bar 칩의 점수는 그대로입니다."
                         LiveDisplayMode.STATUS_SCORE ->
-                            "점수만 짧게 표시합니다. Now Bar가 되는 폰에서는 점수 칩으로도 올라갑니다."
+                            "알림은 점수·이닝만 한 줄. Now Bar 칩의 점수는 그대로입니다."
                     },
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -14,8 +14,8 @@ android {
         applicationId = "com.bossxor.lottegiants"
         minSdk = 30
         targetSdk = 34
-        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1036
-        versionName = (project.findProperty("versionName") as String?) ?: "1.3.29"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1037
+        versionName = (project.findProperty("versionName") as String?) ?: "1.3.30"
     }
 
     signingConfigs {
