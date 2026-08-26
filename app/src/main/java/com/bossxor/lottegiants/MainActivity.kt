@@ -483,7 +483,10 @@ private fun AppScaffold(
             if (overlay == Overlay.None) {
                 CompactBottomBar(
                     selectedTab = tab,
-                    onSelectTab = { tab = it },
+                    onSelectTab = { index ->
+                        if (index == 0) onBackToLotte()
+                        tab = index
+                    },
                 )
             }
         },
