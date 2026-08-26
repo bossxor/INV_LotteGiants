@@ -30,10 +30,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -76,6 +77,7 @@ import com.bossxor.lottegiants.ui.components.ScoreBoard
 import com.bossxor.lottegiants.ui.components.SectionCard
 import com.bossxor.lottegiants.ui.components.SectionHeader
 import com.bossxor.lottegiants.ui.components.PlayerAvatar
+import com.bossxor.lottegiants.ui.components.ScreenTitle
 import com.bossxor.lottegiants.ui.components.TeamLogo
 import com.bossxor.lottegiants.ui.heroGradient
 
@@ -143,7 +145,7 @@ fun LiveScreen(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TeamLogo(
                     headerLogo,
-                    size = 44,
+                    size = 36,
                     modifier = if (viewingOther) {
                         Modifier.clickable(onClick = onBackToLotte)
                     } else {
@@ -151,15 +153,14 @@ fun LiveScreen(
                     },
                 )
                 Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("사직스코어", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
-                    Text(
-                        "실시간 현황",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                CompactRefresh(secondsUntilRefresh, isRefreshing, onRefresh)
+                ScreenTitle(
+                    title = "사직스코어",
+                    subtitle = if (viewingOtherTeam) game?.focusName() else "실시간",
+                    modifier = Modifier.weight(1f),
+                    trailing = {
+                        CompactRefresh(secondsUntilRefresh, isRefreshing, onRefresh)
+                    },
+                )
             }
             val focusTeam = game?.focusTeamCode?.ifBlank { LOTTE_TEAM_CODE } ?: LOTTE_TEAM_CODE
             Spacer(Modifier.height(10.dp))
@@ -226,6 +227,16 @@ fun LiveScreen(
                         selectedTabIndex = pagerState.currentPage,
                         edgePadding = 0.dp,
                         containerColor = Color.Transparent,
+                        divider = {},
+                        indicator = { tabPositions ->
+                            if (pagerState.currentPage < tabPositions.size) {
+                                TabRowDefaults.SecondaryIndicator(
+                                    Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
+                                    height = 2.dp,
+                                    color = LotteRed,
+                                )
+                            }
+                        },
                     ) {
                         DETAIL_TABS.forEachIndexed { i, label ->
                             val selected = pagerState.currentPage == i
@@ -387,9 +398,9 @@ private fun ScoreTicker(
             val show = g.status == GameStatus.LIVE || g.status == GameStatus.ENDED
             Surface(
                 onClick = { onOpenGame(g.gameId) },
-                shape = RoundedCornerShape(12.dp),
+                shape = MaterialTheme.shapes.medium,
                 color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
             ) {
                 Row(
                     Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
@@ -482,9 +493,8 @@ private fun QuickLinks(onHistory: () -> Unit, onEntry: () -> Unit, onLeaders: ()
 @Composable
 private fun QuickLinkChip(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
         onClick = onClick,
         modifier = modifier,
     ) {
@@ -492,11 +502,11 @@ private fun QuickLinkChip(label: String, modifier: Modifier = Modifier, onClick:
             label,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 11.dp),
+                .padding(vertical = 10.dp),
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
@@ -999,10 +1009,27 @@ private fun LineupTab(
                 )
                 if (g.lineupAnnounced) {
                     Spacer(Modifier.height(10.dp))
-                    OutlinedButton(onClick = onRetry) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .clickable(onClick = onRetry)
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
                         Spacer(Modifier.width(6.dp))
-                        Text("다시 불러오기")
+                        Text(
+                            "다시 불러오기",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
                     }
                 }
             }
@@ -1120,17 +1147,17 @@ private fun LineupPlayerRow(
 
 @Composable
 private fun LineupTeamChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    val bg = if (selected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+    val fg = if (selected) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onSurfaceVariant
     Text(
         label,
         modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(50))
             .background(bg)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 7.dp),
         color = fg,
-        fontWeight = FontWeight.Bold,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 13.sp,
     )
 }
@@ -1584,10 +1611,10 @@ private fun CompactRefresh(secondsUntilRefresh: Int, isRefreshing: Boolean, onRe
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f))
             .clickable(enabled = !isRefreshing, onClick = onRefresh)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 7.dp),
     ) {
         if (isRefreshing) {
             Text("...", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
@@ -1717,10 +1744,18 @@ private fun HeroCard(g: LotteGameInfo, onShare: () -> Unit = {}) {
             )
         }
         if (g.status == GameStatus.LIVE || g.status == GameStatus.ENDED) {
-            Spacer(Modifier.height(10.dp))
-            OutlinedButton(onClick = onShare) {
-                Text("공유", color = Color.White)
-            }
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "공유하기",
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.12f))
+                    .clickable(onClick = onShare)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                color = Color.White.copy(alpha = 0.92f),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }
@@ -1918,9 +1953,9 @@ private fun KeyPlayerChip(
 ) {
     val pick = pickKeyPlayer(game, leaders) ?: return
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f)),
         onClick = { onClick(pick.playerCode, pick.name) },
         modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
     ) {

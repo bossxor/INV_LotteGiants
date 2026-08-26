@@ -64,6 +64,7 @@ import com.bossxor.lottegiants.live.LiveScoreService
 import com.bossxor.lottegiants.live.NotificationHelper
 import com.bossxor.lottegiants.ui.LoseRed
 import com.bossxor.lottegiants.ui.components.PlayerAvatar
+import com.bossxor.lottegiants.ui.components.ScreenTitle
 import com.bossxor.lottegiants.ui.components.SectionCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -88,7 +89,7 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
-        Text("설정", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
+        ScreenTitle("설정", "테마 · 알림 · 업데이트")
 
         Spacer(Modifier.height(20.dp))
         Text("화면 테마", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -477,15 +478,15 @@ fun SettingsScreen(
 
 @Composable
 private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    val bg = if (selected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+    val fg = if (selected) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onSurfaceVariant
     Text(
         label,
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(50))
             .background(bg)
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 7.dp),
+            .padding(horizontal = 12.dp, vertical = 7.dp),
         color = fg,
         fontWeight = FontWeight.SemiBold,
         fontSize = 12.sp,

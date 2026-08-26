@@ -29,6 +29,7 @@ import com.bossxor.lottegiants.domain.LotteTeamCard
 import com.bossxor.lottegiants.domain.teamFullName
 import com.bossxor.lottegiants.domain.teamHomeLabel
 import com.bossxor.lottegiants.domain.teamLogoUrl
+import com.bossxor.lottegiants.ui.components.ScreenTitle
 import com.bossxor.lottegiants.ui.components.SectionCard
 import com.bossxor.lottegiants.ui.components.TeamLogo
 
@@ -46,12 +47,15 @@ fun TeamHistoryScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
-            }
-            Text("팀 히스토리", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-        }
+        ScreenTitle(
+            title = "팀 히스토리",
+            subtitle = teamFullName(code),
+            leading = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
+                }
+            },
+        )
         Spacer(Modifier.height(8.dp))
         SectionCard {
             Row(verticalAlignment = Alignment.CenterVertically) {

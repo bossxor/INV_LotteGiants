@@ -49,6 +49,7 @@ import com.bossxor.lottegiants.domain.EntryPlayer
 import com.bossxor.lottegiants.domain.RosterMove
 import com.bossxor.lottegiants.ui.LoseRed
 import com.bossxor.lottegiants.ui.WinGreen
+import com.bossxor.lottegiants.ui.components.ScreenTitle
 import com.bossxor.lottegiants.ui.components.SectionCard
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -114,15 +115,15 @@ fun EntryBoardScreen(
                 )
             },
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
-            }
-            Column(Modifier.weight(1f)) {
-                Text("엔트리 등말소", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-                Text("KBO 공시 · $teamName", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
+        ScreenTitle(
+            title = "엔트리 등말소",
+            subtitle = "KBO 공시 · $teamName",
+            leading = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
+                }
+            },
+        )
 
         Text("날짜별 상세", fontWeight = FontWeight.Bold, fontSize = 15.sp)
         Spacer(Modifier.height(6.dp))

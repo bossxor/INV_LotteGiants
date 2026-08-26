@@ -97,7 +97,7 @@ fun PlayerAvatar(
     }
 }
 
-/** 카드 래퍼 — 그림자 대신 얇은 외곽선으로 깔끔하게 */
+/** 카드 — 테두리 대신 톤 차이로 층을 나눈다 */
 @Composable
 fun SectionCard(
     modifier: Modifier = Modifier,
@@ -106,18 +106,49 @@ fun SectionCard(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
         border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant,
+            0.5.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
         ),
     ) {
         Box(Modifier.padding(padding)) { content() }
     }
 }
 
-/** 통일된 섹션 제목 — 화면 전체에서 같은 스타일 사용 */
+@Composable
+fun ScreenTitle(
+    title: String,
+    subtitle: String? = null,
+    modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        leading?.invoke()
+        Column(Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        trailing?.invoke()
+    }
+}
+
+/** 통일된 섹션 제목 */
 @Composable
 fun SectionHeader(
     title: String,
@@ -125,9 +156,17 @@ fun SectionHeader(
     trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
-        modifier.fillMaxWidth().padding(bottom = 8.dp),
+        modifier.fillMaxWidth().padding(bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box(
+            Modifier
+                .padding(end = 8.dp)
+                .width(3.dp)
+                .height(12.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(LotteRed),
+        )
         Text(
             title,
             style = MaterialTheme.typography.titleSmall,

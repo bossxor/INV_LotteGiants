@@ -48,6 +48,7 @@ import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.teamNameToCode
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.components.PlayerAvatar
+import com.bossxor.lottegiants.ui.components.ScreenTitle
 import com.bossxor.lottegiants.ui.components.SectionCard
 import com.bossxor.lottegiants.ui.components.TeamLogo
 import java.time.LocalDate
@@ -107,14 +108,19 @@ fun LeadersScreen(
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (onBack != null) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
+        ScreenTitle(
+            title = "타이틀 순위",
+            subtitle = teamLabel,
+            leading = if (onBack != null) {
+                {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
+                    }
                 }
-            }
-            Text("타이틀 순위", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-        }
+            } else {
+                null
+            },
+        )
         Spacer(Modifier.height(12.dp))
 
         Row(
@@ -161,15 +167,15 @@ fun LeadersScreen(
 
 @Composable
 private fun TitleTabChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    val bg = if (selected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+    val fg = if (selected) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onSurfaceVariant
     Text(
         label,
         modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(50))
             .background(bg)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 9.dp),
+            .padding(horizontal = 14.dp, vertical = 8.dp),
         color = fg,
         fontWeight = FontWeight.SemiBold,
         fontSize = 13.sp,

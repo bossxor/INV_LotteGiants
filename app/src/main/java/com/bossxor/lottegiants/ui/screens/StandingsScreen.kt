@@ -30,9 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,6 +40,8 @@ import com.bossxor.lottegiants.domain.LotteTeamCard
 import com.bossxor.lottegiants.domain.TeamStanding
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.ui.LotteGold
+import com.bossxor.lottegiants.ui.LotteRed
+import com.bossxor.lottegiants.ui.components.ScreenTitle
 import com.bossxor.lottegiants.ui.components.SectionCard
 import com.bossxor.lottegiants.ui.components.SparklineChart
 import com.bossxor.lottegiants.ui.components.TeamLogo
@@ -82,8 +82,8 @@ fun StandingsScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
-                Spacer(Modifier.height(4.dp))
-                Text("순위", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
+                Spacer(Modifier.height(8.dp))
+                ScreenTitle("순위", "한 팀을 누르면 그 팀 기준 게임차")
             }
 
             // ── 섹션 1: 롯데 시즌 트렌드 ──
@@ -129,11 +129,10 @@ fun StandingsScreen(
             // ── 섹션 3: KBO 순위표 ──
             stickyHeader {
                 Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .shadow(2.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 2.dp,
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.background,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 0.dp,
                 ) {
                     Column(
                         Modifier
@@ -238,17 +237,25 @@ fun StandingsScreen(
 @Composable
 private fun SectionHeader(title: String, subtitle: String) {
     Column(Modifier.fillMaxWidth()) {
-        Text(
-            title,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .padding(end = 8.dp)
+                    .width(3.dp)
+                    .height(12.dp)
+                    .background(LotteRed, RoundedCornerShape(2.dp)),
+            )
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+        }
         Text(
             subtitle,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 12.sp,
+            modifier = Modifier.padding(start = 11.dp, top = 2.dp),
         )
     }
 }
@@ -424,20 +431,19 @@ private fun StandingRow(
 ) {
     val gb = gamesBehindVsBase(t, base)
     val accent = MaterialTheme.colorScheme.primary
-    val isLight = MaterialTheme.colorScheme.background.luminance() > 0.5f
 
-    // 배경 틴트 없이 surface 고정, 구분 효과는 테두리만
-    val border = when {
-        isBase -> BorderStroke(1.5.dp, accent.copy(alpha = if (isLight) 0.65f else 0.55f))
-        else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = if (isLight) 0.55f else 0.40f))
-    }
+    val border = BorderStroke(
+        0.5.dp,
+        if (isBase) accent.copy(alpha = 0.4f)
+        else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
+    )
 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(if (compact) 12.dp else 14.dp),
-        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(if (compact) 14.dp else 18.dp),
+        color = if (isBase) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
         border = border,
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,

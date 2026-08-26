@@ -81,6 +81,7 @@ import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.LoseRed
 import com.bossxor.lottegiants.ui.WinGreen
+import com.bossxor.lottegiants.ui.components.ScreenTitle
 import com.bossxor.lottegiants.ui.components.SectionCard
 import com.bossxor.lottegiants.ui.components.TeamLogo
 import java.time.DayOfWeek
@@ -164,16 +165,9 @@ fun ResultsScreen(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    "결과",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Black,
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "카드를 누르면 상세",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                ScreenTitle(
+                    title = "결과",
+                    subtitle = "카드를 누르면 상세",
                     modifier = Modifier.weight(1f),
                 )
                 ModeChip("리스트", mode == 0) { mode = 0 }
@@ -432,15 +426,15 @@ fun EmptyRetry(message: String, onRetry: (() -> Unit)? = null) {
 
 @Composable
 private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    val bg = if (selected) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+    val fg = if (selected) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.onSurfaceVariant
     Text(
         label,
         modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(50))
             .background(bg)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 13.dp, vertical = 7.dp),
         color = fg,
         fontWeight = FontWeight.SemiBold,
         fontSize = 12.sp,
@@ -468,7 +462,7 @@ private fun DateChip(
     Column(
         Modifier
             .width(52.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(bg)
             .clickable(onClick = onClick)
             .padding(vertical = 8.dp),
