@@ -7,6 +7,21 @@ const val LOTTE_TEAM_CODE = "LT"
 private val TEAM_CODE_IN_LOGO_URL =
     Regex("(?:emblem_|initial_|/default/)([A-Za-z]{2})(?:[_./]|$)")
 
+const val IMAGE_USER_AGENT =
+    "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
+
+/** 네이버 CDN은 KBO Referer면 403, KBO/NCP는 공식 사이트 Referer가 안전하다. */
+fun imageRefererForHost(host: String): String? {
+    val h = host.lowercase()
+    return when {
+        "pstatic.net" in h || h.endsWith("naver.com") || "naver.net" in h ->
+            "https://m.sports.naver.com/"
+        "koreabaseball" in h || "naverncp.com" in h ->
+            "https://www.koreabaseball.com/"
+        else -> null
+    }
+}
+
 /** 네이버 스포츠 KBO 팀 엠블럼 (투명 PNG, 184px) */
 fun teamLogoUrl(teamCode: String): String {
     val code = teamCode.trim().uppercase()
@@ -51,6 +66,20 @@ fun resolveTeamLogoUrl(
     val fromKbo = normalizeKboImageUrl(kboUrl)
     if (fromKbo.isNotBlank() && !isKboInitialLogoUrl(fromKbo)) return fromKbo
     return kboTeamEmblemUrl(teamCode, season)
+}
+
+fun teamLogoCandidates(
+    teamCode: String = "",
+    kboUrl: String = "",
+    season: Int = java.time.LocalDate.now().year,
+): List<String> {
+    val code = teamCode.trim().uppercase().ifBlank { teamCodeFromLogoUrl(kboUrl) }
+    return listOf(
+        if (code.isNotBlank()) teamLogoUrl(code) else "",
+        if (code.isNotBlank()) kboTeamEmblemUrl(code, season) else "",
+        normalizeKboImageUrl(kboUrl).takeIf { it.isNotBlank() && !isKboInitialLogoUrl(it) }.orEmpty(),
+        kboUrl.trim(),
+    ).filter { it.isNotBlank() }.distinct()
 }
 
 val LOTTE_LOGO_URL = teamLogoUrl(LOTTE_TEAM_CODE)
@@ -222,15 +251,14 @@ data class FavoritePlayer(
 fun playerPhotoUrl(playerCode: String): String =
     playerPhotoCandidates(playerCode).firstOrNull().orEmpty()
 
-/** KBO 공식 이미지 우선, 없으면 네이버 CDN */
+/** KBO NCP(공식) → 네이버 CDN. 죽은 img.koreabaseball.com·HTML 응답 경로는 빼 둔다. */
 fun playerPhotoCandidates(playerCode: String): List<String> {
     val code = playerCode.trim()
     if (code.isBlank()) return emptyList()
+    val year = java.time.LocalDate.now().year
     return listOf(
-        "https://img.koreabaseball.com/file/person/middle/$code.jpg",
-        "https://img.koreabaseball.com/file/person/middle/new/$code.jpg",
-        "https://www.koreabaseball.com/file/person/middle/new/$code.jpg",
-        "https://www.koreabaseball.com/file/person/middle/$code.jpg",
+        "https://6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/person/middle/$year/$code.jpg",
+        "https://6ptotvmi5753.edge.naverncp.com/KBO_IMAGE/person/middle/${year - 1}/$code.jpg",
         "https://sports-phinf.pstatic.net/player/kbo/default/$code.png",
         "https://sports-phinf.pstatic.net/player/kbo/default/$code.jpg",
     )

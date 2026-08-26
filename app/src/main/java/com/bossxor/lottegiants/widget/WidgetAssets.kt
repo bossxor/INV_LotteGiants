@@ -10,6 +10,8 @@ import android.graphics.Typeface
 import androidx.annotation.DrawableRes
 import androidx.glance.ImageProvider
 import com.bossxor.lottegiants.R
+import com.bossxor.lottegiants.domain.IMAGE_USER_AGENT
+import com.bossxor.lottegiants.domain.imageRefererForHost
 import com.bossxor.lottegiants.domain.playerPhotoCandidates
 import com.bossxor.lottegiants.domain.kboTeamEmblemUrl
 import com.bossxor.lottegiants.domain.resolveTeamLogoUrl
@@ -198,7 +200,7 @@ object WidgetAssets {
                 val file = File(dir, fileName)
                 // 예전 스코어보드 이니셜(1~2KB) 캐시가 남아 있으면 다시 받는다.
                 val stale = dirName == "team_logos" && file.exists() && file.length() < 8_000L
-                val tooSmallPhoto = dirName == "player_photos" && file.exists() && file.length() < 400L
+                val tooSmallPhoto = dirName == "player_photos" && file.exists() && file.length() < 5_000L
                 if (!file.exists() || file.length() == 0L || stale || tooSmallPhoto) {
                     var saved = false
                     for (candidate in urls) {
@@ -216,14 +218,20 @@ object WidgetAssets {
 
     private fun downloadToFile(url: String, file: File): Boolean {
         return try {
-            val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            val parsed = URL(url)
+            val conn = (parsed.openConnection() as HttpURLConnection).apply {
                 instanceFollowRedirects = true
                 connectTimeout = 8_000
                 readTimeout = 10_000
-                setRequestProperty("User-Agent", "Mozilla/5.0")
-                setRequestProperty("Referer", "https://www.koreabaseball.com/")
+                setRequestProperty("User-Agent", IMAGE_USER_AGENT)
+                imageRefererForHost(parsed.host)?.let { setRequestProperty("Referer", it) }
             }
             if (conn.responseCode !in 200..299) {
+                conn.disconnect()
+                return false
+            }
+            val contentType = conn.contentType.orEmpty().lowercase()
+            if (contentType.isNotBlank() && !contentType.startsWith("image/")) {
                 conn.disconnect()
                 return false
             }

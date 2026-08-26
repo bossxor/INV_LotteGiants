@@ -36,22 +36,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.bossxor.lottegiants.domain.playerPhotoCandidates
-import com.bossxor.lottegiants.domain.resolveTeamLogoUrl
+import com.bossxor.lottegiants.domain.teamLogoCandidates
 import com.bossxor.lottegiants.ui.BaseOccupied
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.WinGreen
 
-/** 팀 엠블럼 */
+/** 팀 엠블럼 — 네이버 CDN이 막히면 KBO NCP 엠블럼으로 넘긴다 */
 @Composable
 fun TeamLogo(url: String, size: Int = 40, modifier: Modifier = Modifier) {
-    val model = remember(url) { resolveTeamLogoUrl("", url).ifBlank { url } }
-    if (model.isBlank()) return
+    val urls = remember(url) { teamLogoCandidates(kboUrl = url) }
+    var idx by remember(url) { mutableIntStateOf(0) }
+    val model = urls.getOrNull(idx) ?: return
     AsyncImage(
         model = model,
         contentDescription = null,
         contentScale = ContentScale.Fit,
         modifier = modifier.size(size.dp),
+        onError = { if (idx < urls.lastIndex) idx++ },
     )
 }
 

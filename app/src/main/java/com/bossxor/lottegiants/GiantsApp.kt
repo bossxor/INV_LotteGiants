@@ -5,6 +5,8 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.domain.GameStatus
+import com.bossxor.lottegiants.domain.IMAGE_USER_AGENT
+import com.bossxor.lottegiants.domain.imageRefererForHost
 import com.bossxor.lottegiants.live.EventDetector
 import com.bossxor.lottegiants.live.GameSchedulerWorker
 import com.bossxor.lottegiants.live.LiveScoreService
@@ -47,12 +49,10 @@ class GiantsApp : Application(), ImageLoaderFactory {
             .connectTimeout(8, TimeUnit.SECONDS)
             .readTimeout(12, TimeUnit.SECONDS)
             .addInterceptor { chain ->
-                chain.proceed(
-                    chain.request().newBuilder()
-                        .header("User-Agent", "Mozilla/5.0")
-                        .header("Referer", "https://www.koreabaseball.com/")
-                        .build(),
-                )
+                val req = chain.request()
+                val builder = req.newBuilder().header("User-Agent", IMAGE_USER_AGENT)
+                imageRefererForHost(req.url.host)?.let { builder.header("Referer", it) }
+                chain.proceed(builder.build())
             }
             .build()
         return ImageLoader.Builder(this)
