@@ -157,6 +157,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
 
         const val ACTION_START_LIVE = "com.bossxor.lottegiants.START_LIVE"
         const val ACTION_PREGAME = "com.bossxor.lottegiants.PREGAME"
+        const val ACTION_HIDE_LIVE = "com.bossxor.lottegiants.HIDE_LIVE"
     }
 }
 
@@ -218,6 +219,9 @@ class GameAlarmReceiver : BroadcastReceiver() {
                         goAsync.finish()
                     }
                 }.start()
+            }
+            GameSchedulerWorker.ACTION_HIDE_LIVE -> {
+                LiveScoreService.stop(context)
             }
         }
     }

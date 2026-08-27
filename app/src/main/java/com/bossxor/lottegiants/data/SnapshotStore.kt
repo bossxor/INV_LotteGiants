@@ -100,6 +100,16 @@ class SnapshotStore(private val context: Context) {
         context.dataStore.edit { it[KEY_ONBOARDING] = done }
     }
 
+    val nowBarGuideDoneFlow: Flow<Boolean> = context.dataStore.data.map {
+        it[KEY_NOWBAR_GUIDE] ?: false
+    }
+
+    suspend fun isNowBarGuideDone(): Boolean = nowBarGuideDoneFlow.first()
+
+    suspend fun setNowBarGuideDone(done: Boolean = true) {
+        context.dataStore.edit { it[KEY_NOWBAR_GUIDE] = done }
+    }
+
     suspend fun setHighlight(text: String, durationMs: Long = 45_000L) {
         val prev = loadSnapshot() ?: LiveSnapshot()
         saveSnapshot(
@@ -338,6 +348,7 @@ class SnapshotStore(private val context: Context) {
         private val KEY_LIVE_ENABLED = booleanPreferencesKey("live_score_display_enabled")
         private val KEY_LIVE_MODE = stringPreferencesKey("live_display_mode")
         private val KEY_ONBOARDING = booleanPreferencesKey("onboarding_done")
+        private val KEY_NOWBAR_GUIDE = booleanPreferencesKey("nowbar_guide_133")
         private val KEY_FAVORITES = stringPreferencesKey("favorite_player_codes")
         private val KEY_FAVORITE_PLAYERS = stringPreferencesKey("favorite_players")
         private val KEY_BANNER_DAY = stringPreferencesKey("perm_banner_dismissed_day")

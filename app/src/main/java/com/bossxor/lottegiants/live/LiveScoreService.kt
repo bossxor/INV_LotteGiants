@@ -66,10 +66,12 @@ class LiveScoreService : Service() {
                 val snap = runCatching { repo.refreshSnapshot() }.getOrNull()
                 val game = snap?.lotteGame
                 val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
-                nm.notify(
-                    NotificationHelper.LIVE_NOTIFICATION_ID,
-                    NotificationHelper.buildLiveNotification(this@LiveScoreService, game, mode),
-                )
+                val live = NotificationHelper.buildLiveNotification(this@LiveScoreService, game, mode)
+                nm.notify(NotificationHelper.LIVE_NOTIFICATION_ID, live)
+                if (Build.VERSION.SDK_INT >= 36) {
+                    val ok = runCatching { live.hasPromotableCharacteristics() }.getOrDefault(false)
+                    if (!ok) android.util.Log.w(TAG, "live notification is not promotable")
+                }
                 WidgetUpdater.updateAll(this@LiveScoreService)
                 WearBridge.syncSnapshot(this@LiveScoreService, snap)
                 detector.process(this@LiveScoreService, game)
@@ -99,6 +101,8 @@ class LiveScoreService : Service() {
     }
 
     companion object {
+        private const val TAG = "LiveScoreService"
+
         fun start(context: Context) {
             val i = Intent(context, LiveScoreService::class.java)
             context.startForegroundService(i)

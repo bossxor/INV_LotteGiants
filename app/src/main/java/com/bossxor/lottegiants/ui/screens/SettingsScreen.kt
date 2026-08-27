@@ -306,7 +306,7 @@ fun SettingsScreen(
         Spacer(Modifier.height(24.dp))
         Text("실시간 스코어 표시", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text(
-            "알림 표시 형태입니다. 잠금화면·상태바 공개는 기기/OS에 따라 다를 수 있습니다.",
+            "알림 표시 형태입니다. One UI 9 Now Bar(라이브 알림)를 켜 두면 잠금화면·상태바 칩에 점수가 뜹니다.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 12.sp,
         )
@@ -363,6 +363,10 @@ fun SettingsScreen(
                             "알림 본문에 투수·타자까지 자세히. Now Bar 칩의 점수는 그대로입니다."
                         LiveDisplayMode.STATUS_SCORE ->
                             "알림은 점수·이닝만 한 줄. Now Bar 칩의 점수는 그대로입니다."
+                        LiveDisplayMode.FULL ->
+                            "알림 본문에 투수·타자까지 자세히. Now Bar 칩의 점수는 그대로입니다."
+                        LiveDisplayMode.STATUS_SCORE ->
+                            "알림은 점수·이닝만 한 줄. Now Bar 칩의 점수는 그대로입니다."
                     },
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -383,7 +387,14 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (Build.VERSION.SDK_INT >= 36 && !NotificationHelper.canPostNowBar(context)) {
+                Spacer(Modifier.height(8.dp))
+                val nowBar = NotificationHelper.nowBarStatus(context)
+                Text(
+                    NotificationHelper.nowBarStatusLabel(nowBar),
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (Build.VERSION.SDK_INT >= 36) {
                     Spacer(Modifier.height(10.dp))
                     Button(
                         onClick = { NotificationHelper.openNowBarSettings(context) },

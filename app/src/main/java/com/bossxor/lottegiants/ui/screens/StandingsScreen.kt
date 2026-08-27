@@ -37,6 +37,7 @@ import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LeaderPlayer
 import com.bossxor.lottegiants.domain.LotteTeamCard
 import com.bossxor.lottegiants.domain.TeamStanding
+import com.bossxor.lottegiants.domain.lotteRaceSummary
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
@@ -70,6 +71,7 @@ fun StandingsScreen(
     val lotteStanding = remember(standings) {
         standings.firstOrNull { it.teamId == LOTTE_TEAM_CODE }
     }
+    val race = remember(standings) { lotteRaceSummary(standings) }
 
     PullToRefreshBox(
         isRefreshing = refreshing,
@@ -83,6 +85,27 @@ fun StandingsScreen(
             item {
                 Spacer(Modifier.height(8.dp))
                 ScreenTitle("순위", "한 팀을 누르면 그 팀 기준 게임차")
+            }
+
+            race?.let { summary ->
+                item {
+                    SectionCard {
+                        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                summary.headline,
+                                fontWeight = FontWeight.Bold,
+                                color = LotteRed,
+                            )
+                            summary.lines.forEach { line ->
+                                Text(
+                                    line,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             // ── 섹션 1: 롯데 시즌 트렌드 ──

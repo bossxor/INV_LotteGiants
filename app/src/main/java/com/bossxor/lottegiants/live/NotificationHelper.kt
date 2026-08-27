@@ -7,6 +7,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -25,8 +28,12 @@ import kotlinx.coroutines.runBlocking
 object NotificationHelper {
 
     const val CHANNEL_LIVE = "live_score"
-    /** Now Bar/Live Update용. 기존 live_score는 IMPORTANCE_LOW라 승격이 막힐 수 있다. */
-    const val CHANNEL_LIVE_NOW = "live_score_nowbar"
+    /**
+     * Now Bar/Live Update용.
+     * v2: One UI 9는 채널이 DEFAULT여도 되지만 HIGH가 칩 노출이 더 잘 된다.
+     * 채널 중요도는 생성 후 코드로 못 바꿔서 ID를 올렸다.
+     */
+    const val CHANNEL_LIVE_NOW = "live_score_nowbar_v2"
     const val CHANNEL_SCORE = "event_score"
     const val CHANNEL_CONCEDE = "event_concede"
     const val CHANNEL_PITCHER = "event_pitcher"
@@ -58,7 +65,8 @@ object NotificationHelper {
             NotificationChannel(id, name, importance).also { nm.createNotificationChannel(it) }
 
         ch(CHANNEL_LIVE, "실시간 스코어", NotificationManager.IMPORTANCE_LOW)
-        ch(CHANNEL_LIVE_NOW, "Now Bar 스코어", NotificationManager.IMPORTANCE_DEFAULT)
+        ch(CHANNEL_LIVE_NOW, "Now Bar 실시간 점수", NotificationManager.IMPORTANCE_HIGH)
+        runCatching { nm.deleteNotificationChannel("live_score_nowbar") }
         ch(CHANNEL_SCORE, "득점", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_CONCEDE, "실점", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_PITCHER, "투수 교체")
@@ -98,11 +106,7 @@ object NotificationHelper {
         }
         val summary = gameSummary(game)
         val compactLine = gameCompactLine(game)
-        val chipText = when {
-            game == null -> "대기"
-            game.status == GameStatus.BEFORE -> game.startTime.ifBlank { "예정" }
-            else -> "${game.lotteScore}:${game.opponentScore}"
-        }
+        val chipText = nowBarChipText(game)
         val headerLine = if (game != null && game.status == GameStatus.LIVE) {
             buildString {
                 append(game.inningLabel)
@@ -133,23 +137,34 @@ object NotificationHelper {
             LiveDisplayMode.LOCK_NOW -> scoreTitle to headerLine
         }
 
+        val hide = PendingIntent.getBroadcast(
+            context,
+            2,
+            Intent(context, GameAlarmReceiver::class.java).setAction(GameSchedulerWorker.ACTION_HIDE_LIVE),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
         val builder = NotificationCompat.Builder(context, CHANNEL_LIVE_NOW)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
             .setContentIntent(intent)
+            .setDeleteIntent(hide)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setShowWhen(false)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setSubText(chipText)
             .setShortCriticalText(chipText)
             .setColor(COLOR_LOTTE)
+            .setColorized(false)
             .setStyle(liveProgressStyle(context, game, countBmp))
             .setRequestPromotedOngoing(true)
+            .addAction(0, "칩 숨기기", hide)
 
         // RemoteViews·colorized는 칩 승격을 막는다. 세 모드 모두 ProgressStyle로 점수를 올린다.
         if (countBmp != null) {
@@ -157,6 +172,19 @@ object NotificationHelper {
         }
 
         return builder.build()
+    }
+
+    /** Now Bar 칩은 대략 7자면 잘린다. 점수는 `3:2`, 전이면 `18:30`. */
+    fun nowBarChipText(game: LotteGameInfo?): String {
+        val raw = when {
+            game == null -> "대기"
+            game.status == GameStatus.BEFORE -> {
+                val t = game.startTime.trim()
+                Regex("""\d{1,2}:\d{2}""").find(t)?.value ?: t.ifBlank { "예정" }
+            }
+            else -> "${game.lotteScore}:${game.opponentScore}"
+        }
+        return if (raw.length <= 7) raw else raw.take(7)
     }
 
     /**
@@ -207,23 +235,67 @@ object NotificationHelper {
     }
 
     fun canPostNowBar(context: Context): Boolean {
-        if (android.os.Build.VERSION.SDK_INT < 36) return false
+        if (Build.VERSION.SDK_INT < 36) return false
         return runCatching {
             context.getSystemService(NotificationManager::class.java).canPostPromotedNotifications()
         }.getOrDefault(false)
     }
 
+    data class NowBarStatus(
+        val apiOk: Boolean,
+        val canPost: Boolean,
+        val livePosted: Boolean,
+        val promotable: Boolean,
+        val promoted: Boolean,
+    )
+
+    fun nowBarStatus(context: Context): NowBarStatus {
+        val apiOk = Build.VERSION.SDK_INT >= 36
+        val canPost = canPostNowBar(context)
+        val nm = context.getSystemService(NotificationManager::class.java)
+        val posted = nm.activeNotifications.firstOrNull { it.id == LIVE_NOTIFICATION_ID }?.notification
+        val sample = posted ?: buildLiveNotification(context, null)
+        val promotable = apiOk && runCatching { sample.hasPromotableCharacteristics() }.getOrDefault(false)
+        val promoted = apiOk && posted != null &&
+            runCatching { posted.flags and Notification.FLAG_PROMOTED_ONGOING != 0 }.getOrDefault(false)
+        return NowBarStatus(
+            apiOk = apiOk,
+            canPost = canPost,
+            livePosted = posted != null,
+            promotable = promotable,
+            promoted = promoted,
+        )
+    }
+
+    fun nowBarStatusLabel(status: NowBarStatus): String = when {
+        !status.apiOk -> "이 기기는 라이브 알림(Now Bar)을 지원하지 않습니다."
+        !status.canPost ->
+            "Now Bar가 꺼져 있습니다. One UI 9: 설정 → 알림 → 라이브 알림, 또는 설정 → 잠금화면 → Now bar에서 사직스코어를 켜 주세요."
+        status.promoted -> "Now Bar에 표시 중입니다."
+        status.livePosted && status.promotable ->
+            "승격 가능한 알림입니다. 칩이 안 보이면 잠금화면 Now bar 목록에서 사직스코어를 켜 보세요."
+        status.livePosted && !status.promotable ->
+            "지금 알림은 승격 조건에 안 맞습니다. 아래 다시 표시를 눌러 주세요."
+        else -> "실시간 스코어를 켜면 잠금화면·상태바 칩에 점수가 올라갑니다."
+    }
+
     fun openNowBarSettings(context: Context) {
-        val pkg = android.net.Uri.parse("package:${context.packageName}")
-        val promoted = android.content.Intent("android.settings.MANAGE_APP_PROMOTED_NOTIFICATIONS")
-            .setData(pkg)
-            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        runCatching { context.startActivity(promoted) }.onFailure {
-            context.startActivity(
-                android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
-                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
+        val pkg = Uri.parse("package:${context.packageName}")
+        val flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        val candidates = listOf(
+            Intent("android.settings.MANAGE_APP_PROMOTED_NOTIFICATIONS")
+                .setData(pkg)
+                .addFlags(flags),
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                .addFlags(flags),
+        )
+        for (intent in candidates) {
+            val ok = runCatching {
+                context.startActivity(intent)
+                true
+            }.getOrDefault(false)
+            if (ok) return
         }
     }
 
