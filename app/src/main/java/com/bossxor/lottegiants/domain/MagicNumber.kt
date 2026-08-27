@@ -63,7 +63,11 @@ fun lotteRaceSummary(
         val gap = gamesAhead(lotte, fifth)
         lines += "5위까지 ${formatGamesAbs(gap)}게임차"
         val elim = magicNumber(fifth, lotte, seasonG)
-        lines += if (elim <= 0) "포스트시즌 탈락" else "탈락까지 $elim"
+        lines += if (elim <= 0) {
+            "포스트시즌 탈락"
+        } else {
+            "5위 탈락매직 $elim (5위 승+롯데 패)"
+        }
     }
 
     if (lotte.ranking == 1) {

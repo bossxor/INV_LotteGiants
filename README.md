@@ -4,7 +4,7 @@
 
 집·회사에서 이어서 한 작업은 **[작업일지.md](작업일지.md)** 에 적는다. 최신이 위. 끝나면 그 파일을 고치고 push.
 
-현재 버전: **`1.3.33`** (`versionCode` **1040**). `app/build.gradle.kts`에서만 올립니다.
+현재 버전: **`1.3.34`** (`versionCode` **1041**). `app/build.gradle.kts`에서만 올립니다.
 
 ## 기능
 
@@ -78,8 +78,8 @@ debug/release 모두 이 키로 서명합니다. 디버그 키로 설치하면 G
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `1.3.33` |
-| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1040` |
+| `versionName` | 사용자에게 보이는 버전 | `1.3.34` |
+| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1041` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 됩니다.
 
@@ -103,8 +103,8 @@ debug/release 모두 이 키로 서명합니다. 디버그 키로 설치하면 G
 
 ```json
 {
-  "versionCode": 1040,
-  "versionName": "1.3.33",
+  "versionCode": 1041,
+  "versionName": "1.3.34",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }
