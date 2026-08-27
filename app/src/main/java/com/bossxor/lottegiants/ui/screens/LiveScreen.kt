@@ -82,6 +82,9 @@ import com.bossxor.lottegiants.ui.components.SectionHeader
 import com.bossxor.lottegiants.ui.components.PlayerAvatar
 import com.bossxor.lottegiants.ui.components.TeamLogo
 import com.bossxor.lottegiants.ui.heroGradient
+import com.bossxor.lottegiants.ui.heroLeadScoreColor
+import com.bossxor.lottegiants.ui.heroOnColor
+import com.bossxor.lottegiants.ui.isAppDark
 
 private val DETAIL_TABS = listOf("프리뷰", "라인업", "요약", "중계", "기록")
 
@@ -178,7 +181,7 @@ fun LiveScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
             ) {
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(4.dp))
             QuickLinks(
                 onHistory = { onOpenTeamHistory(focusTeam) },
                 onEntry = { onOpenEntryBoard(focusTeam) },
@@ -1816,17 +1819,26 @@ private fun CompactRefresh(
 }
 
 @Composable
-private fun HeroTeam(name: String, logoUrl: String, score: Int, showScore: Boolean, highlight: Boolean, modifier: Modifier = Modifier) {
+private fun HeroTeam(
+    name: String,
+    logoUrl: String,
+    score: Int,
+    showScore: Boolean,
+    highlight: Boolean,
+    onHero: Color,
+    leadColor: Color,
+    modifier: Modifier = Modifier,
+) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
         TeamLogo(logoUrl, size = 56)
         Spacer(Modifier.height(8.dp))
-        Text(name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White.copy(alpha = 0.78f), maxLines = 1)
+        Text(name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = onHero.copy(alpha = 0.72f), maxLines = 1)
         if (showScore) {
             Text(
                 "$score",
                 fontSize = 56.sp,
                 fontWeight = FontWeight.Black,
-                color = if (highlight) LotteGold else Color.White,
+                color = if (highlight) leadColor else onHero,
                 lineHeight = 58.sp,
             )
         }
@@ -1844,12 +1856,21 @@ private fun HeroCard(
     viewingLabel: String? = null,
 ) {
     val showScore = g.status == GameStatus.LIVE || g.status == GameStatus.ENDED
+    val dark = isAppDark()
+    val onHero = heroOnColor()
+    val leadColor = heroLeadScoreColor()
+    val muted = onHero.copy(alpha = if (dark) 0.45f else 0.42f)
+    val soft = onHero.copy(alpha = if (dark) 0.7f else 0.62f)
     Column(
         Modifier
             .fillMaxWidth()
             .background(
                 heroGradient(),
-                RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp),
+                if (dark) {
+                    RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
+                } else {
+                    RoundedCornerShape(0.dp)
+                },
             )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1859,21 +1880,21 @@ private fun HeroCard(
                 Text(
                     if (viewingLabel.isNullOrBlank()) "← 롯데" else "← $viewingLabel · 롯데로",
                     modifier = Modifier.clickable(onClick = onBackToLotte).padding(vertical = 4.dp),
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = onHero.copy(alpha = 0.85f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
             } else {
                 Text(
                     "SAJIK",
-                    color = Color.White.copy(alpha = 0.45f),
+                    color = muted,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 2.sp,
                 )
             }
             Spacer(Modifier.weight(1f))
-            CompactRefresh(secondsUntilRefresh, isRefreshing, onRefresh, onDark = true)
+            CompactRefresh(secondsUntilRefresh, isRefreshing, onRefresh, onDark = dark)
         }
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -1883,6 +1904,8 @@ private fun HeroCard(
                 score = if (g.isHome) g.opponentScore else g.lotteScore,
                 showScore = showScore,
                 highlight = if (g.isHome) g.opponentScore > g.lotteScore else g.lotteScore > g.opponentScore,
+                onHero = onHero,
+                leadColor = leadColor,
                 modifier = Modifier.weight(1f),
             )
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 4.dp)) {
@@ -1890,22 +1913,22 @@ private fun HeroCard(
                     GameStatus.LIVE -> {
                         Text("LIVE", fontWeight = FontWeight.Black, fontSize = 11.sp, color = LotteRed, letterSpacing = 1.4.sp)
                         Spacer(Modifier.height(6.dp))
-                        Text(g.inningLabel, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                        Text(g.inningLabel, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = onHero)
                     }
                     GameStatus.ENDED -> {
                         val (label, color) = when {
                             g.lotteScore > g.opponentScore -> "승" to WinGreen
                             g.lotteScore < g.opponentScore -> "패" to LoseRed
-                            else -> "무" to LotteGold
+                            else -> "무" to leadColor
                         }
-                        Text("종료", fontSize = 11.sp, color = Color.White.copy(alpha = 0.55f), letterSpacing = 1.sp)
+                        Text("종료", fontSize = 11.sp, color = muted, letterSpacing = 1.sp)
                         Spacer(Modifier.height(6.dp))
                         Text(label, fontWeight = FontWeight.Black, fontSize = 22.sp, color = color)
                     }
                     GameStatus.BEFORE -> {
-                        Text(g.startTime.ifBlank { "예정" }, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = LotteGold)
+                        Text(g.startTime.ifBlank { "예정" }, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = leadColor)
                         Spacer(Modifier.height(6.dp))
-                        Text("VS", fontWeight = FontWeight.Black, fontSize = 18.sp, color = Color.White.copy(alpha = 0.7f))
+                        Text("VS", fontWeight = FontWeight.Black, fontSize = 18.sp, color = soft)
                     }
                     GameStatus.CANCELED -> {
                         Text(g.cancelLabel, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = LoseRed)
@@ -1913,10 +1936,10 @@ private fun HeroCard(
                 }
                 if (g.stadium.isNotBlank()) {
                     Spacer(Modifier.height(6.dp))
-                    Text(g.stadium, fontSize = 11.sp, color = Color.White.copy(alpha = 0.5f))
+                    Text(g.stadium, fontSize = 11.sp, color = muted)
                 }
                 if (g.doubleHeaderNo > 0) {
-                    Text("DH${g.doubleHeaderNo}", fontSize = 10.sp, color = LotteGold, fontWeight = FontWeight.Bold)
+                    Text("DH${g.doubleHeaderNo}", fontSize = 10.sp, color = leadColor, fontWeight = FontWeight.Bold)
                 }
             }
             HeroTeam(
@@ -1925,6 +1948,8 @@ private fun HeroCard(
                 score = if (g.isHome) g.lotteScore else g.opponentScore,
                 showScore = showScore,
                 highlight = if (g.isHome) g.lotteScore > g.opponentScore else g.opponentScore > g.lotteScore,
+                onHero = onHero,
+                leadColor = leadColor,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -1933,7 +1958,7 @@ private fun HeroCard(
             Text(
                 "공유",
                 modifier = Modifier.clickable(onClick = onShare).padding(horizontal = 8.dp, vertical = 6.dp),
-                color = Color.White.copy(alpha = 0.7f),
+                color = soft,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
             )

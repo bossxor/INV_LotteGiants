@@ -112,18 +112,30 @@ private val AppShapes = Shapes(
 )
 
 @Composable
+fun isAppDark(): Boolean = MaterialTheme.colorScheme.background.luminance() < 0.5f
+
+@Composable
 fun heroGradient(): Brush {
-    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val dark = isAppDark()
+    val bg = MaterialTheme.colorScheme.background
     return if (dark) {
         Brush.verticalGradient(
             listOf(Color(0xFF2A0814), Color(0xFF0C0C0C)),
         )
     } else {
         Brush.verticalGradient(
-            listOf(Color(0xFF1A0A14), Color(0xFF071018)),
+            listOf(Color(0xFFF6E4E8), bg),
         )
     }
 }
+
+@Composable
+fun heroOnColor(): Color =
+    if (isAppDark()) Color.White else MaterialTheme.colorScheme.onBackground
+
+@Composable
+fun heroLeadScoreColor(): Color =
+    if (isAppDark()) LotteGold else Color(0xFF9A6B10)
 
 @Composable
 fun LotteGiantsTheme(

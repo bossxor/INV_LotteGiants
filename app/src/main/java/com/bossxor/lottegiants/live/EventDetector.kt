@@ -8,14 +8,23 @@ import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.PitcherLine
 import com.bossxor.lottegiants.domain.RosterMove
+import com.bossxor.lottegiants.domain.atBatForChance
+import com.bossxor.lottegiants.domain.basesKey
 import com.bossxor.lottegiants.domain.cancelLabel
+import com.bossxor.lottegiants.domain.describePlayHow
 import com.bossxor.lottegiants.domain.formatConcedeTitle
 import com.bossxor.lottegiants.domain.formatHomerunTitle
 import com.bossxor.lottegiants.domain.formatLotteScoreTitle
+import com.bossxor.lottegiants.domain.formatScoringChanceAlert
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.leadChangeTitle
+import com.bossxor.lottegiants.domain.parseBasesKey
+import com.bossxor.lottegiants.domain.pickAdvanceRelay
+import com.bossxor.lottegiants.domain.pickPlayerName
 import com.bossxor.lottegiants.domain.pickScoringRelay
+import com.bossxor.lottegiants.domain.runnersLabel
+import com.bossxor.lottegiants.domain.scoringBody
 import com.bossxor.lottegiants.domain.shouldEmitAlert
 import java.time.LocalTime
 
@@ -124,26 +133,28 @@ class EventDetector(private val store: SnapshotStore) {
         if (lotteScored || oppScored) {
             val play = pickScoringRelay(newTexts)
             val text = play?.text.orEmpty()
+            val how = describePlayHow(text)
             val seq = play?.seqno ?: newTexts.maxOfOrNull { it.seqno } ?: 0
             val lotteRuns = (game.lotteScore - lastLotteScore).coerceAtLeast(1)
             val oppRuns = (game.opponentScore - lastOppScore).coerceAtLeast(1)
             val score = "${game.lotteScore}:${game.opponentScore}"
-            val lotteWho = scorerName(game, text)
+            val lotteWho = pickPlayerName(text, play?.batterTitle.orEmpty(), lotteRosterNames(game))
+            val body = scoringBody(text, lotteWho, how, game.inningLabel)
             if (lotteScored) {
                 val lotteHr = text.contains("홈런") && isLotteHomerun(game, text)
                 if (lotteHr) {
                     val runs = parseHrRuns(text) ?: lotteRuns
-                    val title = formatHomerunTitle(lotteWho, runs, score)
+                    val title = formatHomerunTitle(lotteWho, runs, score, how)
                     maybeNotify(
-                        context, NotificationType.HOMERUN, 3_000_000 + seq, title, text,
+                        context, NotificationType.HOMERUN, 3_000_000 + seq, title, body,
                         gameId = game.gameId, detailTab = "relay",
                     )
                     store.setHighlight(title)
                     WearBridge.sendScoreEvent(context, title)
                 } else {
-                    val title = formatLotteScoreTitle(lotteWho, lotteRuns, score)
+                    val title = formatLotteScoreTitle(lotteWho, lotteRuns, score, how)
                     maybeNotify(
-                        context, NotificationType.SCORE, 1_000_000 + seq, title, text,
+                        context, NotificationType.SCORE, 1_000_000 + seq, title, body,
                         gameId = game.gameId, detailTab = "relay",
                     )
                     store.setHighlight(title)
@@ -151,9 +162,11 @@ class EventDetector(private val store: SnapshotStore) {
                 }
             }
             if (oppScored) {
-                val title = formatConcedeTitle(oppScorerName(game, text), game.opponentName, oppRuns, score)
+                val oppWho = pickPlayerName(text, play?.batterTitle.orEmpty(), oppRosterNames(game))
+                val title = formatConcedeTitle(oppWho, game.opponentName, oppRuns, score, how)
                 maybeNotify(
-                    context, NotificationType.CONCEDING, 2_000_000 + seq, title, text,
+                    context, NotificationType.CONCEDING, 2_000_000 + seq, title,
+                    scoringBody(text, oppWho, how, game.inningLabel),
                     gameId = game.gameId, detailTab = "relay",
                 )
                 store.setHighlight(title)
@@ -232,19 +245,46 @@ class EventDetector(private val store: SnapshotStore) {
         lastTop = game.isTopInning
 
         if (game.isLotteBatting) {
-            val key = "${game.onBase1}${game.onBase2}${game.onBase3}"
+            val key = basesKey(game.onBase1, game.onBase2, game.onBase3)
             if (key != lastBasesKey) {
+                val (was1, was2, was3) = parseBasesKey(lastBasesKey)
+                val wasChance = was2 || was3
+                val nowChance = game.onBase2 || game.onBase3
+                val wasLoaded = was1 && was2 && was3
+                val nowLoaded = game.onBase1 && game.onBase2 && game.onBase3
+                val play = pickAdvanceRelay(newTexts)
+                val how = describePlayHow(play?.text.orEmpty())
+                val who = pickPlayerName(
+                    play?.text.orEmpty(),
+                    play?.batterTitle.orEmpty(),
+                    lotteRosterNames(game),
+                )
+                val runners = runnersLabel(
+                    first = if (game.onBase1) lineupNameByOrder(game.lotteLineup, game.runnerOn1Order) else null,
+                    second = if (game.onBase2) lineupNameByOrder(game.lotteLineup, game.runnerOn2Order) else null,
+                    third = if (game.onBase3) lineupNameByOrder(game.lotteLineup, game.runnerOn3Order) else null,
+                )
+                val atBat = atBatForChance(game.currentBatterName, game.nextBatterName, who)
+                val alert = formatScoringChanceAlert(
+                    loaded = nowLoaded,
+                    who = who,
+                    how = how,
+                    runners = runners,
+                    batterNow = atBat,
+                    inningLabel = game.inningLabel,
+                    outs = game.out,
+                )
                 when {
-                    game.onBase1 && game.onBase2 && game.onBase3 ->
-                        maybeNotify(
-                            context, NotificationType.SCORING_CHANCE, 2601,
-                            "만루 찬스!", "${game.currentBatterName.ifBlank { "타석" }} · ${game.inningLabel}"
-                        )
-                    game.onBase2 || game.onBase3 ->
-                        maybeNotify(
-                            context, NotificationType.SCORING_CHANCE, 2602,
-                            "득점권 찬스", basesLabel(game) + " · ${game.currentBatterName}"
-                        )
+                    nowLoaded && !wasLoaded -> maybeNotify(
+                        context, NotificationType.SCORING_CHANCE, 2601,
+                        alert.title, alert.text,
+                        gameId = game.gameId, detailTab = "relay",
+                    )
+                    nowChance && !wasChance -> maybeNotify(
+                        context, NotificationType.SCORING_CHANCE, 2602,
+                        alert.title, alert.text,
+                        gameId = game.gameId, detailTab = "relay",
+                    )
                 }
                 lastBasesKey = key
             }
@@ -514,7 +554,7 @@ class EventDetector(private val store: SnapshotStore) {
         lastInning = game.inning
         lastTop = game.isTopInning
         lastStatus = game.status
-        lastBasesKey = "${game.onBase1}${game.onBase2}${game.onBase3}"
+        lastBasesKey = basesKey(game.onBase1, game.onBase2, game.onBase3)
         lastFavoriteBatterCode = (game.lotteLineup + game.opponentLineup + game.lotteBenchBatters + game.opponentBenchBatters)
             .firstOrNull { it.name == game.currentBatterName }?.playerCode.orEmpty()
     }
@@ -522,6 +562,17 @@ class EventDetector(private val store: SnapshotStore) {
     private fun seedScores(game: LotteGameInfo) {
         lastLotteScore = game.lotteScore
         lastOppScore = game.opponentScore
+    }
+
+    private fun lotteRosterNames(game: LotteGameInfo): List<String> =
+        (game.lotteLineup + game.lotteBenchBatters).map { it.name }
+
+    private fun oppRosterNames(game: LotteGameInfo): List<String> =
+        (game.opponentLineup + game.opponentBenchBatters).map { it.name }
+
+    private fun lineupNameByOrder(lineup: List<com.bossxor.lottegiants.domain.LineupSlot>, order: Int): String? {
+        if (order <= 0) return null
+        return lineup.firstOrNull { it.batOrder == order }?.name?.takeIf { it.isNotBlank() }
     }
 
     private fun isLotteHomerun(game: LotteGameInfo, text: String): Boolean {
@@ -538,22 +589,6 @@ class EventDetector(private val store: SnapshotStore) {
         Regex("""(\d)\s*타점""").find(text)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
         return null
     }
-
-    private fun scorerName(game: LotteGameInfo, text: String): String? =
-        (game.lotteLineup + game.lotteBenchBatters)
-            .firstOrNull { it.name.isNotBlank() && text.contains(it.name) }
-            ?.name
-
-    private fun oppScorerName(game: LotteGameInfo, text: String): String? =
-        (game.opponentLineup + game.opponentBenchBatters)
-            .firstOrNull { it.name.isNotBlank() && text.contains(it.name) }
-            ?.name
-
-    private fun basesLabel(g: LotteGameInfo): String = buildList {
-        if (g.onBase1) add(if (g.runnerOn1Order > 0) "1루(${g.runnerOn1Order}번)" else "1루")
-        if (g.onBase2) add(if (g.runnerOn2Order > 0) "2루(${g.runnerOn2Order}번)" else "2루")
-        if (g.onBase3) add(if (g.runnerOn3Order > 0) "3루(${g.runnerOn3Order}번)" else "3루")
-    }.joinToString("·").ifBlank { "주자 없음" }
 
     private suspend fun maybeNotify(
         context: Context,

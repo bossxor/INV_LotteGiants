@@ -363,7 +363,7 @@ enum class NotificationType(val label: String, val description: String) {
     CONCEDING("실점", "상대가 득점할 때 알림"),
     PITCHER_CHANGE("투수 교체", "양 팀 투수 교체 시 알림"),
     HOMERUN("홈런", "홈런이 나오면 알림 (롯데는 강조)"),
-    SCORING_CHANCE("롯데 득점권 찬스", "주자 2·3루 진루, 만루 시 알림"),
+    SCORING_CHANCE("롯데 득점권 찬스", "누가 어떤 타구·볼넷·도루로 득점권이 됐는지 알림"),
     LEAD_CHANGE("역전/동점", "리드가 바뀌거나 동점이 되는 순간 알림"),
     INNING_CHANGE("이닝 교대", "매 이닝 종료 시 중간 스코어 알림"),
     EIGHTH_INNING("8회말", "롯데 경기 8회말 시작 알림"),
