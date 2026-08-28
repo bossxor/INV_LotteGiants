@@ -23,6 +23,7 @@ fun remainingGames(team: TeamStanding, seasonG: Int): Int =
 /**
  * A가 B를 상대로 순위를 확정하는 매직넘버.
  * `G + 1 - A승 - B패`. 0 이하면 이미 확정.
+ * 추격 팀 기준으로 같은 식을 쓰면 트래직넘버(탈락 확정까지)가 된다.
  */
 fun magicNumber(leader: TeamStanding, trailing: TeamStanding, seasonG: Int): Int =
     seasonG + 1 - leader.win - trailing.lose
@@ -66,7 +67,7 @@ fun lotteRaceSummary(
         lines += if (elim <= 0) {
             "포스트시즌 탈락"
         } else {
-            "5위 탈락매직 $elim (5위 승+롯데 패)"
+            "5위 트래직넘버 $elim (5위 승+롯데 패)"
         }
     }
 

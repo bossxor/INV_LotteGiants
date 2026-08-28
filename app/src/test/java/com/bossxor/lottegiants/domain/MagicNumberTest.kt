@@ -90,8 +90,8 @@ class MagicNumberTest {
         val race = lotteRaceSummary(standings)!!
         assertTrue(race.lines.any { it.startsWith("5위까지") })
         assertEquals(
-            "5위 탈락매직 ${144 + 1 - 70 - 65} (5위 승+롯데 패)",
-            race.lines.first { it.startsWith("5위 탈락매직") },
+            "5위 트래직넘버 ${144 + 1 - 70 - 65} (5위 승+롯데 패)",
+            race.lines.first { it.startsWith("5위 트래직넘버") },
         )
     }
 
