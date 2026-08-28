@@ -342,6 +342,13 @@ class SnapshotStore(private val context: Context) {
         context.dataStore.edit { it[KEY_WEAR_LAST_SYNC] = millis }
     }
 
+    suspend fun lastRaceFingerprint(): String =
+        context.dataStore.data.map { it[KEY_LAST_RACE].orEmpty() }.first()
+
+    suspend fun setLastRaceFingerprint(value: String) {
+        context.dataStore.edit { it[KEY_LAST_RACE] = value }
+    }
+
     companion object {
         private val KEY_SNAPSHOT = stringPreferencesKey("live_snapshot")
         private val KEY_THEME = stringPreferencesKey("theme_mode")
@@ -366,6 +373,7 @@ class SnapshotStore(private val context: Context) {
         private val KEY_WIDGET_OPACITY = intPreferencesKey("widget_opacity_pct")
         private val KEY_WIDGET_OPP_LOGO = booleanPreferencesKey("widget_show_opp_logo")
         private val KEY_WEAR_LAST_SYNC = longPreferencesKey("wear_last_sync_millis")
+        private val KEY_LAST_RACE = stringPreferencesKey("last_race_fingerprint")
     }
 }
 
@@ -388,4 +396,5 @@ enum class NotificationType(val label: String, val description: String) {
     FAVORITE_AT_BAT("즐겨찾기 타석", "즐겨찾기 선수가 타석에 설 때"),
     FAVORITE_PITCHING("즐겨찾기 등판", "즐겨찾기 투수가 마운드에 오를 때"),
     FAVORITE_ROSTER("즐겨찾기 등말소", "즐겨찾기 선수 등록·말소 시"),
+    RACE_NUMBER("매직·트래직", "매직넘버·트래직넘버가 줄거나 확정·탈락될 때"),
 }

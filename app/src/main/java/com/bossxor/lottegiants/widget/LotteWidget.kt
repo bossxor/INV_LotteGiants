@@ -170,7 +170,7 @@ private fun WidgetRoot(
                 (snap?.highlightUntilMillis ?: 0L) > System.currentTimeMillis()
             when {
                 game != null && game.status == GameStatus.LIVE -> {
-                    if (compact) CompactLive(game, lotteLogo, oppLogo)
+                    if (compact) CompactLive(game, lotteLogo, oppLogo, snap)
                     else LiveWide(game, snap, lotteLogo, oppLogo, pitcherPhoto, batterPhoto, highlightActive)
                 }
                 game != null && game.status == GameStatus.ENDED -> {
@@ -182,12 +182,12 @@ private fun WidgetRoot(
                     else CanceledWide(game, lotteLogo, oppLogo)
                 }
                 game != null && game.status == GameStatus.BEFORE -> {
-                    if (compact) CompactBefore(game, lotteLogo, oppLogo)
+                    if (compact) CompactBefore(game, lotteLogo, oppLogo, snap)
                     else BeforeWide(game, snap, lotteLogo, oppLogo)
                 }
                 snap?.nextLotteGame != null -> {
                     val next = snap.nextLotteGame!!
-                    if (compact) CompactBefore(next, lotteLogo, oppLogo)
+                    if (compact) CompactBefore(next, lotteLogo, oppLogo, snap)
                     else BeforeWide(next, snap, lotteLogo, oppLogo)
                 }
                 else -> Text(
@@ -222,6 +222,7 @@ private fun CompactLive(
     g: LotteGameInfo,
     lotteLogo: ImageProvider,
     oppLogo: ImageProvider,
+    snap: LiveSnapshot?,
 ) {
     val awayLogo = if (g.isHome) oppLogo else lotteLogo
     val homeLogo = if (g.isHome) lotteLogo else oppLogo
@@ -231,6 +232,10 @@ private fun CompactLive(
         CompactScoreboard(awayLogo, homeLogo, awayScore, homeScore)
         Spacer(GlanceModifier.defaultWeight())
         StatusPill("LIVE  ${g.inningLabel}")
+        val race = snap?.widgetRaceLine.orEmpty()
+        if (race.isNotBlank()) {
+            Text(race, style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 8.sp), maxLines = 1)
+        }
     }
 }
 
@@ -257,6 +262,7 @@ private fun CompactBefore(
     g: LotteGameInfo,
     lotteLogo: ImageProvider,
     oppLogo: ImageProvider,
+    snap: LiveSnapshot? = null,
 ) {
     val white = ColorProvider(Color.White, Color.White)
     val muted = ColorProvider(Muted, Muted)
@@ -286,6 +292,10 @@ private fun CompactBefore(
             style = TextStyle(color = white, fontSize = 9.sp),
             maxLines = 1,
         )
+        val race = snap?.widgetRaceLine.orEmpty()
+        if (race.isNotBlank()) {
+            Text(race, style = TextStyle(color = muted, fontSize = 8.sp), maxLines = 1)
+        }
     }
 }
 
@@ -470,6 +480,10 @@ private fun LiveWide(
         Text("득점권!", style = TextStyle(color = gold, fontSize = 10.sp, fontWeight = FontWeight.Bold))
     }
     FormRow(snap)
+    val race = snap?.widgetRaceLine.orEmpty()
+    if (race.isNotBlank()) {
+        Text(race, style = TextStyle(color = muted, fontSize = 10.sp), maxLines = 1)
+    }
 }
 
 @Composable
@@ -548,6 +562,10 @@ private fun BeforeWide(
         style = TextStyle(color = white, fontSize = 11.sp),
         maxLines = 1,
     )
+    val race = snap?.widgetRaceLine.orEmpty()
+    if (race.isNotBlank()) {
+        Text(race, style = TextStyle(color = muted, fontSize = 11.sp), maxLines = 1)
+    }
     if (pregame && snap?.weather != null) {
         val w = snap.weather!!
         Text(

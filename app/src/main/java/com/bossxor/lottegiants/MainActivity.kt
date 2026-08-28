@@ -329,6 +329,7 @@ class MainActivity : ComponentActivity() {
                     onSelectResultsTeam = vm::setResultsTeam,
                     seasonGames = seasonGames,
                     seasonLoading = seasonLoading,
+                    onNeedSeasonGames = vm::ensureSeasonGames,
                     overlayTeamCode = overlayTeamCode,
                     overlayTeamCard = overlayTeamCard,
                     onOpenTeamHistory = vm::openTeamHistory,
@@ -444,6 +445,7 @@ private fun AppScaffold(
     onSelectResultsTeam: (String) -> Unit,
     seasonGames: List<com.bossxor.lottegiants.domain.MiniGame>,
     seasonLoading: Boolean,
+    onNeedSeasonGames: () -> Unit,
     overlayTeamCode: String,
     overlayTeamCard: LotteTeamCard?,
     onOpenTeamHistory: (String) -> Unit,
@@ -733,6 +735,8 @@ private fun AppScaffold(
                         },
                         onRefresh = onRefreshStandings,
                         refreshing = isRefreshing,
+                        seasonGames = seasonGames,
+                        onAppear = onNeedSeasonGames,
                     )
                     3 -> SettingsScreen(
                         themeMode = themeMode,

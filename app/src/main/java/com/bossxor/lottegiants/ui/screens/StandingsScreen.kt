@@ -25,6 +25,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -36,8 +37,11 @@ import androidx.compose.ui.unit.sp
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LeaderPlayer
 import com.bossxor.lottegiants.domain.LotteTeamCard
+import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.TeamStanding
+import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.lotteRaceSummary
+import com.bossxor.lottegiants.domain.remainingOpponentsFrom
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
@@ -58,6 +62,8 @@ fun StandingsScreen(
     onOpenLeaders: () -> Unit = {},
     onRefresh: () -> Unit = {},
     refreshing: Boolean = false,
+    seasonGames: List<MiniGame> = emptyList(),
+    onAppear: () -> Unit = {},
 ) {
     var baseTeamId by remember(standings) {
         mutableStateOf(
@@ -71,7 +77,12 @@ fun StandingsScreen(
     val lotteStanding = remember(standings) {
         standings.firstOrNull { it.teamId == LOTTE_TEAM_CODE }
     }
-    val race = remember(standings) { lotteRaceSummary(standings) }
+    val remaining = remember(seasonGames) {
+        remainingOpponentsFrom(seasonGames, kboToday().toString())
+    }
+    val race = remember(standings, remaining) { lotteRaceSummary(standings, remaining) }
+
+    LaunchedEffect(Unit) { onAppear() }
 
     PullToRefreshBox(
         isRefreshing = refreshing,

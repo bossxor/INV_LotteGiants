@@ -373,7 +373,7 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "워치4 등 Wear OS는 폰과 페어링되면 워치 앱·타일·컴플리케이션에 같은 점수가 갑니다.",
+                    "워치4 등 Wear OS는 폰과 페어링되면 워치 앱·타일·컴플리케이션에 같은 점수와 순위·선발이 갑니다. 워치에 앱이 없으면 갤럭시 웨어러블에서 사직스코어를 설치하세요.",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

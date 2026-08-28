@@ -75,6 +75,10 @@ class LiveScoreService : Service() {
                 WidgetUpdater.updateAll(this@LiveScoreService)
                 WearBridge.syncSnapshot(this@LiveScoreService, snap)
                 detector.process(this@LiveScoreService, game)
+                if (game?.status == GameStatus.ENDED) {
+                    val st = runCatching { repo.fetchStandings() }.getOrDefault(emptyList())
+                    detector.processRace(this@LiveScoreService, st)
+                }
                 pollCount++
                 if (pollCount % 6 == 1) {
                     val moves = runCatching { repo.fetchRecentRosterMoves(2) }.getOrDefault(emptyList())

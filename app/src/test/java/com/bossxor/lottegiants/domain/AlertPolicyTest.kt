@@ -28,6 +28,13 @@ class AlertPolicyTest {
     }
 
     @Test
+    fun allPresetIncludesRaceNumberAndLiveOnlyExempt() {
+        assertTrue(NotificationType.RACE_NUMBER in typesForPreset(AlertPreset.ALL))
+        assertFalse(NotificationType.RACE_NUMBER in typesForPreset(AlertPreset.SCORING))
+        assertTrue(isLiveOnlyExempt(NotificationType.RACE_NUMBER))
+    }
+
+    @Test
     fun quietHoursWrapMidnight() {
         assertTrue(isQuietHour(LocalTime.of(23, 30), 23, 8))
         assertTrue(isQuietHour(LocalTime.of(2, 0), 23, 8))

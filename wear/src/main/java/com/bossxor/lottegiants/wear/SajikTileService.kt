@@ -63,10 +63,11 @@ class SajikTileService : TileService() {
                     .addContent(
                         Text.Builder(
                             this,
-                            if (snap.status == "LIVE") {
-                                "${snap.bsoLine}  ${snap.basesLine}"
-                            } else {
-                                snap.opponent.ifBlank { "롯데" }
+                            snap.let {
+                                when (it.status) {
+                                    "LIVE" -> "${it.bsoLine}  ${it.basesLine}"
+                                    else -> it.raceLine.ifBlank { it.opponent.ifBlank { "롯데" } }
+                                }
                             },
                         )
                             .setTypography(Typography.TYPOGRAPHY_CAPTION1)

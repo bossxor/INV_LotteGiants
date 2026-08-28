@@ -763,6 +763,9 @@ data class LiveSnapshot(
     val winProbSeries: List<WinProbPoint> = emptyList(),
     val hotColdZone: List<HotColdCell> = emptyList(),
     val pitchLocations: List<PitchLocation> = emptyList(),
+    val lotteSeasonRank: Int = 0,
+    val lotteRemainingGames: Int = 0,
+    val widgetRaceLine: String = "",
 )
 
 @Serializable

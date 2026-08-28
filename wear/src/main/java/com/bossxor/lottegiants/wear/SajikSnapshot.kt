@@ -26,6 +26,9 @@ data class SajikSnapshot(
     val startTime: String = "",
     val starterLotte: String = "",
     val starterOpp: String = "",
+    val rank: Int = 0,
+    val remaining: Int = 0,
+    val raceLine: String = "",
 ) {
     val scoreLine: String get() = "$lotteScore:$oppScore"
     val complicationText: String get() = "$scoreLine ${inning.ifBlank { "—" }}"
@@ -67,6 +70,9 @@ data class SajikSnapshot(
             startTime = map.getString("startTime").orEmpty(),
             starterLotte = map.getString("starterLotte").orEmpty(),
             starterOpp = map.getString("starterOpp").orEmpty(),
+            rank = map.getInt("rank"),
+            remaining = map.getInt("remaining"),
+            raceLine = map.getString("raceLine").orEmpty(),
         )
     }
 }

@@ -1,6 +1,7 @@
 package com.bossxor.lottegiants.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -25,6 +26,25 @@ class MagicNumberTest {
         gameBehind = 0.0,
     )
 
+    private fun mini(
+        opp: String,
+        date: String,
+        home: Boolean,
+        status: GameStatus = GameStatus.BEFORE,
+        oppName: String = opp,
+    ) = MiniGame(
+        gameId = "$date-$opp",
+        homeName = if (home) "롯데" else oppName,
+        awayName = if (home) oppName else "롯데",
+        homeScore = 0,
+        awayScore = 0,
+        status = status,
+        statusText = "",
+        gameDate = date,
+        homeTeamCode = if (home) LOTTE_TEAM_CODE else opp,
+        awayTeamCode = if (home) opp else LOTTE_TEAM_CODE,
+    )
+
     @Test
     fun magicNumberIsSeasonPlusOneMinusWinsMinusOppLosses() {
         val a = team("A", 1, win = 80, lose = 50)
@@ -40,7 +60,7 @@ class MagicNumberTest {
     }
 
     @Test
-    fun fourthPlaceShowsClinchMagicVsSixth() {
+    fun fourthPlaceShowsWildcardMagicVsSixth() {
         val standings = listOf(
             team("SS", 1, 85, 45),
             team("LG", 2, 80, 50),
@@ -54,14 +74,17 @@ class MagicNumberTest {
             team("OB", 10, 45, 85),
         )
         val race = lotteRaceSummary(standings)!!
-        assertEquals("롯데 4위 · 잔여 14경기", race.headline)
-        assertTrue(race.lines.any { it.startsWith("5위 확정 매직") })
-        assertEquals("5위 확정 매직 ${144 + 1 - 72 - 62}", race.lines.first { it.startsWith("5위 확정") })
-        assertTrue(race.lines.any { it.startsWith("1위와") })
+        assertTrue(race.headline.contains("4위"))
+        assertTrue(race.headline.contains("와일드카드"))
+        assertEquals(
+            "와일드카드 매직넘버 ${144 + 1 - 72 - 62} (롯데 승+6위 패)",
+            race.lines.first { it.startsWith("와일드카드 매직넘버") },
+        )
+        assertTrue(race.lines.any { it.startsWith("준플레이오프까지") })
     }
 
     @Test
-    fun firstPlaceShowsPennantMagic() {
+    fun firstPlaceShowsKoreanSeriesMagic() {
         val standings = listOf(
             team(LOTTE_TEAM_CODE, 1, 90, 40),
             team("LG", 2, 80, 50),
@@ -71,13 +94,15 @@ class MagicNumberTest {
             team("KI", 6, 60, 70),
         )
         val race = lotteRaceSummary(standings)!!
-        assertEquals("롯데 1위 · 잔여 14경기", race.headline)
-        assertEquals("1위 확정 매직 ${144 + 1 - 90 - 50}", race.lines.first { it.startsWith("1위 확정") })
-        assertTrue(race.lines.any { it.startsWith("5위") })
+        assertTrue(race.headline.contains("한국시리즈 직행"))
+        assertEquals(
+            "한국시리즈 직행 매직넘버 ${144 + 1 - 90 - 50} (롯데 승+2위 패)",
+            race.lines.first { it.startsWith("한국시리즈") },
+        )
     }
 
     @Test
-    fun seventhShowsGapAndElimination() {
+    fun seventhShowsWildcardGapAndTragic() {
         val standings = listOf(
             team("SS", 1, 85, 45),
             team("LG", 2, 80, 50),
@@ -88,25 +113,47 @@ class MagicNumberTest {
             team(LOTTE_TEAM_CODE, 7, 65, 65),
         )
         val race = lotteRaceSummary(standings)!!
-        assertTrue(race.lines.any { it.startsWith("5위까지") })
+        assertTrue(race.headline.contains("포스트시즌 밖"))
+        assertTrue(race.lines.any { it.startsWith("와일드카드까지") })
         assertEquals(
-            "5위 트래직넘버 ${144 + 1 - 70 - 65} (5위 승+롯데 패)",
-            race.lines.first { it.startsWith("5위 트래직넘버") },
+            "와일드카드 트래직넘버 ${144 + 1 - 70 - 65} (5위 승+롯데 패)",
+            race.lines.first { it.startsWith("와일드카드 트래직") },
         )
     }
 
     @Test
-    fun clinchedFifthWhenMagicNonPositive() {
-        val standings = listOf(
-            team(LOTTE_TEAM_CODE, 1, 95, 40),
-            team("LG", 2, 80, 55),
-            team("SS", 3, 70, 65),
-            team("KT", 4, 65, 70),
-            team("NC", 5, 60, 75),
-            team("KI", 6, 40, 95),
+    fun remainingOpponentsGroupsUnplayed() {
+        val games = listOf(
+            mini("OB", "2026-09-01", home = true),
+            mini("OB", "2026-09-02", home = true),
+            mini("HH", "2026-09-10", home = false, oppName = "한화"),
+            mini("OB", "2026-08-01", home = true, status = GameStatus.ENDED),
+            mini("NC", "2026-09-05", home = true, status = GameStatus.CANCELED),
         )
-        val race = lotteRaceSummary(standings)!!
-        assertTrue(race.lines.contains("5위 이상 확정"))
+        val list = remainingOpponentsFrom(games, "2026-08-28")
+        assertEquals(2, list.size)
+        assertEquals("두산", list.first { it.code == "OB" }.name)
+        assertEquals(2, list.first { it.code == "OB" }.games)
+        assertEquals(1, list.first { it.code == "HH" }.games)
+        assertTrue(formatRemainingOpponents(list).contains("두산 2"))
+    }
+
+    @Test
+    fun raceChangeAlertOnMagicDropAndClinch() {
+        val a = RacePulse(5, "와일드카드", magic = 12, tragic = null, magicLabel = "와일드카드 매직넘버")
+        val b = a.copy(magic = 11)
+        val drop = raceChangeAlert(a, b)!!
+        assertTrue(drop.first.contains("11"))
+        val clinch = raceChangeAlert(b, b.copy(magic = 0))!!
+        assertTrue(clinch.first.contains("확정"))
+        assertNull(raceChangeAlert(null, a))
+        assertNull(raceChangeAlert(a, a))
+    }
+
+    @Test
+    fun widgetRaceLineJoinsRankRemainingStarter() {
+        assertEquals("6위 · 잔여 23 · 선발 박세웅", widgetRaceLine(6, 23, "박세웅"))
+        assertEquals("4위 · 잔여 0", widgetRaceLine(4, 0, ""))
     }
 
     @Test

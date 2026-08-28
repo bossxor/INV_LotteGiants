@@ -47,6 +47,7 @@ fun isLiveOnlyExempt(type: NotificationType): Boolean = type in setOf(
     NotificationType.ROSTER,
     NotificationType.FAVORITE_ROSTER,
     NotificationType.CANCELED,
+    NotificationType.RACE_NUMBER,
 )
 
 fun shouldEmitAlert(

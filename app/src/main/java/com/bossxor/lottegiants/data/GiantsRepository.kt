@@ -36,6 +36,9 @@ import com.bossxor.lottegiants.domain.resolveStadiumCoord
 import com.bossxor.lottegiants.domain.teamCodeToName
 import com.bossxor.lottegiants.domain.teamKeuboId
 import com.bossxor.lottegiants.domain.teamLogoUrl
+import com.bossxor.lottegiants.domain.remainingGames
+import com.bossxor.lottegiants.domain.seasonLength
+import com.bossxor.lottegiants.domain.widgetRaceLine
 import com.bossxor.lottegiants.domain.matchesTeam
 import com.bossxor.lottegiants.domain.doubleHeaderNoFromGameId
 import com.bossxor.lottegiants.domain.KBO_ZONE
@@ -282,6 +285,17 @@ class GiantsRepository private constructor(context: Context) {
             g.copy(preview = g.preview?.copy(weather = weather) ?: g.preview)
         }
 
+        val standingsNow = runCatching { fetchStandings() }.getOrDefault(emptyList())
+        val lotteSt = standingsNow.firstOrNull { it.teamId.equals(LOTTE_TEAM_CODE, true) }
+        val seasonG = seasonLength(standingsNow)
+        val rem = lotteSt?.let { remainingGames(it, seasonG) } ?: 0
+        val rank = lotteSt?.ranking ?: lotteInfo?.lotteRank ?: nextLotte?.lotteRank ?: 0
+        val starter = when {
+            lotteInfo?.status == GameStatus.BEFORE -> lotteInfo.lotteStartingPitcher
+            lotteInfo?.status == GameStatus.LIVE -> lotteInfo.currentPitcherName
+            else -> nextLotte?.lotteStartingPitcher.orEmpty()
+        }
+
         val snapshot = LiveSnapshot(
             updatedAtMillis = now,
             lotteGame = lotteInfo,
@@ -308,6 +322,9 @@ class GiantsRepository private constructor(context: Context) {
             winProbSeries = winProbSeries,
             hotColdZone = hotColdCellsFor(lotteInfo),
             pitchLocations = lotteInfo?.pitchLocations.orEmpty(),
+            lotteSeasonRank = rank,
+            lotteRemainingGames = rem,
+            widgetRaceLine = widgetRaceLine(rank, rem, starter),
         )
         store.saveSnapshot(snapshot)
         return snapshot
@@ -889,10 +906,8 @@ class GiantsRepository private constructor(context: Context) {
     }
 
     suspend fun fetchGamesForSeason(year: Int): List<MiniGame> {
-        val today = kboToday()
         val from = LocalDate.of(year, 3, 1)
-        val cap = LocalDate.of(year, 11, 15)
-        val to = today.plusDays(14).let { if (it.isAfter(cap)) cap else it }
+        val to = LocalDate.of(year, 11, 15)
         val out = mutableListOf<MiniGame>()
         var cursor = from
         while (!cursor.isAfter(to)) {

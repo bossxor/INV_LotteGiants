@@ -235,6 +235,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 runCatching { repo.fetchLeaders(true) }
                     .onSuccess { _pitcherLeaders.value = it }
                     .onFailure { _error.value = it.message }
+                ensureSeasonGames()
             } finally {
                 _isRefreshing.value = false
             }

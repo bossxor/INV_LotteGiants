@@ -119,5 +119,23 @@ private fun SajikSummaryScreen(snap: SajikSnapshot) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        val race = snap.raceLine.ifBlank {
+            buildString {
+                if (snap.rank > 0) append("${snap.rank}위")
+                if (snap.remaining > 0) {
+                    if (isNotEmpty()) append(" · ")
+                    append("잔여 ${snap.remaining}")
+                }
+            }
+        }
+        if (race.isNotBlank()) {
+            Text(
+                text = race,
+                style = MaterialTheme.typography.caption2,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }

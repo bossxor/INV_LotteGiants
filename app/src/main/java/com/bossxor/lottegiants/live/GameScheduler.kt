@@ -40,6 +40,10 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             val moves = repo.fetchRecentRosterMoves(3)
             detector.processRosterMoves(applicationContext, moves)
         }
+        runCatching {
+            val st = repo.fetchStandings()
+            detector.processRace(applicationContext, st)
+        }
 
         val todayGames = snap.todayLotteGames
         val hasLive = todayGames.any { it.status == GameStatus.LIVE } || game?.status == GameStatus.LIVE

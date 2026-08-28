@@ -26,6 +26,10 @@ import com.bossxor.lottegiants.domain.pickScoringRelay
 import com.bossxor.lottegiants.domain.runnersLabel
 import com.bossxor.lottegiants.domain.scoringBody
 import com.bossxor.lottegiants.domain.shouldEmitAlert
+import com.bossxor.lottegiants.domain.TeamStanding
+import com.bossxor.lottegiants.domain.parseRacePulse
+import com.bossxor.lottegiants.domain.raceChangeAlert
+import com.bossxor.lottegiants.domain.racePulse
 import java.time.LocalTime
 
 private const val LINEUP_STAGE_FLAG = "flag"
@@ -36,6 +40,7 @@ private const val ID_LINEUP_FULL = 2011
 private const val ID_ROSTER_DIGEST = 5_000_000
 private const val ID_ROSTER_BASE = 5_100_000
 private const val ID_FAVORITE_ROSTER_BASE = 5_200_000
+private const val ID_RACE = 2810
 
 /** 등말소 중복 방지 키를 보관할 기간 */
 private const val ROSTER_KEY_KEEP_DAYS = 60L
@@ -611,6 +616,19 @@ class EventDetector(private val store: SnapshotStore) {
         )
         if (allow) {
             NotificationHelper.notifyEvent(context, type, title, text, id, gameId, detailTab)
+        }
+    }
+
+    suspend fun processRace(context: Context, standings: List<TeamStanding>) {
+        val now = racePulse(standings) ?: return
+        val prev = parseRacePulse(store.lastRaceFingerprint())
+        val alert = raceChangeAlert(prev, now)
+        store.setLastRaceFingerprint(now.fingerprint())
+        if (alert != null) {
+            val live = emittingForLive
+            emittingForLive = false
+            maybeNotify(context, NotificationType.RACE_NUMBER, ID_RACE, alert.first, alert.second)
+            emittingForLive = live
         }
     }
 }
