@@ -157,6 +157,7 @@ fun LiveScreen(
                     isRefreshing = isRefreshing,
                     onRefresh = onRefresh,
                     viewingLabel = if (viewingOtherTeam) game.focusName() else null,
+                    raceLine = if (!viewingOtherTeam) snapshot?.widgetRaceLine.orEmpty() else "",
                 )
             } else {
                 Row(
@@ -1854,6 +1855,7 @@ private fun HeroCard(
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = {},
     viewingLabel: String? = null,
+    raceLine: String = "",
 ) {
     val showScore = g.status == GameStatus.LIVE || g.status == GameStatus.ENDED
     val dark = isAppDark()
@@ -1928,6 +1930,13 @@ private fun HeroCard(
                     GameStatus.BEFORE -> {
                         Text(g.startTime.ifBlank { "예정" }, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = leadColor)
                         Spacer(Modifier.height(6.dp))
+                        val cd = remember(g.gameDate, g.startTime) {
+                            com.bossxor.lottegiants.domain.gameCountdownLabel(g.gameDate, g.startTime)
+                        }
+                        if (cd.isNotBlank() && cd != g.startTime) {
+                            Text(cd, fontWeight = FontWeight.Black, fontSize = 13.sp, color = LotteGold)
+                            Spacer(Modifier.height(4.dp))
+                        }
                         Text("VS", fontWeight = FontWeight.Black, fontSize = 18.sp, color = soft)
                     }
                     GameStatus.CANCELED -> {
@@ -1961,6 +1970,15 @@ private fun HeroCard(
                 color = soft,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
+            )
+        } else if (raceLine.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                raceLine,
+                color = soft,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
             )
         }
     }
@@ -2003,6 +2021,9 @@ private fun NextGameContent(g: LotteGameInfo) {
             java.time.temporal.ChronoUnit.DAYS.between(com.bossxor.lottegiants.domain.kboToday(), d).toInt()
         }.getOrNull()
     }
+    val countdown = remember(g.gameDate, g.startTime) {
+        com.bossxor.lottegiants.domain.gameCountdownLabel(g.gameDate, g.startTime)
+    }
     SectionCard {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2010,11 +2031,13 @@ private fun NextGameContent(g: LotteGameInfo) {
                 Spacer(Modifier.weight(1f))
                 if (dDay != null) {
                     Text(
-                        when {
-                            dDay == 0 -> "오늘"
-                            dDay == 1 -> "내일"
-                            dDay > 1 -> "D-$dDay"
-                            else -> "종료"
+                        countdown.ifBlank {
+                            when {
+                                dDay == 0 -> "오늘"
+                                dDay == 1 -> "내일"
+                                dDay > 1 -> "D-$dDay"
+                                else -> "종료"
+                            }
                         },
                         fontWeight = FontWeight.Black,
                         fontSize = 16.sp,

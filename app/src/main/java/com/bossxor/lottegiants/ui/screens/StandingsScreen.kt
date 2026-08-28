@@ -42,10 +42,13 @@ import com.bossxor.lottegiants.domain.TeamStanding
 import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.lotteRaceSummary
 import com.bossxor.lottegiants.domain.remainingOpponentsFrom
+import com.bossxor.lottegiants.domain.shareRaceText
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
+import com.bossxor.lottegiants.ui.ScoreShare
 import com.bossxor.lottegiants.ui.components.ScreenTitle
+import androidx.compose.ui.platform.LocalContext
 import com.bossxor.lottegiants.ui.components.SectionCard
 import com.bossxor.lottegiants.ui.components.SparklineChart
 import com.bossxor.lottegiants.ui.components.TeamLogo
@@ -80,7 +83,10 @@ fun StandingsScreen(
     val remaining = remember(seasonGames) {
         remainingOpponentsFrom(seasonGames, kboToday().toString())
     }
-    val race = remember(standings, remaining) { lotteRaceSummary(standings, remaining) }
+    val race = remember(standings, seasonGames) {
+        lotteRaceSummary(standings, remainingOpponents = remaining, seasonGames = seasonGames, todayIso = kboToday().toString())
+    }
+    val context = LocalContext.current
 
     LaunchedEffect(Unit) { onAppear() }
 
@@ -102,17 +108,45 @@ fun StandingsScreen(
                 item {
                     SectionCard {
                         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(
-                                summary.headline,
-                                fontWeight = FontWeight.Bold,
-                                color = LotteRed,
-                            )
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    summary.headline,
+                                    modifier = Modifier.weight(1f),
+                                    fontWeight = FontWeight.Bold,
+                                    color = LotteRed,
+                                )
+                                Text(
+                                    "공유",
+                                    modifier = Modifier.clickable {
+                                        ScoreShare.shareText(context, "사직스코어 레이스", shareRaceText(summary))
+                                    },
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
                             summary.lines.forEach { line ->
                                 Text(
                                     line,
                                     fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                            }
+                            if (summary.upcoming.isNotEmpty()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    "다음 ${summary.upcoming.size}경기",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 12.sp,
+                                    color = LotteRed,
+                                )
+                                summary.upcoming.forEach { line ->
+                                    Text(
+                                        line,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                    )
+                                }
                             }
                         }
                     }

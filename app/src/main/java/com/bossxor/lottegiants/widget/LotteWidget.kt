@@ -55,6 +55,7 @@ import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.teamNameToCode
 import com.bossxor.lottegiants.domain.parseKboStartMillis
+import com.bossxor.lottegiants.domain.gameCountdownLabel
 import com.bossxor.lottegiants.live.WearBridge
 
 private val Red = Color(0xFFC8102E)
@@ -285,7 +286,8 @@ private fun CompactBefore(
             }
         }
         Spacer(GlanceModifier.defaultWeight())
-        StatusPill(g.startTime.ifBlank { "예정" })
+        val cd = gameCountdownLabel(g.gameDate, g.startTime)
+        StatusPill(cd.ifBlank { g.startTime.ifBlank { "예정" } })
         Spacer(GlanceModifier.height(4.dp))
         Text(
             startersAwayVsHome(g),
@@ -535,8 +537,9 @@ private fun BeforeWide(
     val muted = ColorProvider(Muted, Muted)
     val gold = ColorProvider(Gold, Gold)
     val pregame = isWithinMinutes(g, 30)
+    val cd = gameCountdownLabel(g.gameDate, g.startTime)
     Text(
-        if (pregame) "경기 임박" else "다음 경기",
+        if (pregame) "경기 임박" else cd.ifBlank { "다음 경기" },
         style = TextStyle(color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold),
     )
     Spacer(GlanceModifier.height(4.dp))

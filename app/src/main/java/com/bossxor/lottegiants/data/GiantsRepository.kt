@@ -39,6 +39,7 @@ import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.remainingGames
 import com.bossxor.lottegiants.domain.seasonLength
 import com.bossxor.lottegiants.domain.widgetRaceLine
+import com.bossxor.lottegiants.domain.gameCountdownLabel
 import com.bossxor.lottegiants.domain.matchesTeam
 import com.bossxor.lottegiants.domain.doubleHeaderNoFromGameId
 import com.bossxor.lottegiants.domain.KBO_ZONE
@@ -295,6 +296,12 @@ class GiantsRepository private constructor(context: Context) {
             lotteInfo?.status == GameStatus.LIVE -> lotteInfo.currentPitcherName
             else -> nextLotte?.lotteStartingPitcher.orEmpty()
         }
+        val countdownGame = when (lotteInfo?.status) {
+            GameStatus.BEFORE -> lotteInfo
+            GameStatus.LIVE -> null
+            else -> nextLotte
+        }
+        val countdown = countdownGame?.let { gameCountdownLabel(it.gameDate, it.startTime, now) }.orEmpty()
 
         val snapshot = LiveSnapshot(
             updatedAtMillis = now,
@@ -324,7 +331,7 @@ class GiantsRepository private constructor(context: Context) {
             pitchLocations = lotteInfo?.pitchLocations.orEmpty(),
             lotteSeasonRank = rank,
             lotteRemainingGames = rem,
-            widgetRaceLine = widgetRaceLine(rank, rem, starter),
+            widgetRaceLine = widgetRaceLine(rank, rem, starter, countdown),
         )
         store.saveSnapshot(snapshot)
         return snapshot

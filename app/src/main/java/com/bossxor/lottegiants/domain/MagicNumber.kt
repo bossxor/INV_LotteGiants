@@ -2,6 +2,7 @@ package com.bossxor.lottegiants.domain
 
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /** KBO 정규시즌 경기 수. 실제 소화 경기가 더 많으면 그 값을 쓴다. */
 const val KBO_REGULAR_GAMES = 144
@@ -12,6 +13,15 @@ const val KBO_POSTSEASON_SPOTS = 5
 data class RaceSummary(
     val headline: String,
     val lines: List<String>,
+    val upcoming: List<String> = emptyList(),
+)
+
+data class RemainingSeries(
+    val opponent: String,
+    val games: Int,
+    val home: Boolean,
+    val startDate: String,
+    val endDate: String,
 )
 
 data class RemainingOpponent(
@@ -64,13 +74,15 @@ fun kboPostseasonSlot(rank: Int): String = when {
     else -> "포스트시즌 밖"
 }
 
-fun widgetRaceLine(rank: Int, remaining: Int, starter: String): String {
+fun widgetRaceLine(rank: Int, remaining: Int, starter: String, countdown: String = ""): String {
     val parts = buildList {
         if (rank > 0) add("${rank}위")
         if (remaining > 0) add("잔여 ${remaining}")
         else if (rank > 0) add("잔여 0")
         val s = starter.trim()
         if (s.isNotBlank() && s != "-") add("선발 $s")
+        val c = countdown.trim()
+        if (c.isNotBlank()) add(c)
     }
     return parts.joinToString(" · ")
 }
@@ -110,6 +122,227 @@ fun remainingOpponentsFrom(
             away = list.count { it.isTeamHome(lotteCode) != true },
         )
     }.sortedByDescending { it.games }
+}
+
+fun formatHomeAwayRemaining(list: List<RemainingOpponent>): String {
+    val home = list.sumOf { it.home }
+    val away = list.sumOf { it.away }
+    if (home + away == 0) return ""
+    return "잔여 홈 $home · 원정 $away"
+}
+
+fun upcomingLotteGames(
+    games: List<MiniGame>,
+    todayIso: String,
+    lotteCode: String = LOTTE_TEAM_CODE,
+): List<MiniGame> =
+    games.filter { g ->
+        g.involvesTeam(lotteCode) &&
+            g.status != GameStatus.CANCELED &&
+            g.status != GameStatus.ENDED &&
+            (g.gameDate > todayIso || (g.gameDate == todayIso && g.status == GameStatus.BEFORE))
+    }.sortedWith(compareBy({ it.gameDate }, { it.startTime }, { it.doubleHeaderNo }))
+
+fun formatMdDate(iso: String): String {
+    val p = iso.take(10).split('-')
+    if (p.size < 3) return iso
+    val m = p[1].toIntOrNull() ?: return iso
+    val d = p[2].toIntOrNull() ?: return iso
+    return "$m/$d"
+}
+
+fun formatDateRange(startIso: String, endIso: String): String {
+    if (startIso.take(10) == endIso.take(10)) return formatMdDate(startIso)
+    val a = startIso.take(10).split('-')
+    val b = endIso.take(10).split('-')
+    if (a.size >= 3 && b.size >= 3 && a[1] == b[1]) {
+        val m = a[1].toIntOrNull() ?: return "${formatMdDate(startIso)}~${formatMdDate(endIso)}"
+        val d1 = a[2].toIntOrNull() ?: return "${formatMdDate(startIso)}~${formatMdDate(endIso)}"
+        val d2 = b[2].toIntOrNull() ?: return "${formatMdDate(startIso)}~${formatMdDate(endIso)}"
+        return "$m/$d1~$d2"
+    }
+    return "${formatMdDate(startIso)}~${formatMdDate(endIso)}"
+}
+
+fun formatUpcomingLine(g: MiniGame, lotteCode: String = LOTTE_TEAM_CODE): String {
+    val home = g.isTeamHome(lotteCode) == true
+    val oppCode = if (home) g.awayTeamCode else g.homeTeamCode
+    val oppName = teamCodeToName(oppCode).ifBlank { if (home) g.awayName else g.homeName }
+    val dh = if (g.doubleHeaderNo > 0) " DH${g.doubleHeaderNo}" else ""
+    val time = g.startTime.trim()
+    return buildString {
+        append(formatMdDate(g.gameDate))
+        append(if (home) " 홈 " else " 원정 ")
+        append(oppName)
+        if (time.isNotBlank()) {
+            append(' ')
+            append(time)
+        }
+        append(dh)
+    }
+}
+
+fun remainingSeriesFrom(
+    games: List<MiniGame>,
+    todayIso: String,
+    lotteCode: String = LOTTE_TEAM_CODE,
+): List<RemainingSeries> {
+    val upcoming = upcomingLotteGames(games, todayIso, lotteCode)
+    if (upcoming.isEmpty()) return emptyList()
+    val series = mutableListOf<RemainingSeries>()
+    var i = 0
+    while (i < upcoming.size) {
+        val first = upcoming[i]
+        val home = first.isTeamHome(lotteCode) == true
+        val oppCode = if (home) first.awayTeamCode else first.homeTeamCode
+        val oppName = teamCodeToName(oppCode).ifBlank { if (home) first.awayName else first.homeName }
+        var j = i + 1
+        while (j < upcoming.size) {
+            val g = upcoming[j]
+            val gHome = g.isTeamHome(lotteCode) == true
+            val gOpp = if (gHome) g.awayTeamCode else g.homeTeamCode
+            if (gHome != home || !gOpp.equals(oppCode, ignoreCase = true)) break
+            j++
+        }
+        val chunk = upcoming.subList(i, j)
+        series += RemainingSeries(
+            opponent = oppName,
+            games = chunk.size,
+            home = home,
+            startDate = chunk.first().gameDate,
+            endDate = chunk.last().gameDate,
+        )
+        i = j
+    }
+    return series
+}
+
+fun formatRemainingSeries(list: List<RemainingSeries>, limit: Int = 4): List<String> =
+    list.take(limit).map { s ->
+        val n = if (s.games >= 2) "${s.games}연전" else "1경기"
+        "${formatDateRange(s.startDate, s.endDate)} ${if (s.home) "홈" else "원정"} ${s.opponent} $n"
+    }
+
+/** 매직/트래직 상대 순위. 1위→2위, 4·5위→6위, 6위 이하→5위. */
+fun raceOpponentRank(lotteRank: Int): Int? = when {
+    lotteRank <= 0 -> null
+    lotteRank == 1 -> 2
+    lotteRank == 2 -> 3
+    lotteRank == 3 -> 4
+    lotteRank in 4..KBO_POSTSEASON_SPOTS -> 6
+    else -> KBO_POSTSEASON_SPOTS
+}
+
+fun formatVsRaceOpponent(
+    remaining: List<RemainingOpponent>,
+    standings: List<TeamStanding>,
+    lotteCode: String = LOTTE_TEAM_CODE,
+): String {
+    if (remaining.isEmpty()) return ""
+    val lotte = standings.firstOrNull { it.teamId.equals(lotteCode, ignoreCase = true) } ?: return ""
+    val vsRank = raceOpponentRank(lotte.ranking) ?: return ""
+    val vs = standings.firstOrNull { it.ranking == vsRank } ?: return ""
+    val rec = remaining.firstOrNull { it.code.equals(vs.teamId, ignoreCase = true) }
+    val n = rec?.games ?: 0
+    val ha = when {
+        rec == null || n <= 0 -> ""
+        rec.home > 0 && rec.away > 0 -> " · 홈 ${rec.home}·원정 ${rec.away}"
+        rec.home > 0 -> " · 홈"
+        else -> " · 원정"
+    }
+    return if (n <= 0) "${vs.teamName}와 잔여 맞대결 없음"
+    else "${vs.teamName}와 잔여 ${n}경기$ha"
+}
+
+fun formatPaceLine(lotte: TeamStanding, seasonG: Int): String {
+    val rem = remainingGames(lotte, seasonG)
+    val decided = lotte.win + lotte.lose
+    if (decided <= 0 || rem <= 0) return ""
+    val extraWins = (lotte.wra * rem).roundToInt().coerceIn(0, rem)
+    val projW = lotte.win + extraWins
+    val projL = lotte.lose + (rem - extraWins)
+    return "현재 페이스면 최종 ${projW}승 ${projL}패"
+}
+
+fun formatSelfClinchLine(lotte: TeamStanding, vs: TeamStanding, seasonG: Int): String {
+    if (lotte.ranking <= 0 || lotte.ranking > KBO_POSTSEASON_SPOTS) return ""
+    val rem = remainingGames(lotte, seasonG)
+    val m = magicNumber(lotte, vs, seasonG)
+    if (m <= 0 || rem <= 0) return ""
+    return if (m <= rem) "자력: 잔여 ${rem}경기 중 ${m}승이면 상대 결과 무관"
+    else "자력 불가 · 상대 패가 ${m - rem}번 필요"
+}
+
+fun lastFiveMarks(
+    games: List<MiniGame>,
+    todayIso: String,
+    lotteCode: String = LOTTE_TEAM_CODE,
+): String {
+    val ended = games.filter { g ->
+        g.involvesTeam(lotteCode) &&
+            g.status == GameStatus.ENDED &&
+            g.gameDate.isNotBlank() &&
+            g.gameDate <= todayIso
+    }.sortedWith(compareByDescending<MiniGame> { it.gameDate }.thenByDescending { it.doubleHeaderNo })
+        .take(5)
+        .reversed()
+    if (ended.isEmpty()) return ""
+    val marks = ended.joinToString("") { g ->
+        when (g.teamWon(lotteCode)) {
+            true -> "승"
+            false -> "패"
+            null -> "무"
+        }
+    }
+    return "최근 ${ended.size}경기 $marks"
+}
+
+fun gameCountdownLabel(
+    date: String,
+    time: String,
+    nowMillis: Long = System.currentTimeMillis(),
+): String {
+    val start = parseKboStartMillis(date, time)
+    if (start == null) {
+        val d = runCatching { java.time.LocalDate.parse(date.take(10)) }.getOrNull() ?: return ""
+        val today = java.time.Instant.ofEpochMilli(nowMillis).atZone(KBO_ZONE).toLocalDate()
+        val days = java.time.temporal.ChronoUnit.DAYS.between(today, d).toInt()
+        return when {
+            days > 1 -> "D-$days"
+            days == 1 -> "내일"
+            days == 0 -> "오늘"
+            else -> ""
+        }
+    }
+    val delta = start - nowMillis
+    if (delta <= 0L) return "임박"
+    val minutes = delta / 60_000L
+    val hours = minutes / 60L
+    val days = hours / 24L
+    val timePart = time.trim()
+    return when {
+        days >= 2L -> "D-$days"
+        days == 1L -> if (timePart.isNotBlank()) "내일 $timePart" else "내일"
+        hours >= 1L -> "${hours}시간 ${minutes % 60}분 후"
+        minutes >= 1L -> "${minutes}분 후"
+        else -> "임박"
+    }
+}
+
+fun shareRaceText(summary: RaceSummary): String = buildString {
+    append(summary.headline)
+    summary.lines.forEach { line ->
+        append('\n')
+        append(line)
+    }
+    if (summary.upcoming.isNotEmpty()) {
+        append("\n다음 경기")
+        summary.upcoming.forEach { line ->
+            append('\n')
+            append(line)
+        }
+    }
+    append("\n#사직스코어")
 }
 
 fun racePulse(
@@ -200,6 +433,8 @@ fun parseRacePulse(raw: String): RacePulse? {
 fun lotteRaceSummary(
     standings: List<TeamStanding>,
     remainingOpponents: List<RemainingOpponent> = emptyList(),
+    seasonGames: List<MiniGame> = emptyList(),
+    todayIso: String = "",
     lotteCode: String = LOTTE_TEAM_CODE,
 ): RaceSummary? {
     if (standings.size < 2) return null
@@ -208,6 +443,11 @@ fun lotteRaceSummary(
     val seasonG = seasonLength(sorted)
     val rem = remainingGames(lotte, seasonG)
     val slot = kboPostseasonSlot(lotte.ranking)
+    val today = todayIso.ifBlank { kboToday().toString() }
+    val remaining = remainingOpponents.ifEmpty {
+        if (seasonGames.isEmpty()) emptyList()
+        else remainingOpponentsFrom(seasonGames, today, lotteCode)
+    }
     fun at(rank: Int) = sorted.firstOrNull { it.ranking == rank } ?: sorted.getOrNull(rank - 1)
 
     val headline = buildString {
@@ -216,6 +456,12 @@ fun lotteRaceSummary(
         append(" · 잔여 ${rem}경기")
     }
     val lines = mutableListOf<String>()
+
+    lotte.streak.trim().takeIf { it.isNotBlank() }?.let { lines += it }
+    when {
+        lotte.lastFive.isNotBlank() -> lines += "최근 5경기 ${lotte.lastFive.trim()}"
+        else -> lastFiveMarks(seasonGames, today, lotteCode).takeIf { it.isNotBlank() }?.let { lines += it }
+    }
 
     when {
         lotte.ranking <= 0 -> {}
@@ -247,6 +493,7 @@ fun lotteRaceSummary(
                 } else {
                     "$label $m (롯데 승+${vsRank}위 패)"
                 }
+                formatSelfClinchLine(lotte, vs, seasonG).takeIf { it.isNotBlank() }?.let { lines += it }
             }
             val next = when (lotte.ranking) {
                 2 -> 1 to "한국시리즈 직행"
@@ -264,7 +511,12 @@ fun lotteRaceSummary(
         }
     }
 
-    formatRemainingOpponents(remainingOpponents).takeIf { it.isNotBlank() }?.let { lines += it }
+    formatPaceLine(lotte, seasonG).takeIf { it.isNotBlank() }?.let { lines += it }
+    formatHomeAwayRemaining(remaining).takeIf { it.isNotBlank() }?.let { lines += it }
+    formatVsRaceOpponent(remaining, sorted, lotteCode).takeIf { it.isNotBlank() }?.let { lines += it }
+    formatRemainingOpponents(remaining).takeIf { it.isNotBlank() }?.let { lines += it }
+    formatRemainingSeries(remainingSeriesFrom(seasonGames, today, lotteCode)).forEach { lines += it }
+    val upcoming = upcomingLotteGames(seasonGames, today, lotteCode).take(5).map { formatUpcomingLine(it, lotteCode) }
 
-    return RaceSummary(headline, lines)
+    return RaceSummary(headline, lines, upcoming)
 }

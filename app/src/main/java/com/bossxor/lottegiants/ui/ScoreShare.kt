@@ -46,6 +46,15 @@ object ScoreShare {
         context.startActivity(Intent.createChooser(send, "점수 공유"))
     }
 
+    fun shareText(context: Context, subject: String, body: String) {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, body)
+        }
+        context.startActivity(Intent.createChooser(send, subject))
+    }
+
     private fun renderBoard(g: LotteGameInfo): Bitmap {
         val w = 1080
         val h = 560

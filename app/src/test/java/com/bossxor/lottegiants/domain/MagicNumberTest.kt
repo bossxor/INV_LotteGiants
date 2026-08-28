@@ -154,11 +154,58 @@ class MagicNumberTest {
     fun widgetRaceLineJoinsRankRemainingStarter() {
         assertEquals("6위 · 잔여 23 · 선발 박세웅", widgetRaceLine(6, 23, "박세웅"))
         assertEquals("4위 · 잔여 0", widgetRaceLine(4, 0, ""))
+        assertEquals("6위 · 잔여 23 · D-2", widgetRaceLine(6, 23, "", "D-2"))
     }
 
     @Test
     fun emptyOrMissingLotteReturnsNull() {
         assertEquals(null, lotteRaceSummary(emptyList()))
         assertEquals(null, lotteRaceSummary(listOf(team("LG", 1, 80, 50))))
+    }
+
+    @Test
+    fun homeAwayAndUpcomingAndLastFive() {
+        val standings = listOf(
+            team("SS", 1, 85, 45),
+            team("LG", 2, 80, 50),
+            team("KT", 3, 76, 54),
+            team("NC", 4, 72, 58),
+            team("KI", 5, 70, 60),
+            team("WO", 6, 68, 62),
+            team(LOTTE_TEAM_CODE, 7, 65, 65),
+        )
+        val games = listOf(
+            mini("OB", "2026-08-26", home = true, status = GameStatus.ENDED).copy(homeScore = 4, awayScore = 1),
+            mini("OB", "2026-08-27", home = true, status = GameStatus.ENDED).copy(homeScore = 1, awayScore = 3),
+            mini("OB", "2026-09-01", home = true, oppName = "두산").copy(startTime = "18:30"),
+            mini("OB", "2026-09-02", home = true, oppName = "두산").copy(startTime = "18:30"),
+            mini("OB", "2026-09-03", home = true, oppName = "두산").copy(startTime = "18:30"),
+            mini("HH", "2026-09-10", home = false, oppName = "한화").copy(startTime = "18:30"),
+        )
+        val race = lotteRaceSummary(standings, seasonGames = games, todayIso = "2026-08-28")!!
+        assertTrue(race.lines.any { it == "잔여 홈 3 · 원정 1" })
+        assertTrue(race.lines.any { it.contains("두산") && it.contains("3연전") })
+        assertTrue(race.lines.any { it.startsWith("최근 2경기") && it.contains("승") && it.contains("패") })
+        assertEquals("9/1 홈 두산 18:30", race.upcoming.first())
+        assertTrue(race.upcoming.any { it.contains("원정 한화") })
+        val vs = formatVsRaceOpponent(remainingOpponentsFrom(games, "2026-08-28"), standings)
+        assertTrue(vs.contains("잔여 맞대결 없음"))
+    }
+
+    @Test
+    fun selfClinchWhenMagicFitsRemaining() {
+        val lotte = team(LOTTE_TEAM_CODE, 4, 72, 58)
+        val sixth = team("KI", 6, 68, 62)
+        assertEquals("자력: 잔여 14경기 중 11승이면 상대 결과 무관", formatSelfClinchLine(lotte, sixth, 144))
+    }
+
+    @Test
+    fun countdownUsesHoursThenDday() {
+        val start = parseKboStartMillis("2026-08-28", "18:30")!!
+        val twoHoursBefore = start - 2 * 60 * 60 * 1000L - 14 * 60 * 1000L
+        assertEquals("2시간 14분 후", gameCountdownLabel("2026-08-28", "18:30", twoHoursBefore))
+        val threeDaysBefore = start - 3 * 24 * 60 * 60 * 1000L
+        assertEquals("D-3", gameCountdownLabel("2026-08-28", "18:30", threeDaysBefore))
+        assertEquals("임박", gameCountdownLabel("2026-08-28", "18:30", start))
     }
 }
