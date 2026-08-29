@@ -23,6 +23,7 @@ import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.WinProbPoint
+import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.estimateLotteWinProb
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.domain.teamAccentColor
@@ -153,10 +154,10 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        // 상세 알림: 스크린샷형 커스텀 카드 (로고·승률바). Now Bar 승격은 불가.
-        val useCustom = mode == LiveDisplayMode.FULL &&
+        // 점수만 모드 제외 → 스크린샷형 카드(로고·루상·투타·승률바). LIVE/종료 모두.
+        val useCustom = mode != LiveDisplayMode.STATUS_SCORE &&
             game != null &&
-            game.status == GameStatus.LIVE
+            (game.status == GameStatus.LIVE || game.status == GameStatus.ENDED)
 
         val builder = NotificationCompat.Builder(
             context,
@@ -422,14 +423,33 @@ object NotificationHelper {
         rv.setTextViewText(R.id.notif_home_name, homeName)
         rv.setTextViewText(R.id.notif_away_score, "$awayScore")
         rv.setTextViewText(R.id.notif_home_score, "$homeScore")
-        rv.setTextViewText(R.id.notif_inning, game.inningLabel.ifBlank { "LIVE" })
+        rv.setTextViewText(R.id.notif_inning, when (game.status) {
+            GameStatus.ENDED -> "종료"
+            GameStatus.CANCELED -> game.cancelLabel.ifBlank { "취소" }
+            else -> game.inningLabel.ifBlank { "LIVE" }
+        })
         rv.setImageViewResource(
             R.id.notif_bases,
             WidgetAssets.basesDrawable(game.onBase1, game.onBase2, game.onBase3),
         )
         rv.setTextViewText(
             R.id.notif_pitcher_line,
-            "투수 ${game.currentPitcherName.ifBlank { "-" }}",
+            buildString {
+                append("투수 ")
+                append(game.currentPitcherName.ifBlank {
+                    // 종료 후에는 현재 투수가 비면 승/패 투수 표시
+                    when {
+                        game.status == GameStatus.ENDED && game.winPitcherName.isNotBlank() ->
+                            game.winPitcherName
+                        else -> "-"
+                    }
+                })
+                if (game.currentPitcherPitchCount > 0) {
+                    append(" ")
+                    append(game.currentPitcherPitchCount)
+                    append("구")
+                }
+            },
         )
         rv.setTextViewText(
             R.id.notif_batter_line,

@@ -90,6 +90,15 @@ class SnapshotStore(private val context: Context) {
         context.dataStore.edit { it[KEY_LIVE_MODE] = mode.name }
     }
 
+    /** v1.3.40: ProgressStyle 라이브 바 → 점수판 카드로 한 번만 전환 */
+    suspend fun migrateToScorecardModeIfNeeded() {
+        context.dataStore.edit { prefs ->
+            if (prefs[KEY_SCORECARD_MIGRATED] == true) return@edit
+            prefs[KEY_LIVE_MODE] = LiveDisplayMode.FULL.name
+            prefs[KEY_SCORECARD_MIGRATED] = true
+        }
+    }
+
     val onboardingDoneFlow: Flow<Boolean> = context.dataStore.data.map {
         it[KEY_ONBOARDING] ?: false
     }
@@ -354,6 +363,7 @@ class SnapshotStore(private val context: Context) {
         private val KEY_THEME = stringPreferencesKey("theme_mode")
         private val KEY_LIVE_ENABLED = booleanPreferencesKey("live_score_display_enabled")
         private val KEY_LIVE_MODE = stringPreferencesKey("live_display_mode")
+        private val KEY_SCORECARD_MIGRATED = booleanPreferencesKey("scorecard_notif_migrated_140")
         private val KEY_ONBOARDING = booleanPreferencesKey("onboarding_done")
         private val KEY_NOWBAR_GUIDE = booleanPreferencesKey("nowbar_guide_133")
         private val KEY_FAVORITES = stringPreferencesKey("favorite_player_codes")

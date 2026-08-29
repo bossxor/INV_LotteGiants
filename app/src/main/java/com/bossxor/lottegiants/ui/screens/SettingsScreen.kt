@@ -357,12 +357,12 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 Text(
                     when (liveMode) {
-                        LiveDisplayMode.LOCK_NOW ->
-                            "Now Bar용. 이닝 진행 바로 잠금화면 칩에 점수가 크게 뜹니다."
-                        LiveDisplayMode.FULL ->
-                            "팀 로고·루상·투타·실시간 승률 바가 있는 상세 스코어 카드입니다."
+                        LiveDisplayMode.LOCK_NOW,
+                        LiveDisplayMode.FULL,
+                        ->
+                            "팀 로고·점수·루상·투수(투구수)·타자·승률 바 카드. (라이브 바 칩 대신 상세 카드)"
                         LiveDisplayMode.STATUS_SCORE ->
-                            "알림은 점수·이닝만 한 줄. Now Bar 칩의 점수는 그대로입니다."
+                            "알림은 점수·이닝만 한 줄."
                     },
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

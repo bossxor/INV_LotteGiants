@@ -13,6 +13,7 @@ import com.bossxor.lottegiants.live.LiveScoreService
 import com.bossxor.lottegiants.live.NotificationHelper
 import com.bossxor.lottegiants.live.WearBridge
 import com.bossxor.lottegiants.widget.WidgetUpdater
+import android.app.NotificationManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,7 +31,8 @@ class GiantsApp : Application(), ImageLoaderFactory {
         scope.launch {
             runCatching {
                 val repo = GiantsRepository.get(this@GiantsApp)
-                val snap = repo.refreshSnapshot()
+                repo.store.migrateToScorecardModeIfNeeded()
+                val snap = repo.refreshSnapshot(force = true)
                 WidgetUpdater.updateAll(this@GiantsApp)
                 WearBridge.syncSnapshot(this@GiantsApp, snap)
                 val detector = EventDetector(repo.store)
@@ -39,8 +41,24 @@ class GiantsApp : Application(), ImageLoaderFactory {
                 runCatching {
                     detector.processRosterMoves(this@GiantsApp, repo.fetchRecentRosterMoves(3))
                 }
-                if (snap.lotteGame?.status == GameStatus.LIVE) {
-                    LiveScoreService.start(this@GiantsApp)
+                if (repo.store.isLiveScoreEnabled()) {
+                    val game = snap.lotteGame
+                    if (game != null &&
+                        (game.status == GameStatus.LIVE || game.status == GameStatus.ENDED)
+                    ) {
+                        val mode = repo.store.liveDisplayMode()
+                        val n = NotificationHelper.buildLiveNotification(
+                            this@GiantsApp,
+                            game,
+                            mode,
+                            snap.winProbSeries,
+                        )
+                        getSystemService(NotificationManager::class.java)
+                            .notify(NotificationHelper.LIVE_NOTIFICATION_ID, n)
+                    }
+                    if (game?.status == GameStatus.LIVE) {
+                        LiveScoreService.start(this@GiantsApp)
+                    }
                 }
             }
         }
