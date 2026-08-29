@@ -50,6 +50,7 @@ import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.cancelLabel
+import com.bossxor.lottegiants.domain.isCanceledGame
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.teamLogoUrl
@@ -170,26 +171,32 @@ private fun WidgetRoot(
             val highlightActive = !snap?.highlightText.isNullOrBlank() &&
                 (snap?.highlightUntilMillis ?: 0L) > System.currentTimeMillis()
             when {
+                game != null && game.isCanceledGame() -> {
+                    if (compact) CompactCanceled(game, lotteLogo, oppLogo)
+                    else CanceledWide(game, lotteLogo, oppLogo)
+                }
                 game != null && game.status == GameStatus.LIVE -> {
                     if (compact) CompactLive(game, lotteLogo, oppLogo, snap)
                     else LiveWide(game, snap, lotteLogo, oppLogo, pitcherPhoto, batterPhoto, highlightActive)
                 }
-                game != null && game.status == GameStatus.ENDED -> {
+                game != null && game.status == GameStatus.ENDED && !game.isCanceledGame() -> {
                     if (compact) CompactScore(game, "경기종료", lotteLogo, oppLogo)
                     else EndedWide(game, lotteLogo, oppLogo, snap)
                 }
-                game != null && game.status == GameStatus.CANCELED -> {
-                    if (compact) CompactScore(game, game.cancelLabel, lotteLogo, oppLogo)
-                    else CanceledWide(game, lotteLogo, oppLogo)
-                }
-                game != null && game.status == GameStatus.BEFORE -> {
+                game != null && game.status == GameStatus.BEFORE && !game.isCanceledGame() -> {
                     if (compact) CompactBefore(game, lotteLogo, oppLogo, snap)
                     else BeforeWide(game, snap, lotteLogo, oppLogo)
                 }
                 snap?.nextLotteGame != null -> {
                     val next = snap.nextLotteGame!!
-                    if (compact) CompactBefore(next, lotteLogo, oppLogo, snap)
-                    else BeforeWide(next, snap, lotteLogo, oppLogo)
+                    if (next.isCanceledGame()) {
+                        if (compact) CompactCanceled(next, lotteLogo, oppLogo)
+                        else CanceledWide(next, lotteLogo, oppLogo)
+                    } else if (compact) {
+                        CompactBefore(next, lotteLogo, oppLogo, snap)
+                    } else {
+                        BeforeWide(next, snap, lotteLogo, oppLogo)
+                    }
                 }
                 else -> Text(
                     "경기 없음",
@@ -255,6 +262,45 @@ private fun CompactScore(
         CompactScoreboard(awayLogo, homeLogo, awayScore, homeScore)
         Spacer(GlanceModifier.defaultWeight())
         StatusPill(label)
+    }
+}
+
+@Composable
+private fun CompactCanceled(
+    g: LotteGameInfo,
+    lotteLogo: ImageProvider,
+    oppLogo: ImageProvider,
+) {
+    val muted = ColorProvider(Muted, Muted)
+    val red = ColorProvider(Red, Red)
+    val awayLogo = if (g.isHome) oppLogo else lotteLogo
+    val homeLogo = if (g.isHome) lotteLogo else oppLogo
+    CompactFrame(lotteLogo) {
+        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(
+                modifier = GlanceModifier.defaultWeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Image(awayLogo, contentDescription = null, modifier = GlanceModifier.size(32.dp))
+            }
+            Text("VS", style = TextStyle(color = muted, fontSize = 12.sp, fontWeight = FontWeight.Bold))
+            Column(
+                modifier = GlanceModifier.defaultWeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Image(homeLogo, contentDescription = null, modifier = GlanceModifier.size(32.dp))
+            }
+        }
+        Spacer(GlanceModifier.defaultWeight())
+        Text(
+            g.cancelLabel,
+            style = TextStyle(color = red, fontSize = 12.sp, fontWeight = FontWeight.Bold),
+            maxLines = 1,
+        )
+        if (g.stadium.isNotBlank()) {
+            Spacer(GlanceModifier.height(4.dp))
+            Text(g.stadium, style = TextStyle(color = muted, fontSize = 9.sp), maxLines = 1)
+        }
     }
 }
 

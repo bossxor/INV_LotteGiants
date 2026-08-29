@@ -897,7 +897,7 @@ val MiniGame.cancelShortLabel: String
     get() = cancelReasonText.ifBlank { "취소" }
 
 /** KBO·네이버 취소 경기 판별 (status 누락·폴백 데이터 보강) */
-fun MiniGame.isCanceledGame(): Boolean {
+fun isCanceledGameStatus(status: GameStatus, cancelReason: String, statusText: String): Boolean {
     if (status == GameStatus.CANCELED) return true
     if (cancelReason.isNotBlank()) return true
     val text = statusText.trim()
@@ -907,6 +907,26 @@ fun MiniGame.isCanceledGame(): Boolean {
         text.contains("폭염") ||
         text.contains("우천") ||
         text.contains("취소됨", ignoreCase = true)
+}
+
+fun MiniGame.isCanceledGame(): Boolean =
+    isCanceledGameStatus(status, cancelReason, statusText)
+
+fun LotteGameInfo.isCanceledGame(): Boolean =
+    isCanceledGameStatus(status, cancelReason, statusText)
+
+/** 취소로 판별됐는데 status만 BEFORE/ENDED인 경우 CANCELED로 정규화 */
+fun LotteGameInfo.normalizedIfCanceled(): LotteGameInfo {
+    if (!isCanceledGame()) return this
+    if (status == GameStatus.CANCELED) return this
+    val reason = cancelReason.ifBlank {
+        Regex("""(?:경기\s*)?취소\s*\(([^)]+)\)""").find(statusText)?.groupValues?.get(1)?.trim().orEmpty()
+    }.ifBlank { resolveCancelReason(statusText).orEmpty() }
+    return copy(
+        status = GameStatus.CANCELED,
+        cancelReason = reason,
+        statusText = cancelDisplayLabel(reason.ifBlank { null }),
+    )
 }
 
 val LotteGameInfo.inningLabel: String

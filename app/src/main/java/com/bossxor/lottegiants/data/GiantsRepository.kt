@@ -40,10 +40,12 @@ import com.bossxor.lottegiants.domain.remainingGames
 import com.bossxor.lottegiants.domain.seasonLength
 import com.bossxor.lottegiants.domain.widgetRaceLine
 import com.bossxor.lottegiants.domain.gameCountdownLabel
+import com.bossxor.lottegiants.domain.isCanceledGame
 import com.bossxor.lottegiants.domain.matchesTeam
 import com.bossxor.lottegiants.domain.doubleHeaderNoFromGameId
 import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.kboToday
+import com.bossxor.lottegiants.domain.normalizedIfCanceled
 import com.bossxor.lottegiants.domain.weatherSummaryKo
 import com.bossxor.lottegiants.domain.toCell
 import kotlinx.coroutines.async
@@ -283,7 +285,7 @@ class GiantsRepository private constructor(context: Context) {
             weather = runCatching { fetchStadiumWeather(weatherStadium) }.getOrNull() ?: weather
         }
         lotteInfo = lotteInfo?.let { g ->
-            g.copy(preview = g.preview?.copy(weather = weather) ?: g.preview)
+            g.copy(preview = g.preview?.copy(weather = weather) ?: g.preview).normalizedIfCanceled()
         }
 
         val standingsNow = runCatching { fetchStandings() }.getOrDefault(emptyList())
@@ -296,10 +298,11 @@ class GiantsRepository private constructor(context: Context) {
             lotteInfo?.status == GameStatus.LIVE -> lotteInfo.currentPitcherName
             else -> nextLotte?.lotteStartingPitcher.orEmpty()
         }
-        val countdownGame = when (lotteInfo?.status) {
-            GameStatus.BEFORE -> lotteInfo
-            GameStatus.LIVE -> null
-            else -> nextLotte
+        val countdownGame = when {
+            lotteInfo?.isCanceledGame() == true -> null
+            lotteInfo?.status == GameStatus.BEFORE -> lotteInfo
+            lotteInfo?.status == GameStatus.LIVE -> null
+            else -> nextLotte?.takeUnless { it.isCanceledGame() }
         }
         val countdown = countdownGame?.let { gameCountdownLabel(it.gameDate, it.startTime, now) }.orEmpty()
 

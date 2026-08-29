@@ -16,6 +16,7 @@ import com.bossxor.lottegiants.data.NotificationType
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.MiniGame
+import com.bossxor.lottegiants.domain.isCanceledGame
 import com.bossxor.lottegiants.domain.shouldEmitAlert
 import com.bossxor.lottegiants.widget.WidgetUpdater
 import kotlinx.coroutines.runBlocking
@@ -46,25 +47,36 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         }
 
         val todayGames = snap.todayLotteGames
+        todayGames.filter { it.isCanceledGame() }.forEach { mini ->
+            cancelGameAlarms(applicationContext, mini.gameId)
+        }
+        game?.takeIf { it.isCanceledGame() }?.let { g ->
+            cancelGameAlarms(applicationContext, g.gameId)
+        }
+
         val hasLive = todayGames.any { it.status == GameStatus.LIVE } || game?.status == GameStatus.LIVE
         if (hasLive) {
             LiveScoreService.start(applicationContext)
         }
-        val befores = todayGames.filter { it.status == GameStatus.BEFORE }
+        val befores = todayGames.filter { it.status == GameStatus.BEFORE && !it.isCanceledGame() }
         if (befores.isNotEmpty()) {
             befores.forEach { mini -> scheduleForMini(applicationContext, mini) }
-        } else if (game?.status == GameStatus.BEFORE) {
+        } else if (game?.status == GameStatus.BEFORE && !game.isCanceledGame()) {
             scheduleExactStart(applicationContext, game.gameDate, game.startTime, game.gameId)
             schedulePregameReminder(
                 applicationContext, game.gameDate, game.startTime,
                 game.opponentName, game.stadium, game.lotteStartingPitcher, game.gameId,
             )
         } else if (!hasLive) {
-            when (game?.status) {
-                GameStatus.ENDED, GameStatus.CANCELED, null -> {
+            when {
+                game == null || game.status == GameStatus.ENDED || game.isCanceledGame() -> {
                     LiveScoreService.stop(applicationContext)
-                    snap.nextLotteGame?.let { next ->
+                    snap.nextLotteGame?.takeIf { !it.isCanceledGame() }?.let { next ->
                         scheduleExactStart(applicationContext, next.gameDate, next.startTime, next.gameId)
+                        schedulePregameReminder(
+                            applicationContext, next.gameDate, next.startTime,
+                            next.opponentName, next.stadium, next.lotteStartingPitcher, next.gameId,
+                        )
                     }
                 }
                 else -> {}
@@ -128,6 +140,10 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         }
 
         private fun scheduleForMini(context: Context, mini: MiniGame) {
+            if (mini.isCanceledGame()) {
+                cancelGameAlarms(context, mini.gameId)
+                return
+            }
             val lotteHome = mini.homeTeamCode.equals("LT", ignoreCase = true) ||
                 mini.homeName.contains("롯데")
             val opponent = if (lotteHome) mini.awayName else mini.homeName
@@ -137,6 +153,43 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             schedulePregameReminder(
                 context, date, mini.startTime, opponent, mini.stadium, pitcher, mini.gameId,
             )
+        }
+
+        fun cancelGameAlarms(context: Context, gameId: String) {
+            if (gameId.isBlank()) return
+            val am = context.getSystemService(AlarmManager::class.java)
+            fun cancel(action: String, base: Int) {
+                val intent = Intent(context, GameAlarmReceiver::class.java).setAction(action)
+                val pi = PendingIntent.getBroadcast(
+                    context,
+                    requestCode(base, gameId),
+                    intent,
+                    PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+                )
+                if (pi != null) am.cancel(pi)
+            }
+            cancel(ACTION_START_LIVE, 0x3001)
+            cancel(ACTION_PREGAME, 0x3002)
+        }
+
+        /** 예약 알람(30분 전·시작)을 실행해도 되는지 — 취소된 경기면 false */
+        suspend fun isGameStillScheduled(context: Context, gameId: String): Boolean {
+            if (gameId.isBlank()) return true
+            val snap = runCatching { GiantsRepository.get(context).refreshSnapshot(force = true) }.getOrNull()
+                ?: return true
+            snap.todayLotteGames.firstOrNull { it.gameId == gameId }?.let { mini ->
+                if (mini.isCanceledGame()) {
+                    cancelGameAlarms(context, gameId)
+                    return false
+                }
+            }
+            snap.lotteGame?.takeIf { it.gameId == gameId }?.let { g ->
+                if (g.isCanceledGame()) {
+                    cancelGameAlarms(context, gameId)
+                    return false
+                }
+            }
+            return true
         }
 
         private fun requestCode(base: Int, gameId: String): Int {
@@ -175,12 +228,17 @@ class GameAlarmReceiver : BroadcastReceiver() {
                 Thread {
                     try {
                         runBlocking {
+                            if (gameId.isNotBlank() &&
+                                !GameSchedulerWorker.isGameStillScheduled(context, gameId)
+                            ) {
+                                return@runBlocking
+                            }
                             if (gameId.isNotBlank()) {
                                 GiantsRepository.get(context).store.setPreferredLiveGameId(gameId)
                             }
+                            LiveScoreService.start(context)
+                            GameSchedulerWorker.enqueue(context)
                         }
-                        LiveScoreService.start(context)
-                        GameSchedulerWorker.enqueue(context)
                     } finally {
                         goAsync.finish()
                     }
@@ -196,6 +254,11 @@ class GameAlarmReceiver : BroadcastReceiver() {
                     try {
                         val store = GiantsRepository.get(context).store
                         runBlocking {
+                            if (gameId.isNotBlank() &&
+                                !GameSchedulerWorker.isGameStillScheduled(context, gameId)
+                            ) {
+                                return@runBlocking
+                            }
                             val allow = shouldEmitAlert(
                                 typeEnabled = store.isNotificationEnabled(NotificationType.PREGAME_REMINDER),
                                 liveOnly = store.alertsLiveOnly(),
