@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -982,14 +983,56 @@ private fun SummaryTab(
         SectionCard {
             Column {
                 SectionHeader("${g.focusName()} 승리 확률")
-                val last = (winSeries.last().homeProb * 100).toInt()
+                val lotteProb = winSeries.last().homeProb
+                val last = (lotteProb * 100).toInt()
                 Text(
                     "$last%",
                     fontWeight = FontWeight.Black,
                     fontSize = 22.sp,
                     color = MaterialTheme.colorScheme.primary,
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
+                // 좌(원정) · 우(홈) 실시간 승률 바
+                val awayProb = if (g.isHome) 1.0 - lotteProb else lotteProb
+                val homeProb = 1.0 - awayProb
+                val awayName = if (g.isHome) g.opponentName.ifBlank { "상대" } else g.focusName()
+                val homeName = if (g.isHome) g.focusName() else g.opponentName.ifBlank { "상대" }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${awayName} ${(awayProb * 100).toInt()}%",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        "${(homeProb * 100).toInt()}% $homeName",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(5.dp)),
+                ) {
+                    Box(
+                        Modifier
+                            .weight(awayProb.toFloat().coerceIn(0.02f, 0.98f))
+                            .fillMaxHeight()
+                            .background(if (g.isHome) Color(0xFFC30452) else LotteRed),
+                    )
+                    Box(
+                        Modifier
+                            .weight(homeProb.toFloat().coerceIn(0.02f, 0.98f))
+                            .fillMaxHeight()
+                            .background(if (g.isHome) LotteRed else Color(0xFF9AA0A6)),
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
                 com.bossxor.lottegiants.ui.components.SparklineChart(
                     values = winSeries.map { it.homeProb * 100.0 },
                     height = 56.dp,
@@ -997,7 +1040,7 @@ private fun SummaryTab(
                     yMax = 100.0,
                 )
                 Text(
-                    "타석별 변화",
+                    if (winSeries.size <= 1) "현재 추정" else "타석별 변화",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

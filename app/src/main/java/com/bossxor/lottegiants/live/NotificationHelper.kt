@@ -18,10 +18,16 @@ import com.bossxor.lottegiants.MainActivity
 import com.bossxor.lottegiants.R
 import com.bossxor.lottegiants.data.NotificationType
 import com.bossxor.lottegiants.domain.GameStatus
+import com.bossxor.lottegiants.domain.LOTTE_LOGO_URL
+import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.LotteGameInfo
+import com.bossxor.lottegiants.domain.WinProbPoint
+import com.bossxor.lottegiants.domain.estimateLotteWinProb
 import com.bossxor.lottegiants.domain.inningLabel
-import com.bossxor.lottegiants.domain.playerPhotoUrl
+import com.bossxor.lottegiants.domain.teamAccentColor
+import com.bossxor.lottegiants.domain.teamLogoUrl
+import com.bossxor.lottegiants.domain.teamNameToCode
 import com.bossxor.lottegiants.widget.WidgetAssets
 import kotlinx.coroutines.runBlocking
 
@@ -92,6 +98,7 @@ object NotificationHelper {
         context: Context,
         game: LotteGameInfo?,
         mode: LiveDisplayMode = LiveDisplayMode.LOCK_NOW,
+        winProbSeries: List<WinProbPoint> = emptyList(),
     ): Notification {
         val intent = PendingIntent.getActivity(
             context, 0,
@@ -146,7 +153,15 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val builder = NotificationCompat.Builder(context, CHANNEL_LIVE_NOW)
+        // 상세 알림: 스크린샷형 커스텀 카드 (로고·승률바). Now Bar 승격은 불가.
+        val useCustom = mode == LiveDisplayMode.FULL &&
+            game != null &&
+            game.status == GameStatus.LIVE
+
+        val builder = NotificationCompat.Builder(
+            context,
+            if (useCustom) CHANNEL_LIVE else CHANNEL_LIVE_NOW,
+        )
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
@@ -163,14 +178,22 @@ object NotificationHelper {
             .setSubText(chipText)
             .setShortCriticalText(chipText)
             .setColor(COLOR_LOTTE)
-            .setColorized(false)
-            .setStyle(liveProgressStyle(context, game, countBmp))
-            .setRequestPromotedOngoing(true)
             .addAction(0, "칩 숨기기", hide)
 
-        // RemoteViews·colorized는 칩 승격을 막는다. 세 모드 모두 ProgressStyle로 점수를 올린다.
-        if (countBmp != null) {
-            builder.setLargeIcon(countBmp)
+        if (useCustom) {
+            builder
+                .setColor(COLOR_NAVY)
+                .setColorized(true)
+                .setCustomContentView(buildLiveRemoteViews(context, game!!, winProbSeries))
+                .setCustomBigContentView(buildLiveRemoteViews(context, game, winProbSeries))
+                .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+                .setRequestPromotedOngoing(false)
+        } else {
+            builder
+                .setColorized(false)
+                .setStyle(liveProgressStyle(context, game, countBmp))
+                .setRequestPromotedOngoing(true)
+            if (countBmp != null) builder.setLargeIcon(countBmp)
         }
 
         return builder.build()
@@ -366,46 +389,56 @@ object NotificationHelper {
         return if (parts.isEmpty()) "주자 없음" else parts.joinToString("·")
     }
 
-    private fun buildLiveRemoteViews(context: Context, game: LotteGameInfo, big: Boolean): RemoteViews {
-        val rv = RemoteViews(
-            context.packageName,
-            if (big) R.layout.notification_live_big else R.layout.notification_live,
-        )
-        rv.setTextViewText(
-            R.id.notif_score,
-            "롯데 ${game.lotteScore} : ${game.opponentScore} ${game.opponentName}",
-        )
-        rv.setTextViewText(
-            R.id.notif_inning,
-            buildString {
-                append(game.inningLabel)
-                if (game.isLotteBatting) append(" · 롯데 공격") else append(" · 상대 공격")
-            },
-        )
-        val batterLabel = buildString {
-            if (game.currentBatterOrder > 0) append("${game.currentBatterOrder}번 ")
-            append(game.currentBatterName.ifBlank { "-" })
+    private fun buildLiveRemoteViews(
+        context: Context,
+        game: LotteGameInfo,
+        winProbSeries: List<WinProbPoint> = emptyList(),
+    ): RemoteViews {
+        val rv = RemoteViews(context.packageName, R.layout.notification_live)
+        val awayName = if (game.isHome) game.opponentName else "롯데"
+        val homeName = if (game.isHome) "롯데" else game.opponentName
+        val awayScore = if (game.isHome) game.opponentScore else game.lotteScore
+        val homeScore = if (game.isHome) game.lotteScore else game.opponentScore
+        val awayCode = if (game.isHome) {
+            game.opponentCode.ifBlank { teamNameToCode(game.opponentName) }
+        } else {
+            LOTTE_TEAM_CODE
         }
+        val homeCode = if (game.isHome) LOTTE_TEAM_CODE else {
+            game.opponentCode.ifBlank { teamNameToCode(game.opponentName) }
+        }
+        val awayLogoUrl = if (game.isHome) {
+            game.opponentLogoUrl.ifBlank { teamLogoUrl(awayCode) }
+        } else {
+            game.lotteLogoUrl.ifBlank { LOTTE_LOGO_URL }
+        }
+        val homeLogoUrl = if (game.isHome) {
+            game.lotteLogoUrl.ifBlank { LOTTE_LOGO_URL }
+        } else {
+            game.opponentLogoUrl.ifBlank { teamLogoUrl(homeCode) }
+        }
+
+        rv.setTextViewText(R.id.notif_away_name, awayName)
+        rv.setTextViewText(R.id.notif_home_name, homeName)
+        rv.setTextViewText(R.id.notif_away_score, "$awayScore")
+        rv.setTextViewText(R.id.notif_home_score, "$homeScore")
+        rv.setTextViewText(R.id.notif_inning, game.inningLabel.ifBlank { "LIVE" })
         rv.setImageViewResource(
             R.id.notif_bases,
             WidgetAssets.basesDrawable(game.onBase1, game.onBase2, game.onBase3),
         )
-        if (big) {
-            rv.setViewVisibility(R.id.notif_count_text, android.view.View.VISIBLE)
-            rv.setViewVisibility(R.id.notif_players_line, android.view.View.VISIBLE)
-            rv.setTextViewText(R.id.notif_count_text, basesLabel(game))
-            rv.setTextViewText(
-                R.id.notif_players_line,
-                buildString {
-                    append("투 ${game.currentPitcherName.ifBlank { "-" }}")
-                    if (game.currentPitcherPitchCount > 0) append("(${game.currentPitcherPitchCount}구)")
-                    append("  ·  타 $batterLabel")
-                },
-            )
-        } else {
-            rv.setViewVisibility(R.id.notif_count_text, android.view.View.GONE)
-            rv.setViewVisibility(R.id.notif_players_line, android.view.View.GONE)
-        }
+        rv.setTextViewText(
+            R.id.notif_pitcher_line,
+            "투수 ${game.currentPitcherName.ifBlank { "-" }}",
+        )
+        rv.setTextViewText(
+            R.id.notif_batter_line,
+            buildString {
+                append("타자 ")
+                if (game.currentBatterOrder > 0) append("${game.currentBatterOrder}번 ")
+                append(game.currentBatterName.ifBlank { "-" })
+            },
+        )
         fun setDots(ids: IntArray, count: Int, kind: Char) {
             ids.forEachIndexed { i, id ->
                 rv.setImageViewResource(id, WidgetAssets.countDot(i < count, kind))
@@ -415,37 +448,25 @@ object NotificationHelper {
         setDots(intArrayOf(R.id.notif_s0, R.id.notif_s1, R.id.notif_s2), game.strike, 'S')
         setDots(intArrayOf(R.id.notif_o0, R.id.notif_o1, R.id.notif_o2), game.out, 'O')
 
-        if (big) {
-            rv.setTextViewText(R.id.notif_bases_label, "루상  ${basesLabel(game)}")
-            rv.setTextViewText(
-                R.id.notif_pitcher_name,
-                buildString {
-                    append(game.currentPitcherName.ifBlank { "-" })
-                    if (game.currentPitcherPitchCount > 0) append(" (${game.currentPitcherPitchCount}구)")
-                },
-            )
-            rv.setTextViewText(R.id.notif_batter_name, batterLabel)
-            rv.setTextViewText(
-                R.id.notif_next_batter,
-                if (game.nextBatterName.isNotBlank()) "다음 타자  ${game.nextBatterName}" else "",
-            )
-            val batterCode = (game.lotteLineup + game.opponentLineup + game.lotteBenchBatters + game.opponentBenchBatters)
-                .firstOrNull { it.name == game.currentBatterName }?.playerCode.orEmpty()
-            val pitcherBmp = runBlocking {
-                WidgetAssets.loadPlayerBitmap(context, game.currentPitcherCode, playerPhotoUrl(game.currentPitcherCode))
-            }
-            val batterBmp = runBlocking {
-                WidgetAssets.loadPlayerBitmap(context, batterCode, playerPhotoUrl(batterCode))
-            }
-            setPhotoOrFallback(rv, R.id.notif_pitcher_photo, pitcherBmp)
-            setPhotoOrFallback(rv, R.id.notif_batter_photo, batterBmp)
-        }
-        return rv
-    }
+        val lotteProb = winProbSeries.lastOrNull()?.homeProb
+            ?: estimateLotteWinProb(game)
+        val awayProb = if (game.isHome) (1.0 - lotteProb) else lotteProb
+        val bar = WidgetAssets.winProbBarBitmap(
+            leftProb = awayProb.toFloat(),
+            leftColor = teamAccentColor(awayCode),
+            rightColor = teamAccentColor(homeCode),
+        )
+        rv.setImageViewBitmap(R.id.notif_winprob_bar, bar)
 
-    private fun setPhotoOrFallback(rv: RemoteViews, id: Int, bmp: Bitmap?) {
-        if (bmp != null) rv.setImageViewBitmap(id, bmp)
-        else rv.setImageViewResource(id, R.drawable.ic_notification)
+        val awayBmp = runBlocking {
+            WidgetAssets.loadTeamLogoBitmap(context, awayCode, awayLogoUrl, awayName)
+        }
+        val homeBmp = runBlocking {
+            WidgetAssets.loadTeamLogoBitmap(context, homeCode, homeLogoUrl, homeName)
+        }
+        rv.setImageViewBitmap(R.id.notif_away_logo, awayBmp)
+        rv.setImageViewBitmap(R.id.notif_home_logo, homeBmp)
+        return rv
     }
 
     fun notifyEvent(

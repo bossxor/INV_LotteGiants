@@ -450,6 +450,7 @@ class EventDetector(private val store: SnapshotStore) {
         }
         maybeNotify(context, NotificationType.CANCELED, 2003, title, text)
         store.setNotifiedCancelGameId(game.gameId)
+        GameSchedulerWorker.cancelGameAlarms(context, game.gameId)
     }
 
     /**

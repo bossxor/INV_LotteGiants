@@ -181,6 +181,44 @@ object WidgetAssets {
         return loadCachedBitmap(context, "player_photos", "$playerCode.png", urls)
     }
 
+    suspend fun loadTeamLogoBitmap(
+        context: Context,
+        teamCode: String,
+        url: String = "",
+        teamName: String = "",
+    ): Bitmap {
+        val code = teamCode.trim().uppercase().ifBlank { teamNameToCode(teamName) }
+        val urls = listOfNotNull(
+            resolveTeamLogoUrl(code, url).takeIf { it.isNotBlank() },
+            teamLogoUrl(code).takeIf { code.isNotBlank() },
+            kboTeamEmblemUrl(code).takeIf { code.isNotBlank() },
+            url.takeIf { it.isNotBlank() },
+        ).distinct()
+        val cacheKey = code.ifBlank { teamName.take(8).ifBlank { "UNK" } }
+        return loadCachedBitmap(context, "team_logos", "$cacheKey.png", urls)
+            ?: teamInitialBitmap(code, teamName)
+    }
+
+    /** 좌(원정)·우(홈) 실시간 승률 바 */
+    fun winProbBarBitmap(
+        leftProb: Float,
+        leftColor: Int,
+        rightColor: Int,
+        width: Int = 480,
+        height: Int = 16,
+    ): Bitmap {
+        val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val leftW = (width * leftProb.coerceIn(0.02f, 0.98f)).toInt().coerceIn(2, width - 2)
+        val leftPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = leftColor }
+        val rightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = rightColor }
+        val divider = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() }
+        canvas.drawRect(0f, 0f, leftW.toFloat(), height.toFloat(), leftPaint)
+        canvas.drawRect(leftW.toFloat(), 0f, width.toFloat(), height.toFloat(), rightPaint)
+        canvas.drawRect((leftW - 1).toFloat(), 0f, (leftW + 1).toFloat(), height.toFloat(), divider)
+        return bmp
+    }
+
     private suspend fun loadCachedBitmap(
         context: Context,
         dirName: String,

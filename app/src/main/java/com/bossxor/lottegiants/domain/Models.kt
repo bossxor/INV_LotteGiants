@@ -702,8 +702,44 @@ data class KeyPlay(
 data class WinProbPoint(
     val seq: Int = 0,
     val label: String = "",
+    /** 포커스(롯데) 승리 확률 0~1 */
     val homeProb: Double = 0.5,
 )
+
+/** API 승률이 없을 때 점수·이닝으로 대략 추정 (요약·알림 폴백) */
+fun estimateLotteWinProb(game: LotteGameInfo): Double {
+    when (game.status) {
+        GameStatus.ENDED -> return when {
+            game.lotteScore > game.opponentScore -> 0.97
+            game.lotteScore < game.opponentScore -> 0.03
+            else -> 0.5
+        }
+        GameStatus.CANCELED, GameStatus.BEFORE -> return 0.5
+        GameStatus.LIVE -> Unit
+    }
+    val lead = (game.lotteScore - game.opponentScore).toDouble()
+    val inn = game.inning.coerceIn(1, 12).toDouble()
+    val half = if (game.isTopInning) 0.0 else 0.5
+    val progress = (((inn - 1) + half) / 9.0).coerceIn(0.0, 1.35)
+    val leverage = 0.4 + progress * 1.1
+    val raw = 1.0 / (1.0 + kotlin.math.exp(-lead * leverage))
+    return raw.coerceIn(0.03, 0.97)
+}
+
+/** 알림·승률 바용 팀 강조색 */
+fun teamAccentColor(teamCode: String): Int = when (teamCode.trim().uppercase()) {
+    "LT" -> 0xFFD00F31.toInt()
+    "LG" -> 0xFFC30452.toInt()
+    "OB" -> 0xFF131230.toInt()
+    "HT" -> 0xFFEA0029.toInt()
+    "SK" -> 0xFFCE0E2D.toInt()
+    "NC" -> 0xFF315288.toInt()
+    "KT" -> 0xFF333333.toInt()
+    "WO" -> 0xFF570514.toInt()
+    "HH" -> 0xFFFF6600.toInt()
+    "SS" -> 0xFF0054A6.toInt()
+    else -> 0xFF9AA0A6.toInt()
+}
 
 @Serializable
 data class HotColdCell(

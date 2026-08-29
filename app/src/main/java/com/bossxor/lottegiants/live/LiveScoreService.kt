@@ -21,7 +21,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * 경기 중 10~15초 간격으로 폴링해 위젯·Now Bar·이벤트 알림을 갱신한다.
+ * 경기 중 5초(라이브)·20초(경기 전) 간격으로 폴링해 위젯·알림·이벤트를 갱신한다.
  */
 class LiveScoreService : Service() {
 
@@ -56,17 +56,21 @@ class LiveScoreService : Service() {
         if (pollJob?.isActive == true) return
         pollJob = scope.launch {
             val repo = GiantsRepository.get(this@LiveScoreService)
-            var pollCount = 0
             while (isActive) {
                 if (!repo.store.isLiveScoreEnabled()) {
                     stopSelf()
                     break
                 }
                 val mode = repo.store.liveDisplayMode()
-                val snap = runCatching { repo.refreshSnapshot() }.getOrNull()
+                val snap = runCatching { repo.refreshSnapshot(force = true) }.getOrNull()
                 val game = snap?.lotteGame
                 val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
-                val live = NotificationHelper.buildLiveNotification(this@LiveScoreService, game, mode)
+                val live = NotificationHelper.buildLiveNotification(
+                    this@LiveScoreService,
+                    game,
+                    mode,
+                    snap?.winProbSeries.orEmpty(),
+                )
                 nm.notify(NotificationHelper.LIVE_NOTIFICATION_ID, live)
                 if (Build.VERSION.SDK_INT >= 36) {
                     val ok = runCatching { live.hasPromotableCharacteristics() }.getOrDefault(false)
@@ -79,17 +83,15 @@ class LiveScoreService : Service() {
                     val st = runCatching { repo.fetchStandings() }.getOrDefault(emptyList())
                     detector.processRace(this@LiveScoreService, st)
                 }
-                pollCount++
-                if (pollCount % 6 == 1) {
-                    val moves = runCatching { repo.fetchRecentRosterMoves(2) }.getOrDefault(emptyList())
-                    detector.processRosterMoves(this@LiveScoreService, moves)
-                }
+                // 등말소는 매 폴링마다 — 다른 앱보다 빠르게
+                val moves = runCatching { repo.fetchRecentRosterMoves(2) }.getOrDefault(emptyList())
+                detector.processRosterMoves(this@LiveScoreService, moves)
 
                 when (game?.status) {
-                    GameStatus.LIVE -> delay(10_000L)
-                    GameStatus.BEFORE -> delay(60_000L)
+                    GameStatus.LIVE -> delay(5_000L)
+                    GameStatus.BEFORE -> delay(20_000L)
                     GameStatus.ENDED, GameStatus.CANCELED, null -> {
-                        delay(5_000L)
+                        delay(3_000L)
                         stopSelf()
                         break
                     }

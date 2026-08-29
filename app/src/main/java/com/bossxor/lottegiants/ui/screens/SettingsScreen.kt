@@ -358,13 +358,9 @@ fun SettingsScreen(
                 Text(
                     when (liveMode) {
                         LiveDisplayMode.LOCK_NOW ->
-                            "알림은 이닝·공격 팀 위주. Now Bar 칩에는 세 모드 모두 점수가 올라갑니다."
+                            "Now Bar용. 이닝 진행 바로 잠금화면 칩에 점수가 크게 뜹니다."
                         LiveDisplayMode.FULL ->
-                            "알림 본문에 투수·타자까지 자세히. Now Bar 칩의 점수는 그대로입니다."
-                        LiveDisplayMode.STATUS_SCORE ->
-                            "알림은 점수·이닝만 한 줄. Now Bar 칩의 점수는 그대로입니다."
-                        LiveDisplayMode.FULL ->
-                            "알림 본문에 투수·타자까지 자세히. Now Bar 칩의 점수는 그대로입니다."
+                            "팀 로고·루상·투타·실시간 승률 바가 있는 상세 스코어 카드입니다."
                         LiveDisplayMode.STATUS_SCORE ->
                             "알림은 점수·이닝만 한 줄. Now Bar 칩의 점수는 그대로입니다."
                     },

@@ -63,6 +63,8 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="com.bossxor.lottegiants.START_LIVE" />
                 <action android:name="com.bossxor.lottegiants.PREGAME" />
+                <action android:name="com.bossxor.lottegiants.HIDE_LIVE" />
+                <action android:name="com.bossxor.lottegiants.FAST_POLL" />
             </intent-filter>
         </receiver>
 

@@ -80,8 +80,8 @@ class SnapshotStore(private val context: Context) {
 
     val liveDisplayModeFlow: Flow<LiveDisplayMode> = context.dataStore.data.map { prefs ->
         runCatching {
-            LiveDisplayMode.valueOf(prefs[KEY_LIVE_MODE] ?: LiveDisplayMode.LOCK_NOW.name)
-        }.getOrDefault(LiveDisplayMode.LOCK_NOW)
+            LiveDisplayMode.valueOf(prefs[KEY_LIVE_MODE] ?: LiveDisplayMode.FULL.name)
+        }.getOrDefault(LiveDisplayMode.FULL)
     }
 
     suspend fun liveDisplayMode(): LiveDisplayMode = liveDisplayModeFlow.first()

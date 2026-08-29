@@ -61,12 +61,22 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         val befores = todayGames.filter { it.status == GameStatus.BEFORE && !it.isCanceledGame() }
         if (befores.isNotEmpty()) {
             befores.forEach { mini -> scheduleForMini(applicationContext, mini) }
+            val within90 = befores.any { mini ->
+                val date = mini.gameDate.ifBlank { com.bossxor.lottegiants.domain.kboToday().toString() }
+                val start = parseGameMillis(date, mini.startTime) ?: return@any false
+                start - System.currentTimeMillis() in 0..(90 * 60_000L)
+            }
+            if (within90) LiveScoreService.start(applicationContext)
         } else if (game?.status == GameStatus.BEFORE && !game.isCanceledGame()) {
             scheduleExactStart(applicationContext, game.gameDate, game.startTime, game.gameId)
             schedulePregameReminder(
                 applicationContext, game.gameDate, game.startTime,
                 game.opponentName, game.stadium, game.lotteStartingPitcher, game.gameId,
             )
+            val start = parseGameMillis(game.gameDate, game.startTime)
+            if (start != null && start - System.currentTimeMillis() in 0..(90 * 60_000L)) {
+                LiveScoreService.start(applicationContext)
+            }
         } else if (!hasLive) {
             when {
                 game == null || game.status == GameStatus.ENDED || game.isCanceledGame() -> {
@@ -100,8 +110,8 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
 
         fun scheduleExactStart(context: Context, date: String, time: String, gameId: String = "") {
             val trigger = parseGameMillis(date, time) ?: return
-            // 시작 2분 전에 서비스 기동
-            val at = (trigger - 2 * 60_000L).coerceAtLeast(System.currentTimeMillis() + 5_000L)
+            // 경기 90분 전부터 폴링 시작 → 라인업·취소·등말소를 다른 앱보다 먼저 잡음
+            val at = (trigger - 90 * 60_000L).coerceAtLeast(System.currentTimeMillis() + 5_000L)
             val am = context.getSystemService(AlarmManager::class.java)
             val intent = Intent(context, GameAlarmReceiver::class.java).setAction(ACTION_START_LIVE)
                 .putExtra("gameId", gameId)
@@ -111,6 +121,31 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             setAlarmSafe(am, at, pi)
+            scheduleFastPoll(context, date, time, gameId)
+        }
+
+        /** 경기 당일 3시간 전부터 3분마다 스냅샷·이벤트 검사 */
+        fun scheduleFastPoll(context: Context, date: String, time: String, gameId: String = "") {
+            val start = parseGameMillis(date, time) ?: return
+            val windowStart = start - 3 * 60 * 60_000L
+            val now = System.currentTimeMillis()
+            if (now > start + 5 * 60 * 60_000L) return
+            val nextAt = when {
+                now < windowStart -> windowStart
+                else -> now + 3 * 60_000L
+            }.coerceAtMost(start + 30 * 60_000L)
+            if (nextAt <= now) return
+            val am = context.getSystemService(AlarmManager::class.java)
+            val intent = Intent(context, GameAlarmReceiver::class.java).setAction(ACTION_FAST_POLL)
+                .putExtra("gameId", gameId)
+                .putExtra("gameDate", date)
+                .putExtra("startTime", time)
+            val pi = PendingIntent.getBroadcast(
+                context, requestCode(0x3003, gameId),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            setAlarmSafe(am, nextAt, pi)
         }
 
         fun schedulePregameReminder(
@@ -170,6 +205,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             }
             cancel(ACTION_START_LIVE, 0x3001)
             cancel(ACTION_PREGAME, 0x3002)
+            cancel(ACTION_FAST_POLL, 0x3003)
         }
 
         /** 예약 알람(30분 전·시작)을 실행해도 되는지 — 취소된 경기면 false */
@@ -215,6 +251,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         const val ACTION_START_LIVE = "com.bossxor.lottegiants.START_LIVE"
         const val ACTION_PREGAME = "com.bossxor.lottegiants.PREGAME"
         const val ACTION_HIDE_LIVE = "com.bossxor.lottegiants.HIDE_LIVE"
+        const val ACTION_FAST_POLL = "com.bossxor.lottegiants.FAST_POLL"
     }
 }
 
@@ -289,6 +326,43 @@ class GameAlarmReceiver : BroadcastReceiver() {
             }
             GameSchedulerWorker.ACTION_HIDE_LIVE -> {
                 LiveScoreService.stop(context)
+            }
+            GameSchedulerWorker.ACTION_FAST_POLL -> {
+                val gameId = intent?.getStringExtra("gameId").orEmpty()
+                val date = intent?.getStringExtra("gameDate").orEmpty()
+                val time = intent?.getStringExtra("startTime").orEmpty()
+                val goAsync = goAsync()
+                Thread {
+                    try {
+                        runBlocking {
+                            if (gameId.isNotBlank() &&
+                                !GameSchedulerWorker.isGameStillScheduled(context, gameId)
+                            ) {
+                                return@runBlocking
+                            }
+                            val repo = GiantsRepository.get(context)
+                            val snap = runCatching { repo.refreshSnapshot(force = true) }.getOrNull()
+                            NotificationHelper.createChannels(context)
+                            val detector = EventDetector(repo.store)
+                            runCatching { detector.process(context, snap?.lotteGame) }
+                            runCatching {
+                                detector.processRosterMoves(context, repo.fetchRecentRosterMoves(2))
+                            }
+                            WidgetUpdater.updateAll(context)
+                            val status = snap?.lotteGame?.status
+                            if (status == GameStatus.LIVE || status == GameStatus.BEFORE) {
+                                LiveScoreService.start(context)
+                            }
+                            if (date.isNotBlank() && time.isNotBlank() &&
+                                status != GameStatus.ENDED && status != GameStatus.CANCELED
+                            ) {
+                                GameSchedulerWorker.scheduleFastPoll(context, date, time, gameId)
+                            }
+                        }
+                    } finally {
+                        goAsync.finish()
+                    }
+                }.start()
             }
         }
     }

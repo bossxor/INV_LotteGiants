@@ -28,6 +28,7 @@ import com.bossxor.lottegiants.domain.StadiumWeather
 import com.bossxor.lottegiants.domain.TeamStanding
 import com.bossxor.lottegiants.domain.WinProbPoint
 import com.bossxor.lottegiants.domain.cancelDisplayLabel
+import com.bossxor.lottegiants.domain.estimateLotteWinProb
 import com.bossxor.lottegiants.domain.resolveCancelReason
 import com.bossxor.lottegiants.domain.isPitcherPosition
 import com.bossxor.lottegiants.domain.playerPhotoUrl
@@ -243,13 +244,32 @@ class GiantsRepository private constructor(context: Context) {
         }
 
         val focusGame = lotteInfo ?: nextLotte
+        val prev = store.loadSnapshot()
         val rutaExtras = if (focusGame != null && rutaConnected) {
             fetchRutaExtras(focusGame.gameId, focusGame.isHome)
         } else {
             RutaGameExtras(connected = rutaConnected)
         }
         val naverWinProb = relayData?.let { buildWinProbFromRelay(it, lotteInfo?.isHome == true) }.orEmpty()
-        val winProbSeries = rutaExtras.winProbSeries.ifEmpty { naverWinProb }
+        val estimated = lotteInfo?.takeIf {
+            it.status == GameStatus.LIVE || it.status == GameStatus.ENDED
+        }?.let {
+            listOf(WinProbPoint(seq = 0, label = "현재", homeProb = estimateLotteWinProb(it)))
+        }.orEmpty()
+        val freshWin = rutaExtras.winProbSeries.ifEmpty { naverWinProb }.ifEmpty { estimated }
+        val prevWin = prev?.winProbSeries.orEmpty()
+        val winProbSeries = when {
+            freshWin.size >= 2 -> freshWin.takeLast(48)
+            freshWin.isNotEmpty() && prevWin.isNotEmpty() &&
+                prev?.lotteGame?.gameId == lotteInfo?.gameId -> {
+                (prevWin + freshWin.mapIndexed { i, p -> p.copy(seq = prevWin.size + i) })
+                    .distinctBy { "%.4f".format(it.homeProb) to it.label }
+                    .takeLast(48)
+            }
+            freshWin.isNotEmpty() -> freshWin
+            prev?.lotteGame?.gameId == lotteInfo?.gameId -> prevWin
+            else -> emptyList()
+        }
 
         val recentLotte = kboRange
             .filter { it.involvesLotte() && it.status() == GameStatus.ENDED && it.isoDate() <= todayStr }
@@ -274,7 +294,6 @@ class GiantsRepository private constructor(context: Context) {
             }.getOrDefault(emptyList())
         }
 
-        val prev = store.loadSnapshot()
         val now = System.currentTimeMillis()
         val keepHighlight = (prev?.highlightUntilMillis ?: 0L) > now
 
@@ -485,11 +504,19 @@ class GiantsRepository private constructor(context: Context) {
 
     /** 네이버 relay metricOption → 롯데 승리확률 시계열 */
     private fun buildWinProbFromRelay(relay: TextRelayData, isHome: Boolean): List<WinProbPoint> {
+        fun norm(v: Double): Double = (if (v > 1.5) v / 100.0 else v).coerceIn(0.0, 1.0)
         fun rateOf(m: MetricOptionDto?): Double? {
             if (m == null) return null
-            val raw = if (isHome) m.homeTeamWinRate else m.awayTeamWinRate
-            val v = raw ?: return null
-            return (if (v > 1.5) v / 100.0 else v).coerceIn(0.0, 1.0)
+            val preferred = if (isHome) m.homeTeamWinRate else m.awayTeamWinRate
+            preferred?.let { return norm(it) }
+            // 한쪽만 오면 포커스 기준 보정
+            m.homeTeamWinRate?.let { h ->
+                return if (isHome) norm(h) else (1.0 - norm(h))
+            }
+            m.awayTeamWinRate?.let { a ->
+                return if (isHome) (1.0 - norm(a)) else norm(a)
+            }
+            return null
         }
         val fromPlates = relay.textRelays.mapIndexedNotNull { idx, tr ->
             val r = rateOf(tr.metricOption) ?: return@mapIndexedNotNull null
@@ -1856,7 +1883,7 @@ class GiantsRepository private constructor(context: Context) {
         private const val STANDINGS_TTL_MS = 5 * 60_000L
         private const val KBO_TODAY_TTL_MS = 30_000L
         private const val KBO_PAST_TTL_MS = 10 * 60_000L
-        private const val SNAPSHOT_FRESH_MS = 8_000L
+        private const val SNAPSHOT_FRESH_MS = 3_000L
 
         @Volatile
         private var instance: GiantsRepository? = null
