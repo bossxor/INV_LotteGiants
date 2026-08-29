@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -94,6 +98,9 @@ import com.bossxor.lottegiants.ui.isAppDark
 
 private val DETAIL_TABS = listOf("프리뷰", "라인업", "요약", "중계", "기록")
 
+/** 상단에 고정되는 탭 줄 높이 (스티키 헤더). */
+private val DETAIL_TAB_ROW_HEIGHT = 44.dp
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LiveScreen(
@@ -125,6 +132,11 @@ fun LiveScreen(
         selectedTab = detailTabIndex(initialDetailTab)
     }
     val listState = rememberLazyListState()
+    // 탭 내용이 짧아도 한 화면을 채우게 해서, 어떤 탭에서든 스크롤로 히어로를 접을 수 있게 한다.
+    val viewportPx by remember {
+        derivedStateOf { listState.layoutInfo.viewportSize.height }
+    }
+    val minTabHeight = with(LocalDensity.current) { viewportPx.toDp() } - DETAIL_TAB_ROW_HEIGHT
     val context = androidx.compose.ui.platform.LocalContext.current
     val store = remember { com.bossxor.lottegiants.data.GiantsRepository.get(context).store }
     var showPermBanner by remember { mutableStateOf(true) }
@@ -303,6 +315,7 @@ fun LiveScreen(
                         Column(
                             Modifier
                                 .fillMaxWidth()
+                                .heightIn(min = minTabHeight.coerceAtLeast(0.dp))
                                 .padding(horizontal = 16.dp)
                                 .padding(top = 12.dp),
                         ) {
@@ -985,10 +998,12 @@ private fun SummaryTab(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SectionHeader("주요 장면")
                 g.keyPlays.take(8).forEach { play ->
-                    val half = when (play.isTop) {
-                        true -> "${play.inning}회초"
-                        false -> "${play.inning}회말"
-                        null -> "${play.inning}회"
+                    // KBO 요약(결승타·홈런)에는 이닝이 없다. 0회로 쓰지 않고 칸을 비운다.
+                    val half = when {
+                        play.inning <= 0 -> ""
+                        play.isTop == true -> "${play.inning}회초"
+                        play.isTop == false -> "${play.inning}회말"
+                        else -> "${play.inning}회"
                     }
                     Row(
                         Modifier
@@ -1001,13 +1016,15 @@ private fun SummaryTab(
                             .padding(horizontal = 10.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            half,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (play.isScoring) LotteGold else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.width(44.dp),
-                        )
+                        if (half.isNotBlank()) {
+                            Text(
+                                half,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (play.isScoring) LotteGold else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(44.dp),
+                            )
+                        }
                         Text(
                             play.text,
                             style = MaterialTheme.typography.bodySmall,

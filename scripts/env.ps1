@@ -1,5 +1,29 @@
 ﻿# LotteWidget 개발 환경 로드 (네트워크 공유 경로 대응)
-$env:JAVA_HOME = "C:\Program Files\Microsoft\jdk-17.0.20.8-hotspot"
+# JDK 17은 패치 버전이 바뀌면 폴더 이름도 바뀐다. 고정하지 않고 가장 새 것을 찾는다.
+function Find-Jdk17 {
+  $roots = @(
+    "C:\Program Files\Microsoft",
+    "C:\Program Files\Eclipse Adoptium",
+    "C:\Program Files\Java",
+    "C:\Program Files\Android\Android Studio\jbr"
+  )
+  foreach ($root in $roots) {
+    if (-not (Test-Path $root)) { continue }
+    if (Test-Path (Join-Path $root "bin\java.exe")) { return $root }
+    $hit = Get-ChildItem $root -Directory -ErrorAction SilentlyContinue |
+      Where-Object { $_.Name -match '17' -and (Test-Path (Join-Path $_.FullName "bin\java.exe")) } |
+      Sort-Object Name -Descending | Select-Object -First 1
+    if ($hit) { return $hit.FullName }
+  }
+  return $null
+}
+
+$jdk = Find-Jdk17
+if ($jdk) {
+  $env:JAVA_HOME = $jdk
+} else {
+  Write-Warning "JDK 17을 찾지 못했습니다. JAVA_HOME을 직접 설정하세요."
+}
 $env:ANDROID_HOME = "C:\Android\Sdk"
 $env:ANDROID_SDK_ROOT = "C:\Android\Sdk"
 $env:GRADLE_USER_HOME = Join-Path $env:USERPROFILE ".gradle"

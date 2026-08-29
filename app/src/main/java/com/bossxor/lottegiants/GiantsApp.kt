@@ -1,19 +1,20 @@
 package com.bossxor.lottegiants
 
 import android.app.Application
+import android.app.NotificationManager
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.IMAGE_USER_AGENT
 import com.bossxor.lottegiants.domain.imageRefererForHost
+import com.bossxor.lottegiants.domain.kboNow
 import com.bossxor.lottegiants.live.EventDetector
 import com.bossxor.lottegiants.live.GameSchedulerWorker
 import com.bossxor.lottegiants.live.LiveScoreService
 import com.bossxor.lottegiants.live.NotificationHelper
 import com.bossxor.lottegiants.live.WearBridge
 import com.bossxor.lottegiants.widget.WidgetUpdater
-import android.app.NotificationManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -43,14 +44,18 @@ class GiantsApp : Application(), ImageLoaderFactory {
                 }
                 if (repo.store.isLiveScoreEnabled()) {
                     val game = snap.lotteGame
-                    if (game != null &&
-                        (game.status == GameStatus.LIVE || game.status == GameStatus.ENDED)
-                    ) {
-                        val mode = repo.store.liveDisplayMode()
+                    // 어제 끝난 경기를 다시 띄우면 다음날 새벽까지 스코어카드가 남는다. 오늘 경기만.
+                    val today = kboNow().toLocalDate().toString()
+                    val showCard = game != null && when (game.status) {
+                        GameStatus.LIVE -> true
+                        GameStatus.ENDED -> game.gameDate == today
+                        else -> false
+                    }
+                    if (game != null && showCard) {
                         val n = NotificationHelper.buildLiveNotification(
                             this@GiantsApp,
                             game,
-                            mode,
+                            repo.store.liveDisplayMode(),
                             snap.winProbSeries,
                         )
                         getSystemService(NotificationManager::class.java)

@@ -92,6 +92,15 @@ class LiveScoreService : Service() {
                     GameStatus.BEFORE -> delay(20_000L)
                     GameStatus.ENDED, GameStatus.CANCELED, null -> {
                         delay(3_000L)
+                        // 서비스를 멈추면 알림도 같이 사라진다. 최종 스코어카드는 떼어 놓고
+                        // 한 번 더 올려야 NO_CLEAR가 빠져 손으로 지울 수 있다. 만료는 setTimeoutAfter.
+                        if (game != null) {
+                            ServiceCompat.stopForeground(
+                                this@LiveScoreService,
+                                ServiceCompat.STOP_FOREGROUND_DETACH,
+                            )
+                            nm.notify(NotificationHelper.LIVE_NOTIFICATION_ID, live)
+                        }
                         stopSelf()
                         break
                     }

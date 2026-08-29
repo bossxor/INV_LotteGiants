@@ -10,6 +10,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -65,6 +66,9 @@ object NotificationHelper {
     const val CHANNEL_RACE = "event_race"
 
     const val LIVE_NOTIFICATION_ID = 1001
+
+    /** 종료·취소 알림은 2시간 뒤 스스로 사라진다 (서비스가 멈춘 뒤에도 남는 걸 막는다). */
+    private const val FINISHED_NOTIFICATION_TIMEOUT_MS = 2 * 60 * 60 * 1000L
 
     private const val REGULATION_INNINGS = 9
     private const val COLOR_LOTTE = 0xFFD00F31.toInt()
@@ -154,10 +158,13 @@ object NotificationHelper {
             LiveDisplayMode.LOCK_NOW -> scoreTitle to headerLine
         }
 
-        // 점수만 모드 제외 → 스크린샷형 카드(로고·루상·투타·승률바). LIVE/종료 모두.
-        val useCustom = mode != LiveDisplayMode.STATUS_SCORE &&
+        // `상세 알림`만 스코어카드. `라이브 바`는 ProgressStyle이어야 Now Bar 칩으로 승격된다.
+        val useCustom = mode == LiveDisplayMode.FULL &&
             game != null &&
             (game.status == GameStatus.LIVE || game.status == GameStatus.ENDED)
+        // 경기가 끝나면 서비스가 멈춰도 알림은 남는다. 손으로 지울 수 있게 두고 스스로 만료시킨다.
+        val finished = game != null &&
+            (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED)
 
         val builder = NotificationCompat.Builder(
             context,
@@ -167,7 +174,8 @@ object NotificationHelper {
             .setContentTitle(title)
             .setContentText(text)
             .setContentIntent(intent)
-            .setOngoing(true)
+            .setOngoing(!finished)
+            .setAutoCancel(finished)
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setShowWhen(false)
@@ -176,6 +184,14 @@ object NotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setColor(COLOR_LOTTE)
+        if (finished) builder.setTimeoutAfter(FINISHED_NOTIFICATION_TIMEOUT_MS)
+
+        val hide = PendingIntent.getBroadcast(
+            context,
+            2,
+            Intent(context, GameAlarmReceiver::class.java).setAction(GameSchedulerWorker.ACTION_HIDE_LIVE),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
         if (useCustom) {
             // DEFAULT+ 채널에서 colorized하면 알림 전체가 네이비로 칠해져 카드가 가로를 채운 것처럼 보인다.
@@ -187,23 +203,18 @@ object NotificationHelper {
                 .setCustomContentView(card)
                 .setCustomBigContentView(card)
                 .setCustomHeadsUpContentView(card)
+                .setDeleteIntent(hide)
                 .setSubText(null)
                 .setShortCriticalText(null)
                 .setRequestPromotedOngoing(false)
         } else {
-            val hide = PendingIntent.getBroadcast(
-                context,
-                2,
-                Intent(context, GameAlarmReceiver::class.java).setAction(GameSchedulerWorker.ACTION_HIDE_LIVE),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
             builder
                 .setDeleteIntent(hide)
                 .setSubText(chipText)
                 .setShortCriticalText(chipText)
                 .setColorized(false)
                 .setStyle(liveProgressStyle(context, game, countBmp))
-                .setRequestPromotedOngoing(true)
+                .setRequestPromotedOngoing(!finished)
             if (countBmp != null) builder.setLargeIcon(countBmp)
         }
 
@@ -438,42 +449,47 @@ object NotificationHelper {
             GameStatus.CANCELED -> game.cancelLabel.ifBlank { "취소" }
             else -> game.inningLabel.ifBlank { "LIVE" }
         })
+        // 루상·BSO는 진행 중일 때만 뜻이 있다. 끝난 경기에 빈 다이아몬드를 두면 주자가 있는 것처럼 읽힌다.
         val showBases = game.status == GameStatus.LIVE
-        rv.setImageViewResource(
-            R.id.notif_bases,
-            WidgetAssets.basesDrawable(
-                showBases && game.onBase1,
-                showBases && game.onBase2,
-                showBases && game.onBase3,
-            ),
-        )
-        rv.setTextViewText(
-            R.id.notif_pitcher_line,
+        rv.setViewVisibility(R.id.notif_bases, if (showBases) View.VISIBLE else View.GONE)
+        rv.setViewVisibility(R.id.notif_bso, if (showBases) View.VISIBLE else View.GONE)
+        if (showBases) {
+            rv.setImageViewResource(
+                R.id.notif_bases,
+                WidgetAssets.basesDrawable(game.onBase1, game.onBase2, game.onBase3),
+            )
+        }
+        val pitcherLine = if (showBases) {
             buildString {
                 append("투수 ")
-                append(game.currentPitcherName.ifBlank {
-                    // 종료 후에는 현재 투수가 비면 승/패 투수 표시
-                    when {
-                        game.status == GameStatus.ENDED && game.winPitcherName.isNotBlank() ->
-                            game.winPitcherName
-                        else -> "-"
-                    }
-                })
+                append(game.currentPitcherName.ifBlank { "-" })
                 if (game.currentPitcherPitchCount > 0) {
                     append(" ")
                     append(game.currentPitcherPitchCount)
                     append("구")
                 }
-            },
-        )
-        rv.setTextViewText(
-            R.id.notif_batter_line,
+            }
+        } else {
+            buildString {
+                append("승 ")
+                append(game.winPitcherName.ifBlank { "-" })
+                if (game.savePitcherName.isNotBlank()) {
+                    append(" · 세 ")
+                    append(game.savePitcherName)
+                }
+            }
+        }
+        val batterLine = if (showBases) {
             buildString {
                 append("타자 ")
                 if (game.currentBatterOrder > 0) append("${game.currentBatterOrder}번 ")
                 append(game.currentBatterName.ifBlank { "-" })
-            },
-        )
+            }
+        } else {
+            "패 ${game.losePitcherName.ifBlank { "-" }}"
+        }
+        rv.setTextViewText(R.id.notif_pitcher_line, pitcherLine)
+        rv.setTextViewText(R.id.notif_batter_line, batterLine)
         fun setDots(ids: IntArray, count: Int, kind: Char) {
             ids.forEachIndexed { i, id ->
                 rv.setImageViewResource(id, WidgetAssets.countDot(i < count, kind))

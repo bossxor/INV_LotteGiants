@@ -312,7 +312,7 @@ fun SettingsScreen(
         )
         Spacer(Modifier.height(8.dp))
         val liveEnabled by store.liveScoreEnabledFlow.collectAsState(initial = true)
-        val liveMode by store.liveDisplayModeFlow.collectAsState(initial = LiveDisplayMode.LOCK_NOW)
+        val liveMode by store.liveDisplayModeFlow.collectAsState(initial = LiveDisplayMode.FULL)
         val notifEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
         SectionCard {
             Column {
@@ -357,12 +357,12 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 Text(
                     when (liveMode) {
-                        LiveDisplayMode.LOCK_NOW,
-                        LiveDisplayMode.FULL,
-                        ->
-                            "팀 로고·점수·루상·투수(투구수)·타자·승률 바 카드. (라이브 바 칩 대신 상세 카드)"
+                        LiveDisplayMode.LOCK_NOW ->
+                            "이닝 진행 바 알림. Now Bar·잠금화면 칩에 점수가 뜹니다."
+                        LiveDisplayMode.FULL ->
+                            "팀 로고·점수·루상·투수(투구수)·타자·승률 바 카드. 카드는 Now Bar 칩으로 승격되지 않습니다."
                         LiveDisplayMode.STATUS_SCORE ->
-                            "알림은 점수·이닝만 한 줄."
+                            "점수·이닝만 한 줄. 칩에는 점수가 뜹니다."
                     },
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
