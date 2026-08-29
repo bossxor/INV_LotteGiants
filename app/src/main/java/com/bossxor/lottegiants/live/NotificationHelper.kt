@@ -36,6 +36,11 @@ object NotificationHelper {
 
     const val CHANNEL_LIVE = "live_score"
     /**
+     * 스코어카드(커스텀 RemoteViews)용.
+     * colorized는 DEFAULT 이상에서만 적용된다. 기존 live_score는 LOW라 회색 테두리가 남았다.
+     */
+    const val CHANNEL_LIVE_CARD = "live_score_card_v3"
+    /**
      * Now Bar/Live Update용.
      * v2: One UI 9는 채널이 DEFAULT여도 되지만 HIGH가 칩 노출이 더 잘 된다.
      * 채널 중요도는 생성 후 코드로 못 바꿔서 ID를 올렸다.
@@ -73,8 +78,10 @@ object NotificationHelper {
             NotificationChannel(id, name, importance).also { nm.createNotificationChannel(it) }
 
         ch(CHANNEL_LIVE, "실시간 스코어", NotificationManager.IMPORTANCE_LOW)
+        ch(CHANNEL_LIVE_CARD, "실시간 스코어카드", NotificationManager.IMPORTANCE_DEFAULT)
         ch(CHANNEL_LIVE_NOW, "Now Bar 실시간 점수", NotificationManager.IMPORTANCE_HIGH)
         runCatching { nm.deleteNotificationChannel("live_score_nowbar") }
+        runCatching { nm.deleteNotificationChannel("live_score_card_v2") }
         ch(CHANNEL_SCORE, "득점", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_CONCEDE, "실점", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_PITCHER, "투수 교체")
@@ -154,7 +161,7 @@ object NotificationHelper {
 
         val builder = NotificationCompat.Builder(
             context,
-            if (useCustom) CHANNEL_LIVE else CHANNEL_LIVE_NOW,
+            if (useCustom) CHANNEL_LIVE_CARD else CHANNEL_LIVE_NOW,
         )
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
@@ -171,14 +178,15 @@ object NotificationHelper {
             .setColor(COLOR_LOTTE)
 
         if (useCustom) {
-            // DecoratedCustomViewStyle는 시스템 헤더·액션 영역이 생겨 카드가 안쪽으로 줄어든다.
-            // 커스텀 뷰만 써서 알림창 가로를 꽉 채운다. (칩 숨기기 액션도 없음)
+            // DEFAULT+ 채널에서 colorized하면 알림 전체가 네이비로 칠해져 카드가 가로를 채운 것처럼 보인다.
+            // DecoratedCustomViewStyle/액션은 쓰지 않는다 (칩 숨기기·안쪽 여백 원인).
             val card = buildLiveRemoteViews(context, game!!, winProbSeries)
             builder
                 .setColor(COLOR_NAVY)
                 .setColorized(true)
                 .setCustomContentView(card)
                 .setCustomBigContentView(card)
+                .setCustomHeadsUpContentView(card)
                 .setSubText(null)
                 .setShortCriticalText(null)
                 .setRequestPromotedOngoing(false)

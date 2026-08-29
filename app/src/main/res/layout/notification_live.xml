@@ -5,8 +5,8 @@
     android:background="@color/notif_live_bg"
     android:minHeight="120dp"
     android:orientation="vertical"
-    android:paddingHorizontal="14dp"
-    android:paddingVertical="12dp">
+    android:paddingHorizontal="10dp"
+    android:paddingVertical="10dp">
 
     <!-- 팀 로고 · 점수 · 루상 · 이닝 -->
     <LinearLayout
