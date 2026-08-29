@@ -147,13 +147,6 @@ object NotificationHelper {
             LiveDisplayMode.LOCK_NOW -> scoreTitle to headerLine
         }
 
-        val hide = PendingIntent.getBroadcast(
-            context,
-            2,
-            Intent(context, GameAlarmReceiver::class.java).setAction(GameSchedulerWorker.ACTION_HIDE_LIVE),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
         // 점수만 모드 제외 → 스크린샷형 카드(로고·루상·투타·승률바). LIVE/종료 모두.
         val useCustom = mode != LiveDisplayMode.STATUS_SCORE &&
             game != null &&
@@ -167,7 +160,6 @@ object NotificationHelper {
             .setContentTitle(title)
             .setContentText(text)
             .setContentIntent(intent)
-            .setDeleteIntent(hide)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
@@ -176,21 +168,31 @@ object NotificationHelper {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setSubText(chipText)
-            .setShortCriticalText(chipText)
             .setColor(COLOR_LOTTE)
-            .addAction(0, "칩 숨기기", hide)
 
         if (useCustom) {
+            // DecoratedCustomViewStyle는 시스템 헤더·액션 영역이 생겨 카드가 안쪽으로 줄어든다.
+            // 커스텀 뷰만 써서 알림창 가로를 꽉 채운다. (칩 숨기기 액션도 없음)
+            val card = buildLiveRemoteViews(context, game!!, winProbSeries)
             builder
                 .setColor(COLOR_NAVY)
                 .setColorized(true)
-                .setCustomContentView(buildLiveRemoteViews(context, game!!, winProbSeries))
-                .setCustomBigContentView(buildLiveRemoteViews(context, game, winProbSeries))
-                .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+                .setCustomContentView(card)
+                .setCustomBigContentView(card)
+                .setSubText(null)
+                .setShortCriticalText(null)
                 .setRequestPromotedOngoing(false)
         } else {
+            val hide = PendingIntent.getBroadcast(
+                context,
+                2,
+                Intent(context, GameAlarmReceiver::class.java).setAction(GameSchedulerWorker.ACTION_HIDE_LIVE),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
             builder
+                .setDeleteIntent(hide)
+                .setSubText(chipText)
+                .setShortCriticalText(chipText)
                 .setColorized(false)
                 .setStyle(liveProgressStyle(context, game, countBmp))
                 .setRequestPromotedOngoing(true)
