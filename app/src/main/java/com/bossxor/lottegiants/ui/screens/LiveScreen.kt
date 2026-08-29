@@ -25,7 +25,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -47,8 +50,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bossxor.lottegiants.domain.GameStatus
@@ -504,29 +509,88 @@ private fun WeatherLine(w: StadiumWeather) {
 private fun QuickLinks(onHistory: () -> Unit, onEntry: () -> Unit, onLeaders: () -> Unit) {
     Row(
         Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        QuickLinkText("히스토리", onHistory)
-        Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 13.sp)
-        QuickLinkText("엔트리", onEntry)
-        Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), fontSize = 13.sp)
-        QuickLinkText("타이틀", onLeaders)
-        Spacer(Modifier.weight(1f))
+        QuickLinkCard(
+            modifier = Modifier.weight(1f),
+            icon = Icons.Filled.History,
+            label = "히스토리",
+            caption = "팀 연혁",
+            accent = LotteGold,
+            onClick = onHistory,
+        )
+        QuickLinkCard(
+            modifier = Modifier.weight(1f),
+            icon = Icons.Filled.SwapHoriz,
+            label = "엔트리",
+            caption = "등말소",
+            accent = WinGreen,
+            onClick = onEntry,
+        )
+        QuickLinkCard(
+            modifier = Modifier.weight(1f),
+            icon = Icons.Filled.EmojiEvents,
+            label = "타이틀",
+            caption = "순위표",
+            accent = LotteRed,
+            onClick = onLeaders,
+        )
     }
 }
 
 @Composable
-private fun QuickLinkText(label: String, onClick: () -> Unit) {
-    Text(
-        label,
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp, horizontal = 2.dp),
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+private fun QuickLinkCard(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    label: String,
+    caption: String,
+    accent: Color,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(accent.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                label,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                caption,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }
 
 @Composable
