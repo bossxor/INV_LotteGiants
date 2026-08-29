@@ -123,23 +123,14 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- 투수 · BSO · 타자 -->
+    <!-- BSO (경기 중에만) -->
     <LinearLayout
+        android:id="@+id/notif_bso_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:gravity="center_vertical"
+        android:layout_marginTop="8dp"
+        android:gravity="center_horizontal"
         android:orientation="horizontal">
-
-        <TextView
-            android:id="@+id/notif_pitcher_line"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textColor="#FFD0D6E2"
-            android:textSize="13sp" />
 
         <LinearLayout
             android:id="@+id/notif_bso"
@@ -235,6 +226,26 @@
                 android:layout_height="8dp"
                 android:layout_marginStart="2dp" />
         </LinearLayout>
+    </LinearLayout>
+
+    <!-- 투수(왼쪽) · 타자(오른쪽). 각자 절반을 써서 이름이 잘리지 않게 한다 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/notif_pitcher_line"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:paddingEnd="6dp"
+            android:textColor="#FFD0D6E2"
+            android:textSize="13sp" />
 
         <TextView
             android:id="@+id/notif_batter_line"

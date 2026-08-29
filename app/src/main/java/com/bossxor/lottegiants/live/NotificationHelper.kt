@@ -197,12 +197,13 @@ object NotificationHelper {
             // DEFAULT+ 채널에서 colorized하면 알림 전체가 네이비로 칠해져 카드가 가로를 채운 것처럼 보인다.
             // DecoratedCustomViewStyle/액션은 쓰지 않는다 (칩 숨기기·안쪽 여백 원인).
             val card = buildLiveRemoteViews(context, game!!, winProbSeries)
+            val compact = buildLiveCompactViews(context, game)
             builder
                 .setColor(COLOR_NAVY)
                 .setColorized(true)
-                .setCustomContentView(card)
+                .setCustomContentView(compact)
                 .setCustomBigContentView(card)
-                .setCustomHeadsUpContentView(card)
+                .setCustomHeadsUpContentView(compact)
                 .setDeleteIntent(hide)
                 .setSubText(null)
                 .setShortCriticalText(null)
@@ -411,48 +412,104 @@ object NotificationHelper {
         return if (parts.isEmpty()) "주자 없음" else parts.joinToString("·")
     }
 
+    private data class CardSides(
+        val awayName: String,
+        val homeName: String,
+        val awayScore: Int,
+        val homeScore: Int,
+        val awayCode: String,
+        val homeCode: String,
+        val awayLogoUrl: String,
+        val homeLogoUrl: String,
+    )
+
+    private fun cardSides(game: LotteGameInfo): CardSides {
+        val oppCode = game.opponentCode.ifBlank { teamNameToCode(game.opponentName) }
+        val lotteLogo = game.lotteLogoUrl.ifBlank { LOTTE_LOGO_URL }
+        val oppLogo = game.opponentLogoUrl.ifBlank { teamLogoUrl(oppCode) }
+        return CardSides(
+            awayName = if (game.isHome) game.opponentName else "롯데",
+            homeName = if (game.isHome) "롯데" else game.opponentName,
+            awayScore = if (game.isHome) game.opponentScore else game.lotteScore,
+            homeScore = if (game.isHome) game.lotteScore else game.opponentScore,
+            awayCode = if (game.isHome) oppCode else LOTTE_TEAM_CODE,
+            homeCode = if (game.isHome) LOTTE_TEAM_CODE else oppCode,
+            awayLogoUrl = if (game.isHome) oppLogo else lotteLogo,
+            homeLogoUrl = if (game.isHome) lotteLogo else oppLogo,
+        )
+    }
+
+    private fun statusPillText(game: LotteGameInfo): String = when (game.status) {
+        GameStatus.ENDED -> "종료"
+        GameStatus.CANCELED -> game.cancelLabel.ifBlank { "취소" }
+        else -> game.inningLabel.ifBlank { "LIVE" }
+    }
+
+    /** 접힌 알림·헤드업용 한 줄 카드 (큰 카드는 64dp에서 잘린다) */
+    private fun buildLiveCompactViews(context: Context, game: LotteGameInfo): RemoteViews {
+        val rv = RemoteViews(context.packageName, R.layout.notification_live_compact)
+        val side = cardSides(game)
+        rv.setTextViewText(R.id.notif_c_away_score, "${side.awayScore}")
+        rv.setTextViewText(R.id.notif_c_home_score, "${side.homeScore}")
+        rv.setTextViewText(R.id.notif_c_inning, statusPillText(game))
+
+        val live = game.status == GameStatus.LIVE
+        rv.setViewVisibility(R.id.notif_c_bases, if (live) View.VISIBLE else View.GONE)
+        if (live) {
+            rv.setImageViewResource(
+                R.id.notif_c_bases,
+                WidgetAssets.basesDrawable(game.onBase1, game.onBase2, game.onBase3),
+            )
+        }
+        // 끝난 경기는 점수·종료만으로 충분하다. 좁은 한 줄에 승패까지 넣으면 잘린다.
+        rv.setViewVisibility(R.id.notif_c_note, if (live) View.VISIBLE else View.GONE)
+        if (live) {
+            rv.setTextViewText(
+                R.id.notif_c_note,
+                buildString {
+                    append("${game.out}아웃")
+                    if (game.currentBatterName.isNotBlank()) append(" · ${game.currentBatterName}")
+                },
+            )
+        }
+        rv.setImageViewBitmap(
+            R.id.notif_c_away_logo,
+            runBlocking {
+                WidgetAssets.loadTeamLogoBitmap(context, side.awayCode, side.awayLogoUrl, side.awayName)
+            },
+        )
+        rv.setImageViewBitmap(
+            R.id.notif_c_home_logo,
+            runBlocking {
+                WidgetAssets.loadTeamLogoBitmap(context, side.homeCode, side.homeLogoUrl, side.homeName)
+            },
+        )
+        return rv
+    }
+
     private fun buildLiveRemoteViews(
         context: Context,
         game: LotteGameInfo,
         winProbSeries: List<WinProbPoint> = emptyList(),
     ): RemoteViews {
         val rv = RemoteViews(context.packageName, R.layout.notification_live)
-        val awayName = if (game.isHome) game.opponentName else "롯데"
-        val homeName = if (game.isHome) "롯데" else game.opponentName
-        val awayScore = if (game.isHome) game.opponentScore else game.lotteScore
-        val homeScore = if (game.isHome) game.lotteScore else game.opponentScore
-        val awayCode = if (game.isHome) {
-            game.opponentCode.ifBlank { teamNameToCode(game.opponentName) }
-        } else {
-            LOTTE_TEAM_CODE
-        }
-        val homeCode = if (game.isHome) LOTTE_TEAM_CODE else {
-            game.opponentCode.ifBlank { teamNameToCode(game.opponentName) }
-        }
-        val awayLogoUrl = if (game.isHome) {
-            game.opponentLogoUrl.ifBlank { teamLogoUrl(awayCode) }
-        } else {
-            game.lotteLogoUrl.ifBlank { LOTTE_LOGO_URL }
-        }
-        val homeLogoUrl = if (game.isHome) {
-            game.lotteLogoUrl.ifBlank { LOTTE_LOGO_URL }
-        } else {
-            game.opponentLogoUrl.ifBlank { teamLogoUrl(homeCode) }
-        }
+        val side = cardSides(game)
+        val awayName = side.awayName
+        val homeName = side.homeName
+        val awayCode = side.awayCode
+        val homeCode = side.homeCode
+        val awayLogoUrl = side.awayLogoUrl
+        val homeLogoUrl = side.homeLogoUrl
 
         rv.setTextViewText(R.id.notif_away_name, awayName)
         rv.setTextViewText(R.id.notif_home_name, homeName)
-        rv.setTextViewText(R.id.notif_away_score, "$awayScore")
-        rv.setTextViewText(R.id.notif_home_score, "$homeScore")
-        rv.setTextViewText(R.id.notif_inning, when (game.status) {
-            GameStatus.ENDED -> "종료"
-            GameStatus.CANCELED -> game.cancelLabel.ifBlank { "취소" }
-            else -> game.inningLabel.ifBlank { "LIVE" }
-        })
+        rv.setTextViewText(R.id.notif_away_score, "${side.awayScore}")
+        rv.setTextViewText(R.id.notif_home_score, "${side.homeScore}")
+        rv.setTextViewText(R.id.notif_inning, statusPillText(game))
         // 루상·BSO는 진행 중일 때만 뜻이 있다. 끝난 경기에 빈 다이아몬드를 두면 주자가 있는 것처럼 읽힌다.
         val showBases = game.status == GameStatus.LIVE
         rv.setViewVisibility(R.id.notif_bases, if (showBases) View.VISIBLE else View.GONE)
-        rv.setViewVisibility(R.id.notif_bso, if (showBases) View.VISIBLE else View.GONE)
+        rv.setViewVisibility(R.id.notif_bso_row, if (showBases) View.VISIBLE else View.GONE)
         if (showBases) {
             rv.setImageViewResource(
                 R.id.notif_bases,
