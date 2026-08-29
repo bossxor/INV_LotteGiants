@@ -4,9 +4,6 @@
     android:height="48dp"
     android:viewportWidth="48"
     android:viewportHeight="48">
-    <path
-        android:fillColor="#22FFFFFF"
-        android:pathData="M24,8 L40,24 L24,40 L8,24 Z" />
     <!-- 2루 occupied -->
     <path
         android:fillColor="#CCFF00"
@@ -18,10 +15,14 @@
         android:pathData="M24,5.5 L29.5,11 L24,16.5 L18.5,11 Z" />
     <!-- 3루 empty -->
     <path
-        android:fillColor="#88AAB4CB"
-        android:pathData="M12,18.5 L17.5,24 L12,29.5 L6.5,24 Z" />
+        android:fillColor="#00000000"
+        android:pathData="M12,18.5 L17.5,24 L12,29.5 L6.5,24 Z"
+        android:strokeWidth="1.8"
+        android:strokeColor="#66AAB4CB" />
     <!-- 1루 empty -->
     <path
-        android:fillColor="#88AAB4CB"
-        android:pathData="M36,18.5 L41.5,24 L36,29.5 L30.5,24 Z" />
+        android:fillColor="#00000000"
+        android:pathData="M36,18.5 L41.5,24 L36,29.5 L30.5,24 Z"
+        android:strokeWidth="1.8"
+        android:strokeColor="#66AAB4CB" />
 </vector>

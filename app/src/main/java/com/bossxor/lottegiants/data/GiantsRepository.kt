@@ -1776,18 +1776,20 @@ class GiantsRepository private constructor(context: Context) {
             .sortedByDescending { it.seqno }
 
         val pitcherCode = state?.pitcher.orEmpty()
+        // 종료·취소 후에도 중계 JSON에 마지막 주자/카운트가 남아 다이아몬드가 켜진 채로 보인다.
+        val liveSituation = base.status == GameStatus.LIVE
         return base.copy(
             lotteScore = state?.run { if (isHome) homeScore else awayScore }?.toIntOrNull() ?: base.lotteScore,
             opponentScore = state?.run { if (isHome) awayScore else homeScore }?.toIntOrNull() ?: base.opponentScore,
             inning = if (relay.inn > 0) relay.inn else base.inning,
             isTopInning = if (relay.inn > 0) isTop else base.isTopInning,
             // relay가 볼카운트를 못 주면 KBO 공식 값을 유지한다 (0으로 덮지 않는다)
-            strike = state?.strike?.toIntOrNull() ?: base.strike,
-            ball = state?.ball?.toIntOrNull() ?: base.ball,
-            out = state?.out?.toIntOrNull() ?: base.out,
-            onBase1 = mergeRunner(state?.base1, base.onBase1, state == null),
-            onBase2 = mergeRunner(state?.base2, base.onBase2, state == null),
-            onBase3 = mergeRunner(state?.base3, base.onBase3, state == null),
+            strike = if (liveSituation) state?.strike?.toIntOrNull() ?: base.strike else 0,
+            ball = if (liveSituation) state?.ball?.toIntOrNull() ?: base.ball else 0,
+            out = if (liveSituation) state?.out?.toIntOrNull() ?: base.out else 0,
+            onBase1 = liveSituation && mergeRunner(state?.base1, base.onBase1, state == null),
+            onBase2 = liveSituation && mergeRunner(state?.base2, base.onBase2, state == null),
+            onBase3 = liveSituation && mergeRunner(state?.base3, base.onBase3, state == null),
             currentPitcherName = names[pitcherCode]
                 ?: listOf(lottePitchers, opponentPitchers).flatten()
                     .firstOrNull { it.playerCode == pitcherCode }?.name

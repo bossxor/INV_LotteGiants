@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -40,6 +41,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,13 +51,22 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LOTTE_LOGO_URL
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
@@ -147,24 +158,143 @@ fun LiveScreen(
         onRefresh = onRefresh,
         modifier = Modifier.fillMaxSize(),
     ) {
-        Column(Modifier.fillMaxSize()) {
-            val game = viewingGame ?: snapshot?.lotteGame ?: snapshot?.nextLotteGame
-            val viewingOther = viewingGame != null
-            val viewingOtherTeam = viewingOther && game?.isFocusLotte() == false
-            val focusTeam = game?.focusTeamCode?.ifBlank { LOTTE_TEAM_CODE } ?: LOTTE_TEAM_CODE
-            val showHero = viewingOther || snapshot?.lotteGame != null || snapshot?.nextLotteGame != null
+        val game = viewingGame ?: snapshot?.lotteGame ?: snapshot?.nextLotteGame
+        val viewingOther = viewingGame != null
+        val viewingOtherTeam = viewingOther && game?.isFocusLotte() == false
+        val focusTeam = game?.focusTeamCode?.ifBlank { LOTTE_TEAM_CODE } ?: LOTTE_TEAM_CODE
+        val showHero = viewingOther || snapshot?.lotteGame != null || snapshot?.nextLotteGame != null
+        val showSpinner = (loading && snapshot == null && viewingGame == null) ||
+            (viewingLoading && viewingGame == null)
+        val density = LocalDensity.current
+        var headerHeightPx by remember { mutableFloatStateOf(0f) }
+        var collapsePx by remember { mutableFloatStateOf(0f) }
+        LaunchedEffect(game?.gameId) {
+            collapsePx = 0f
+            headerHeightPx = 0f
+        }
+        val nestedScrollConnection = remember {
+            object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    if (headerHeightPx <= 0f) return Offset.Zero
+                    val delta = available.y
+                    if (delta >= 0f) return Offset.Zero
+                    val next = (collapsePx - delta).coerceIn(0f, headerHeightPx)
+                    val consumed = next - collapsePx
+                    collapsePx = next
+                    return Offset(0f, -consumed)
+                }
 
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    if (headerHeightPx <= 0f) return Offset.Zero
+                    val delta = available.y
+                    if (delta <= 0f) return Offset.Zero
+                    val next = (collapsePx - delta).coerceIn(0f, headerHeightPx)
+                    val consumedY = collapsePx - next
+                    collapsePx = next
+                    return Offset(0f, consumedY)
+                }
+            }
+        }
+
+        Column(
+            Modifier
+                .fillMaxSize()
+                .then(if (game != null && !showSpinner) Modifier.nestedScroll(nestedScrollConnection) else Modifier),
+        ) {
             if (game != null && showHero) {
-                HeroCard(
-                    g = game,
-                    onShare = { onShare(game) },
-                    onBackToLotte = if (viewingOther) onBackToLotte else null,
-                    secondsUntilRefresh = secondsUntilRefresh,
-                    isRefreshing = isRefreshing,
-                    onRefresh = onRefresh,
-                    viewingLabel = if (viewingOtherTeam) game.focusName() else null,
-                    raceLine = if (!viewingOtherTeam) snapshot?.widgetRaceLine.orEmpty() else "",
-                )
+                val visibleHeaderPx = (headerHeightPx - collapsePx).coerceAtLeast(0f)
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (headerHeightPx > 0f) {
+                                Modifier.height(with(density) { visibleHeaderPx.toDp() })
+                            } else {
+                                Modifier
+                            },
+                        )
+                        .clipToBounds(),
+                ) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .onSizeChanged { size ->
+                                if (collapsePx == 0f) {
+                                    headerHeightPx = size.height.toFloat()
+                                }
+                            }
+                            .offset { IntOffset(0, -collapsePx.roundToInt()) },
+                    ) {
+                        HeroCard(
+                            g = game,
+                            onShare = { onShare(game) },
+                            onBackToLotte = if (viewingOther) onBackToLotte else null,
+                            secondsUntilRefresh = secondsUntilRefresh,
+                            isRefreshing = isRefreshing,
+                            onRefresh = onRefresh,
+                            viewingLabel = if (viewingOtherTeam) game.focusName() else null,
+                            raceLine = if (!viewingOtherTeam) snapshot?.widgetRaceLine.orEmpty() else "",
+                        )
+                        Column(Modifier.padding(horizontal = 16.dp)) {
+                            Spacer(Modifier.height(4.dp))
+                            QuickLinks(
+                                onHistory = { onOpenTeamHistory(focusTeam) },
+                                onEntry = { onOpenEntryBoard(focusTeam) },
+                                onLeaders = { onOpenLeaders(focusTeam) },
+                            )
+                            if (!viewingOtherTeam && showPermBanner && (needNotif || needBattery)) {
+                                Spacer(Modifier.height(8.dp))
+                                PermissionBanner(
+                                    needNotif = needNotif,
+                                    needBattery = needBattery,
+                                    onOpenSettings = {
+                                        if (needNotif) {
+                                            context.startActivity(
+                                                android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                                    putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                                },
+                                            )
+                                        } else {
+                                            context.startActivity(
+                                                android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                                    data = android.net.Uri.parse("package:${context.packageName}")
+                                                },
+                                            )
+                                        }
+                                    },
+                                    onDismiss = {
+                                        showPermBanner = false
+                                        kotlinx.coroutines.MainScope().launch { store.setBannerDismissedDay(today) }
+                                    },
+                                )
+                            }
+                            if (error != null) {
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    error,
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            if (!viewingOther && snapshot?.lotteGame != null) {
+                                val liveChoices = snapshot.todayLotteGames
+                                if (liveChoices.size >= 2) {
+                                    Spacer(Modifier.height(8.dp))
+                                    DhGameSwitcher(
+                                        games = liveChoices,
+                                        selectedId = game.gameId,
+                                        onSelect = onSelectLiveGame,
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                        }
+                    }
+                }
             } else {
                 Row(
                     Modifier
@@ -188,194 +318,145 @@ fun LiveScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp),
             ) {
-            Spacer(Modifier.height(4.dp))
-            QuickLinks(
-                onHistory = { onOpenTeamHistory(focusTeam) },
-                onEntry = { onOpenEntryBoard(focusTeam) },
-                onLeaders = { onOpenLeaders(focusTeam) },
-            )
-            Spacer(Modifier.height(4.dp))
-
-            val showSpinner = (loading && snapshot == null && viewingGame == null) ||
-                (viewingLoading && viewingGame == null)
-            when {
-                showSpinner -> {
-                    Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+                when {
+                    showSpinner -> {
+                        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
                     }
-                }
-                game != null -> {
-                    if (!viewingOtherTeam && showPermBanner && (needNotif || needBattery)) {
-                        PermissionBanner(
-                            needNotif = needNotif,
-                            needBattery = needBattery,
-                            onOpenSettings = {
-                                if (needNotif) {
-                                    context.startActivity(
-                                        android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                        },
+                    game != null -> {
+                        Row(Modifier.fillMaxWidth()) {
+                            DETAIL_TABS.forEachIndexed { i, label ->
+                                val selected = pagerState.currentPage == i
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { scope.launch { pagerState.animateScrollToPage(i) } }
+                                        .padding(top = 6.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    Text(
+                                        label,
+                                        color = if (selected) MaterialTheme.colorScheme.onBackground
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                        fontSize = 13.sp,
                                     )
-                                } else {
-                                    context.startActivity(
-                                        android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                                            data = android.net.Uri.parse("package:${context.packageName}")
-                                        },
+                                    Spacer(Modifier.height(8.dp))
+                                    Box(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .height(2.dp)
+                                            .background(
+                                                if (selected) LotteRed else Color.Transparent,
+                                                RoundedCornerShape(1.dp),
+                                            ),
                                     )
                                 }
-                            },
-                            onDismiss = {
-                                showPermBanner = false
-                                kotlinx.coroutines.MainScope().launch { store.setBannerDismissedDay(today) }
-                            },
-                        )
-                        Spacer(Modifier.height(10.dp))
-                    }
-                        if (error != null) {
-                            Text(
-                                error,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Spacer(Modifier.height(8.dp))
+                            }
                         }
-                    if (!viewingOther && snapshot?.lotteGame != null) {
-                        val liveChoices = snapshot.todayLotteGames
-                        if (liveChoices.size >= 2) {
-                            Spacer(Modifier.height(8.dp))
-                            DhGameSwitcher(
-                                games = liveChoices,
-                                selectedId = game.gameId,
-                                onSelect = onSelectLiveGame,
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row(Modifier.fillMaxWidth()) {
-                        DETAIL_TABS.forEachIndexed { i, label ->
-                            val selected = pagerState.currentPage == i
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            beyondViewportPageCount = 1,
+                            verticalAlignment = Alignment.Top,
+                        ) { page ->
                             Column(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { scope.launch { pagerState.animateScrollToPage(i) } }
-                                    .padding(top = 6.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
+                                Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(top = 12.dp, bottom = 16.dp),
                             ) {
-                                Text(
-                                    label,
-                                    color = if (selected) MaterialTheme.colorScheme.onBackground
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 13.sp,
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Box(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .height(2.dp)
-                                        .background(
-                                            if (selected) LotteRed else Color.Transparent,
-                                            RoundedCornerShape(1.dp),
-                                        ),
-                                )
+                                when (page) {
+                                    0 -> PreviewTab(
+                                        g = game,
+                                        snapshot = snapshot,
+                                        weather = if (viewingOther) {
+                                            game.preview?.weather
+                                        } else {
+                                            weather ?: snapshot?.weather ?: game.preview?.weather
+                                        },
+                                        onKeyPlayerClick = onKeyPlayerClick,
+                                    )
+                                    1 -> LineupTab(game, onPlayerClick, onPitcherClick, onRefresh)
+                                    2 -> SummaryTab(
+                                        g = game,
+                                        snapshot = snapshot,
+                                        weather = if (viewingOther) game.preview?.weather else weather,
+                                        batterLeaders = batterLeaders,
+                                        onKeyPlayerClick = onKeyPlayerClick,
+                                        onRetry = onRefresh,
+                                        onOpenGame = onOpenGame,
+                                        viewingOther = viewingOther,
+                                    )
+                                    3 -> RelayTab(game, snapshot, onRefresh)
+                                    4 -> RecordTab(game, onPlayerClick, onPitcherClick, onRefresh)
+                                }
                             }
                         }
                     }
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        beyondViewportPageCount = 1,
-                        verticalAlignment = Alignment.Top,
-                    ) { page ->
+                    else -> {
+                        Spacer(Modifier.height(4.dp))
+                        QuickLinks(
+                            onHistory = { onOpenTeamHistory(focusTeam) },
+                            onEntry = { onOpenEntryBoard(focusTeam) },
+                            onLeaders = { onOpenLeaders(focusTeam) },
+                        )
+                        Spacer(Modifier.height(4.dp))
                         Column(
                             Modifier
-                                .fillMaxSize()
+                                .weight(1f)
                                 .verticalScroll(rememberScrollState())
-                                .padding(top = 12.dp, bottom = 16.dp),
+                                .padding(bottom = 16.dp),
                         ) {
-                            when (page) {
-                                0 -> PreviewTab(
-                                    g = game,
-                                    snapshot = snapshot,
-                                    weather = if (viewingOther) {
-                                        game.preview?.weather
-                                    } else {
-                                        weather ?: snapshot?.weather ?: game.preview?.weather
+                            if (showPermBanner && (needNotif || needBattery)) {
+                                PermissionBanner(
+                                    needNotif = needNotif,
+                                    needBattery = needBattery,
+                                    onOpenSettings = {
+                                        if (needNotif) {
+                                            context.startActivity(
+                                                android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                                    putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                                },
+                                            )
+                                        } else {
+                                            context.startActivity(
+                                                android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                                    data = android.net.Uri.parse("package:${context.packageName}")
+                                                },
+                                            )
+                                        }
                                     },
-                                    onKeyPlayerClick = onKeyPlayerClick,
+                                    onDismiss = {
+                                        showPermBanner = false
+                                        kotlinx.coroutines.MainScope().launch { store.setBannerDismissedDay(today) }
+                                    },
                                 )
-                                1 -> LineupTab(game, onPlayerClick, onPitcherClick, onRefresh)
-                                2 -> SummaryTab(
-                                    g = game,
-                                    snapshot = snapshot,
-                                    weather = if (viewingOther) game.preview?.weather else weather,
-                                    batterLeaders = batterLeaders,
-                                    onKeyPlayerClick = onKeyPlayerClick,
-                                    onRetry = onRefresh,
-                                    onOpenGame = onOpenGame,
-                                    viewingOther = viewingOther,
-                                )
-                                3 -> RelayTab(game, snapshot, onRefresh)
-                                4 -> RecordTab(game, onPlayerClick, onPitcherClick, onRefresh)
+                                Spacer(Modifier.height(10.dp))
+                            }
+                            snapshot?.recentLotteGames?.takeIf { it.isNotEmpty() }?.let {
+                                RecentFiveCard(it)
+                                Spacer(Modifier.height(12.dp))
+                            } ?: snapshot?.lastLotteGame?.let {
+                                RecentResultCard(it)
+                                Spacer(Modifier.height(12.dp))
+                            }
+                            ScoreTicker(snapshot, onOpenGame = onOpenGame)
+                            Spacer(Modifier.height(12.dp))
+                            weather?.let {
+                                WeatherLine(it)
+                                Spacer(Modifier.height(12.dp))
+                            }
+                            if (error != null) {
+                                Spacer(Modifier.height(8.dp))
+                                Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
                 }
-                else -> {
-                    Column(
-                        Modifier
-                            .weight(1f)
-                            .verticalScroll(rememberScrollState())
-                            .padding(bottom = 16.dp),
-                    ) {
-                        if (showPermBanner && (needNotif || needBattery)) {
-                            PermissionBanner(
-                                needNotif = needNotif,
-                                needBattery = needBattery,
-                                onOpenSettings = {
-                                    if (needNotif) {
-                                        context.startActivity(
-                                            android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                                putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                            },
-                                        )
-                                    } else {
-                                        context.startActivity(
-                                            android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                                                data = android.net.Uri.parse("package:${context.packageName}")
-                                            },
-                                        )
-                                    }
-                                },
-                                onDismiss = {
-                                    showPermBanner = false
-                                    kotlinx.coroutines.MainScope().launch { store.setBannerDismissedDay(today) }
-                                },
-                            )
-                            Spacer(Modifier.height(10.dp))
-                        }
-                        snapshot?.recentLotteGames?.takeIf { it.isNotEmpty() }?.let {
-                            RecentFiveCard(it)
-                            Spacer(Modifier.height(12.dp))
-                        } ?: snapshot?.lastLotteGame?.let {
-                            RecentResultCard(it)
-                            Spacer(Modifier.height(12.dp))
-                        }
-                        ScoreTicker(snapshot, onOpenGame = onOpenGame)
-                        Spacer(Modifier.height(12.dp))
-                        weather?.let {
-                            WeatherLine(it)
-                            Spacer(Modifier.height(12.dp))
-                        }
-                        if (error != null) {
-                            Spacer(Modifier.height(8.dp))
-                            Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            }
             }
         }
     }

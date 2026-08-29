@@ -4,9 +4,6 @@
     android:height="48dp"
     android:viewportWidth="48"
     android:viewportHeight="48">
-    <path
-        android:fillColor="#22FFFFFF"
-        android:pathData="M24,8 L40,24 L24,40 L8,24 Z" />
     <!-- 2루 occupied -->
     <path
         android:fillColor="#CCFF00"

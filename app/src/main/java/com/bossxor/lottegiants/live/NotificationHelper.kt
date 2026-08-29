@@ -430,9 +430,14 @@ object NotificationHelper {
             GameStatus.CANCELED -> game.cancelLabel.ifBlank { "취소" }
             else -> game.inningLabel.ifBlank { "LIVE" }
         })
+        val showBases = game.status == GameStatus.LIVE
         rv.setImageViewResource(
             R.id.notif_bases,
-            WidgetAssets.basesDrawable(game.onBase1, game.onBase2, game.onBase3),
+            WidgetAssets.basesDrawable(
+                showBases && game.onBase1,
+                showBases && game.onBase2,
+                showBases && game.onBase3,
+            ),
         )
         rv.setTextViewText(
             R.id.notif_pitcher_line,
@@ -466,9 +471,12 @@ object NotificationHelper {
                 rv.setImageViewResource(id, WidgetAssets.countDot(i < count, kind))
             }
         }
-        setDots(intArrayOf(R.id.notif_b0, R.id.notif_b1, R.id.notif_b2, R.id.notif_b3), game.ball, 'B')
-        setDots(intArrayOf(R.id.notif_s0, R.id.notif_s1, R.id.notif_s2), game.strike, 'S')
-        setDots(intArrayOf(R.id.notif_o0, R.id.notif_o1, R.id.notif_o2), game.out, 'O')
+        val ball = if (showBases) game.ball else 0
+        val strike = if (showBases) game.strike else 0
+        val out = if (showBases) game.out else 0
+        setDots(intArrayOf(R.id.notif_b0, R.id.notif_b1, R.id.notif_b2, R.id.notif_b3), ball, 'B')
+        setDots(intArrayOf(R.id.notif_s0, R.id.notif_s1, R.id.notif_s2), strike, 'S')
+        setDots(intArrayOf(R.id.notif_o0, R.id.notif_o1, R.id.notif_o2), out, 'O')
 
         val lotteProb = winProbSeries.lastOrNull()?.homeProb
             ?: estimateLotteWinProb(game)
