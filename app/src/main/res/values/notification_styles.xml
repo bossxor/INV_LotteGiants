@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="NotifScore" parent="TextAppearance.Compat.Notification.Title">
+        <item name="android:textStyle">bold</item>
+    </style>
+    <style name="NotifMeta" parent="TextAppearance.Compat.Notification.Info" />
+    <style name="NotifLine" parent="TextAppearance.Compat.Notification" />
+</resources>

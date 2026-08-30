@@ -37,8 +37,7 @@ object NotificationHelper {
 
     const val CHANNEL_LIVE = "live_score"
     /**
-     * 스코어카드(커스텀 RemoteViews)용.
-     * colorized는 DEFAULT 이상에서만 적용된다. 기존 live_score는 LOW라 회색 테두리가 남았다.
+     * 스코어카드(커스텀 RemoteViews)용. 배경은 시스템 알림색을 그대로 쓰고, 작은 아이콘만 롯데 레드.
      */
     const val CHANNEL_LIVE_CARD = "live_score_card_v3"
     /**
@@ -72,7 +71,6 @@ object NotificationHelper {
 
     private const val REGULATION_INNINGS = 9
     private const val COLOR_LOTTE = 0xFFD00F31.toInt()
-    private const val COLOR_NAVY = 0xFF0B2A4A.toInt()
     private const val COLOR_OPPONENT = 0xFF9AA0A6.toInt()
     private const val COLOR_TRACK = 0xFF4A4F55.toInt()
 
@@ -192,13 +190,12 @@ object NotificationHelper {
         )
 
         if (useCustom) {
-            // DEFAULT+ 채널에서 colorized하면 알림 전체가 네이비로 칠해져 카드가 가로를 채운 것처럼 보인다.
-            // DecoratedCustomViewStyle/액션은 쓰지 않는다 (칩 숨기기·안쪽 여백 원인).
+            // 배경색은 시스템 알림 칸을 그대로 쓴다. 네이비 박스를 두면 아이콘·펼치기 칸과 색이 갈라진다.
             val card = buildLiveRemoteViews(context, game!!, winProbSeries)
             val compact = buildLiveCompactViews(context, game)
             builder
-                .setColor(COLOR_NAVY)
-                .setColorized(true)
+                .setColor(COLOR_LOTTE)
+                .setColorized(false)
                 .setCustomContentView(compact)
                 .setCustomBigContentView(card)
                 .setCustomHeadsUpContentView(compact)
