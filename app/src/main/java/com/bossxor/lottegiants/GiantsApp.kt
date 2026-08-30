@@ -48,8 +48,8 @@ class GiantsApp : Application(), ImageLoaderFactory {
                     val today = kboNow().toLocalDate().toString()
                     val showCard = game != null && when (game.status) {
                         GameStatus.LIVE -> true
-                        GameStatus.ENDED -> game.gameDate == today
-                        else -> false
+                        GameStatus.BEFORE, GameStatus.ENDED -> game.gameDate == today
+                        GameStatus.CANCELED -> false
                     }
                     if (game != null && showCard) {
                         val n = NotificationHelper.buildLiveNotification(

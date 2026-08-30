@@ -15,8 +15,8 @@ android {
         applicationId = "com.bossxor.lottegiants"
         minSdk = 31
         targetSdk = 36
-        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1053
-        versionName = (project.findProperty("versionName") as String?) ?: "1.3.46"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1054
+        versionName = (project.findProperty("versionName") as String?) ?: "1.3.47"
 
         // private GitHub 저장소 업데이트용 (local.properties 또는 env GITHUB_TOKEN)
         val localProps = Properties().apply {

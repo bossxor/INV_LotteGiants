@@ -40,7 +40,13 @@ class LiveScoreService : Service() {
                 return@launch
             }
             val mode = store.liveDisplayMode()
-            val notification = NotificationHelper.buildLiveNotification(this@LiveScoreService, null, mode)
+            val snap = store.loadSnapshot()
+            val notification = NotificationHelper.buildLiveNotification(
+                this@LiveScoreService,
+                snap?.lotteGame,
+                mode,
+                snap?.winProbSeries.orEmpty(),
+            )
             ServiceCompat.startForeground(
                 this@LiveScoreService,
                 NotificationHelper.LIVE_NOTIFICATION_ID,

@@ -158,10 +158,8 @@ object NotificationHelper {
             LiveDisplayMode.LOCK_NOW -> scoreTitle to headerLine
         }
 
-        // `상세 알림`만 스코어카드. `라이브 바`는 ProgressStyle이어야 Now Bar 칩으로 승격된다.
-        val useCustom = mode == LiveDisplayMode.FULL &&
-            game != null &&
-            (game.status == GameStatus.LIVE || game.status == GameStatus.ENDED)
+        // `상세 알림`만 스코어카드. 경기 전·중·종료·취소 모두 같은 카드. `라이브 바`는 ProgressStyle이어야 Now Bar 칩으로 승격된다.
+        val useCustom = mode == LiveDisplayMode.FULL && game != null
         // 경기가 끝나면 서비스가 멈춰도 알림은 남는다. 손으로 지울 수 있게 두고 스스로 만료시킨다.
         val finished = game != null &&
             (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED)
@@ -439,11 +437,23 @@ object NotificationHelper {
         )
     }
 
+    private fun kickoffTime(game: LotteGameInfo): String {
+        val t = game.startTime.trim()
+        return Regex("""\d{1,2}:\d{2}""").find(t)?.value ?: t.ifBlank { "예정" }
+    }
+
     private fun statusPillText(game: LotteGameInfo): String = when (game.status) {
         GameStatus.ENDED -> "종료"
         GameStatus.CANCELED -> game.cancelLabel.ifBlank { "취소" }
+        GameStatus.BEFORE -> kickoffTime(game)
         else -> game.inningLabel.ifBlank { "LIVE" }
     }
+
+    private fun awayStarter(game: LotteGameInfo): String =
+        if (game.isHome) game.opponentStartingPitcher else game.lotteStartingPitcher
+
+    private fun homeStarter(game: LotteGameInfo): String =
+        if (game.isHome) game.lotteStartingPitcher else game.opponentStartingPitcher
 
     /** 접힌 알림·헤드업용 한 줄 카드 (큰 카드는 64dp에서 잘린다) */
     private fun buildLiveCompactViews(context: Context, game: LotteGameInfo): RemoteViews {
@@ -454,6 +464,7 @@ object NotificationHelper {
         rv.setTextViewText(R.id.notif_c_inning, statusPillText(game))
 
         val live = game.status == GameStatus.LIVE
+        val before = game.status == GameStatus.BEFORE
         rv.setViewVisibility(R.id.notif_c_bases, if (live) View.VISIBLE else View.GONE)
         if (live) {
             rv.setImageViewResource(
@@ -462,16 +473,20 @@ object NotificationHelper {
             )
         }
         // 끝난 경기는 점수·종료만으로 충분하다. 좁은 한 줄에 승패까지 넣으면 잘린다.
-        rv.setViewVisibility(R.id.notif_c_note, if (live) View.VISIBLE else View.GONE)
-        if (live) {
-            rv.setTextViewText(
-                R.id.notif_c_note,
-                buildString {
-                    append("${game.out}아웃")
-                    if (game.currentBatterName.isNotBlank()) append(" · ${game.currentBatterName}")
-                },
-            )
+        // 경기 전은 구장(또는 선발)을 오른쪽에 둔다.
+        val note = when {
+            live -> buildString {
+                append("${game.out}아웃")
+                if (game.currentBatterName.isNotBlank()) append(" · ${game.currentBatterName}")
+            }
+            before -> game.stadium.ifBlank {
+                val starter = game.lotteStartingPitcher.ifBlank { game.opponentStartingPitcher }
+                if (starter.isNotBlank()) "선발 $starter" else ""
+            }
+            else -> ""
         }
+        rv.setViewVisibility(R.id.notif_c_note, if (note.isNotBlank()) View.VISIBLE else View.GONE)
+        if (note.isNotBlank()) rv.setTextViewText(R.id.notif_c_note, note)
         rv.setImageViewBitmap(
             R.id.notif_c_away_logo,
             runBlocking {
@@ -516,37 +531,55 @@ object NotificationHelper {
                 WidgetAssets.basesDrawable(game.onBase1, game.onBase2, game.onBase3),
             )
         }
-        val pitcherLine = if (showBases) {
-            buildString {
-                append("투수 ")
-                append(game.currentPitcherName.ifBlank { "-" })
-                if (game.currentPitcherPitchCount > 0) {
-                    append(" ")
-                    append(game.currentPitcherPitchCount)
-                    append("구")
+        val pitcherLine: String
+        val batterLine: String
+        when (game.status) {
+            GameStatus.LIVE -> {
+                pitcherLine = buildString {
+                    append("투수 ")
+                    append(game.currentPitcherName.ifBlank { "-" })
+                    if (game.currentPitcherPitchCount > 0) {
+                        append(" ")
+                        append(game.currentPitcherPitchCount)
+                        append("구")
+                    }
+                }
+                batterLine = buildString {
+                    append("타자 ")
+                    if (game.currentBatterOrder > 0) append("${game.currentBatterOrder}번 ")
+                    append(game.currentBatterName.ifBlank { "-" })
                 }
             }
-        } else {
-            buildString {
-                append("승 ")
-                append(game.winPitcherName.ifBlank { "-" })
-                if (game.savePitcherName.isNotBlank()) {
-                    append(" · 세 ")
-                    append(game.savePitcherName)
+            GameStatus.BEFORE -> {
+                pitcherLine = "선발 ${awayStarter(game).ifBlank { "-" }}"
+                batterLine = "선발 ${homeStarter(game).ifBlank { "-" }}"
+            }
+            GameStatus.CANCELED -> {
+                pitcherLine = if (game.stadium.isNotBlank()) "구장 ${game.stadium}" else ""
+                batterLine = ""
+            }
+            GameStatus.ENDED -> {
+                pitcherLine = buildString {
+                    append("승 ")
+                    append(game.winPitcherName.ifBlank { "-" })
+                    if (game.savePitcherName.isNotBlank()) {
+                        append(" · 세 ")
+                        append(game.savePitcherName)
+                    }
                 }
+                batterLine = "패 ${game.losePitcherName.ifBlank { "-" }}"
             }
-        }
-        val batterLine = if (showBases) {
-            buildString {
-                append("타자 ")
-                if (game.currentBatterOrder > 0) append("${game.currentBatterOrder}번 ")
-                append(game.currentBatterName.ifBlank { "-" })
-            }
-        } else {
-            "패 ${game.losePitcherName.ifBlank { "-" }}"
         }
         rv.setTextViewText(R.id.notif_pitcher_line, pitcherLine)
         rv.setTextViewText(R.id.notif_batter_line, batterLine)
+        rv.setViewVisibility(
+            R.id.notif_winprob_bar,
+            if (game.status == GameStatus.LIVE || game.status == GameStatus.ENDED) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            },
+        )
         fun setDots(ids: IntArray, count: Int, kind: Char) {
             ids.forEachIndexed { i, id ->
                 rv.setImageViewResource(id, WidgetAssets.countDot(i < count, kind))
