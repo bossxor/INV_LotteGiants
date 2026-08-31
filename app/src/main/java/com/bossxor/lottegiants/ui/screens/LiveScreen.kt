@@ -92,7 +92,6 @@ import com.bossxor.lottegiants.ui.components.SectionHeader
 import com.bossxor.lottegiants.ui.components.PlayerAvatar
 import com.bossxor.lottegiants.ui.components.TeamLogo
 import com.bossxor.lottegiants.ui.heroGradient
-import com.bossxor.lottegiants.ui.heroLeadScoreColor
 import com.bossxor.lottegiants.ui.heroOnColor
 import com.bossxor.lottegiants.ui.isAppDark
 
@@ -447,6 +446,7 @@ private fun ScoreTicker(
                         awayScore = if (g.isHome) g.opponentScore else g.lotteScore,
                         status = g.status,
                         statusText = g.inningLabel,
+                        startTime = g.startTime,
                         homeLogoUrl = if (g.isHome) g.lotteLogoUrl.ifBlank { LOTTE_LOGO_URL } else g.opponentLogoUrl,
                         awayLogoUrl = if (g.isHome) g.opponentLogoUrl else g.lotteLogoUrl.ifBlank { LOTTE_LOGO_URL },
                         homeTeamCode = if (g.isHome) "LT" else g.opponentCode,
@@ -459,7 +459,7 @@ private fun ScoreTicker(
     }
     if (games.isEmpty()) return
     Text(
-        if (excludeLotte) "다른 구장 · 탭하면 상세" else "오늘 경기 · 탭하면 상세",
+        if (excludeLotte) "다른 구장 · 탭하면 상세" else "오늘 경기",
         style = MaterialTheme.typography.titleSmall,
         modifier = Modifier.padding(bottom = 8.dp),
     )
@@ -471,42 +471,68 @@ private fun ScoreTicker(
             val show = g.status == GameStatus.LIVE || g.status == GameStatus.ENDED
             Surface(
                 onClick = { onOpenGame(g.gameId) },
-                shape = MaterialTheme.shapes.medium,
+                shape = RoundedCornerShape(18.dp),
                 color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 1.dp,
+                tonalElevation = 1.dp,
             ) {
-                Row(
-                    Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                Column(
+                    Modifier.padding(horizontal = 14.dp, vertical = 12.dp).width(148.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    TeamLogo(g.awayLogoUrl, size = 18)
-                    Spacer(Modifier.width(4.dp))
-                    Text(shortName(g.awayName), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    val pill = when (g.status) {
+                        GameStatus.LIVE -> g.statusText.ifBlank { "LIVE" }
+                        GameStatus.ENDED -> "종료"
+                        GameStatus.BEFORE -> g.startTime.ifBlank { "예정" }
+                        GameStatus.CANCELED -> g.statusText.ifBlank { "취소" }
+                    }
                     Text(
-                        if (show) " ${g.awayScore}" else "",
-                        fontSize = 13.sp,
+                        if (g.status == GameStatus.LIVE) "LIVE" else pill,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Black,
-                    )
-                    Text(" · ", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(
-                        if (show) "${g.homeScore} " else "",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Black,
-                    )
-                    Text(shortName(g.homeName), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.width(4.dp))
-                    TeamLogo(g.homeLogoUrl, size = 18)
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        when (g.status) {
-                            GameStatus.LIVE -> g.statusText.ifBlank { "LIVE" }
-                            GameStatus.ENDED -> "종료"
-                            GameStatus.BEFORE -> g.startTime.ifBlank { "예정" }
-                            GameStatus.CANCELED -> g.statusText.ifBlank { "취소" }
+                        color = when (g.status) {
+                            GameStatus.LIVE -> WinGreen
+                            GameStatus.ENDED -> MaterialTheme.colorScheme.onSurface
+                            GameStatus.CANCELED -> LoseRed
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
                         },
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (g.status == GameStatus.LIVE) LotteRed else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TeamLogo(g.awayLogoUrl, size = 28)
+                        Spacer(Modifier.width(8.dp))
+                        if (show) {
+                            Text(
+                                "${g.awayScore} : ${g.homeScore}",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Black,
+                            )
+                        } else {
+                            Text("VS", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        TeamLogo(g.homeLogoUrl, size = 28)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "${shortName(g.awayName)} · ${shortName(g.homeName)}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                    if (g.status == GameStatus.LIVE) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            pill,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(WinGreen)
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
             }
         }
@@ -1982,27 +2008,57 @@ private fun CompactRefresh(
 private fun HeroTeam(
     name: String,
     logoUrl: String,
-    score: Int,
-    showScore: Boolean,
-    highlight: Boolean,
+    starter: String = "",
     onHero: Color,
-    leadColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
-        TeamLogo(logoUrl, size = 56)
-        Spacer(Modifier.height(8.dp))
-        Text(name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = onHero.copy(alpha = 0.72f), maxLines = 1)
-        if (showScore) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        color = onHero.copy(alpha = 0.08f),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Column(
+            Modifier.padding(horizontal = 8.dp, vertical = 12.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            TeamLogo(logoUrl, size = 52)
+            Spacer(Modifier.height(8.dp))
             Text(
-                "$score",
-                fontSize = 56.sp,
-                fontWeight = FontWeight.Black,
-                color = if (highlight) leadColor else onHero,
-                lineHeight = 58.sp,
+                name,
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = onHero,
+                maxLines = 1,
             )
+            if (starter.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    starter,
+                    fontSize = 11.sp,
+                    color = onHero.copy(alpha = 0.55f),
+                    maxLines = 1,
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun InningPill(text: String, live: Boolean) {
+    val bg = if (live) WinGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
+    val fg = if (live) Color.White else MaterialTheme.colorScheme.onSurface
+    Text(
+        text,
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(bg)
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        color = fg,
+        fontWeight = FontWeight.Bold,
+        fontSize = 13.sp,
+    )
 }
 
 @Composable
@@ -2019,9 +2075,16 @@ private fun HeroCard(
     val showScore = g.status == GameStatus.LIVE || g.status == GameStatus.ENDED
     val dark = isAppDark()
     val onHero = heroOnColor()
-    val leadColor = heroLeadScoreColor()
     val muted = onHero.copy(alpha = if (dark) 0.45f else 0.42f)
     val soft = onHero.copy(alpha = if (dark) 0.7f else 0.62f)
+    val awayName = if (g.isHome) g.opponentName else g.focusName()
+    val homeName = if (g.isHome) g.focusName() else g.opponentName
+    val awayLogo = if (g.isHome) g.opponentLogoUrl else g.lotteLogoUrl.ifBlank { if (g.isFocusLotte()) LOTTE_LOGO_URL else "" }
+    val homeLogo = if (g.isHome) g.lotteLogoUrl.ifBlank { if (g.isFocusLotte()) LOTTE_LOGO_URL else "" } else g.opponentLogoUrl
+    val awayScore = if (g.isHome) g.opponentScore else g.lotteScore
+    val homeScore = if (g.isHome) g.lotteScore else g.opponentScore
+    val awayStarter = if (g.isHome) g.opponentStartingPitcher else g.lotteStartingPitcher
+    val homeStarter = if (g.isHome) g.lotteStartingPitcher else g.opponentStartingPitcher
     Column(
         Modifier
             .fillMaxWidth()
@@ -2058,71 +2121,124 @@ private fun HeroCard(
             CompactRefresh(secondsUntilRefresh, isRefreshing, onRefresh, onDark = dark)
         }
         Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            HeroTeam(
-                name = if (g.isHome) g.opponentName else g.focusName(),
-                logoUrl = if (g.isHome) g.opponentLogoUrl else g.lotteLogoUrl.ifBlank { if (g.isFocusLotte()) LOTTE_LOGO_URL else "" },
-                score = if (g.isHome) g.opponentScore else g.lotteScore,
-                showScore = showScore,
-                highlight = if (g.isHome) g.opponentScore > g.lotteScore else g.lotteScore > g.opponentScore,
-                onHero = onHero,
-                leadColor = leadColor,
-                modifier = Modifier.weight(1f),
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            shadowElevation = if (dark) 0.dp else 2.dp,
+            tonalElevation = if (dark) 2.dp else 0.dp,
+        ) {
+            Column(
+                Modifier.padding(horizontal = 12.dp, vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+        when (g.status) {
+            GameStatus.LIVE -> Text(
+                "LIVE",
+                fontWeight = FontWeight.Black,
+                fontSize = 18.sp,
+                color = WinGreen,
+                letterSpacing = 1.2.sp,
             )
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 4.dp)) {
-                when (g.status) {
-                    GameStatus.LIVE -> {
-                        Text("LIVE", fontWeight = FontWeight.Black, fontSize = 11.sp, color = LotteRed, letterSpacing = 1.4.sp)
-                        Spacer(Modifier.height(6.dp))
-                        Text(g.inningLabel, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = onHero)
-                    }
-                    GameStatus.ENDED -> {
-                        val (label, color) = when {
-                            g.lotteScore > g.opponentScore -> "승" to WinGreen
-                            g.lotteScore < g.opponentScore -> "패" to LoseRed
-                            else -> "무" to leadColor
-                        }
-                        Text("종료", fontSize = 11.sp, color = muted, letterSpacing = 1.sp)
-                        Spacer(Modifier.height(6.dp))
-                        Text(label, fontWeight = FontWeight.Black, fontSize = 22.sp, color = color)
-                    }
-                    GameStatus.BEFORE -> {
-                        Text(g.startTime.ifBlank { "예정" }, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = leadColor)
-                        Spacer(Modifier.height(6.dp))
+            GameStatus.ENDED -> {
+                val (label, color) = when {
+                    g.lotteScore > g.opponentScore -> "WIN" to WinGreen
+                    g.lotteScore < g.opponentScore -> "LOSE" to LoseRed
+                    else -> "DRAW" to LotteGold
+                }
+                Text(label, fontWeight = FontWeight.Black, fontSize = 18.sp, color = color, letterSpacing = 1.2.sp)
+            }
+            GameStatus.BEFORE -> Text(
+                g.startTime.ifBlank { "예정" },
+                fontWeight = FontWeight.Black,
+                fontSize = 16.sp,
+                color = LotteGold,
+            )
+            GameStatus.CANCELED -> Text(
+                g.cancelLabel.ifBlank { "취소" },
+                fontWeight = FontWeight.Black,
+                fontSize = 16.sp,
+                color = LoseRed,
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            HeroTeam(awayName, awayLogo, awayStarter, onHero, Modifier.weight(1f))
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 2.dp),
+            ) {
+                if (showScore) {
+                    Text(
+                        "$awayScore : $homeScore",
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Black,
+                        color = onHero,
+                        lineHeight = 36.sp,
+                    )
+                } else {
+                    Text("VS", fontWeight = FontWeight.Black, fontSize = 20.sp, color = soft)
+                    if (g.status == GameStatus.BEFORE) {
                         val cd = remember(g.gameDate, g.startTime) {
                             com.bossxor.lottegiants.domain.gameCountdownLabel(g.gameDate, g.startTime)
                         }
                         if (cd.isNotBlank() && cd != g.startTime) {
-                            Text(cd, fontWeight = FontWeight.Black, fontSize = 13.sp, color = LotteGold)
                             Spacer(Modifier.height(4.dp))
+                            Text(cd, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LotteGold, maxLines = 1)
                         }
-                        Text("VS", fontWeight = FontWeight.Black, fontSize = 18.sp, color = soft)
-                    }
-                    GameStatus.CANCELED -> {
-                        Text(g.cancelLabel, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = LoseRed)
                     }
                 }
-                if (g.stadium.isNotBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(g.stadium, fontSize = 11.sp, color = muted)
+                Spacer(Modifier.height(8.dp))
+                val pill = when (g.status) {
+                    GameStatus.LIVE -> g.inningLabel.ifBlank { "LIVE" }
+                    GameStatus.ENDED -> "종료"
+                    GameStatus.BEFORE -> g.startTime.ifBlank { "예정" }
+                    GameStatus.CANCELED -> g.cancelLabel.ifBlank { "취소" }
                 }
-                if (g.doubleHeaderNo > 0) {
-                    Text("DH${g.doubleHeaderNo}", fontSize = 10.sp, color = leadColor, fontWeight = FontWeight.Bold)
-                }
+                InningPill(pill, live = g.status == GameStatus.LIVE)
             }
-            HeroTeam(
-                name = if (g.isHome) g.focusName() else g.opponentName,
-                logoUrl = if (g.isHome) g.lotteLogoUrl.ifBlank { if (g.isFocusLotte()) LOTTE_LOGO_URL else "" } else g.opponentLogoUrl,
-                score = if (g.isHome) g.lotteScore else g.opponentScore,
-                showScore = showScore,
-                highlight = if (g.isHome) g.lotteScore > g.opponentScore else g.opponentScore > g.lotteScore,
-                onHero = onHero,
-                leadColor = leadColor,
-                modifier = Modifier.weight(1f),
+            HeroTeam(homeName, homeLogo, homeStarter, onHero, Modifier.weight(1f))
+        }
+        if (g.status == GameStatus.LIVE) {
+            Spacer(Modifier.height(12.dp))
+            DiamondView(
+                on1 = g.onBase1,
+                on2 = g.onBase2,
+                on3 = g.onBase3,
+                outs = g.out,
+                ball = g.ball,
+                strike = g.strike,
+                compact = true,
             )
+            val pit = g.currentPitcherName
+            val bat = g.currentBatterName
+            if (pit.isNotBlank() || bat.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "P ${pit.ifBlank { "-" }}  ·  B ${bat.ifBlank { "-" }}",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+        }
+            }
+        }
+        val sub = buildList {
+            if (g.stadium.isNotBlank()) add(g.stadium)
+            if (g.doubleHeaderNo > 0) add("DH${g.doubleHeaderNo}")
+        }.joinToString(" · ")
+        if (sub.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Text(sub, fontSize = 12.sp, color = muted)
         }
         if (g.status == GameStatus.LIVE || g.status == GameStatus.ENDED) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
                 "공유",
                 modifier = Modifier.clickable(onClick = onShare).padding(horizontal = 8.dp, vertical = 6.dp),

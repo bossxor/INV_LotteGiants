@@ -124,7 +124,7 @@ fun heroGradient(): Brush {
         )
     } else {
         Brush.verticalGradient(
-            listOf(Color(0xFFF6E4E8), bg),
+            listOf(bg, bg),
         )
     }
 }

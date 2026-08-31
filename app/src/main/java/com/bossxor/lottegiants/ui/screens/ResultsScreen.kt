@@ -92,6 +92,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+/** 캘린더 예정 경기: 홈=파랑, 원정=빨강 */
+private val CalHomeBlue = Color(0xFF2F6FED)
+private val CalAwayRed = Color(0xFFE23B3B)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ResultsScreen(
@@ -580,7 +584,9 @@ private fun CalendarMonthView(
                 Text("패", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LoseRed)
                 Text("무", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LotteGold)
                 Text("·", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("홈/원정 = 예정·진행", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("홈", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CalHomeBlue)
+                Text("원정", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CalAwayRed)
+                Text("= 예정·진행", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Spacer(Modifier.height(10.dp))
@@ -660,7 +666,8 @@ private fun RowScope.CalendarDayCell(
                 ended && teamWon -> WinGreen
                 ended && teamLost -> LoseRed
                 ended && draw -> LotteGold
-                teamHome == true -> MaterialTheme.colorScheme.primary
+                teamHome == true -> CalHomeBlue
+                teamHome == false -> CalAwayRed
                 else -> MaterialTheme.colorScheme.onSurfaceVariant
             }
             val border = when {
@@ -677,8 +684,8 @@ private fun RowScope.CalendarDayCell(
                 ended && teamWon -> WinGreen.copy(alpha = 0.10f)
                 ended && teamLost -> LoseRed.copy(alpha = 0.10f)
                 ended && draw -> LotteGold.copy(alpha = 0.12f)
-                teamHome == true -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                teamHome == false -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+                teamHome == true -> CalHomeBlue.copy(alpha = 0.10f)
+                teamHome == false -> CalAwayRed.copy(alpha = 0.10f)
                 else -> Color.Transparent
             }
             Column(

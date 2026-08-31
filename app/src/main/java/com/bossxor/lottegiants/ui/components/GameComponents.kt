@@ -174,11 +174,13 @@ fun DiamondView(
     ball: Int = 0,
     strike: Int = 0,
     inningLabel: String = "",
+    compact: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val occupied = BaseOccupied
     val empty = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.40f)
     val outline = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+    val canvasSize = if (compact) 72.dp else 120.dp
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         if (inningLabel.isNotBlank()) {
             Text(
@@ -189,7 +191,7 @@ fun DiamondView(
             )
             Spacer(Modifier.height(4.dp))
         }
-        Canvas(modifier = Modifier.size(120.dp)) {
+        Canvas(modifier = Modifier.size(canvasSize)) {
             val cx = size.width / 2f
             val cy = size.height / 2f + 4.dp.toPx()
             val r = size.minDimension * 0.32f
