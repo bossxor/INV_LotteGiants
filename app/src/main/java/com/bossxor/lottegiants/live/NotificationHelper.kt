@@ -22,12 +22,13 @@ import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LOTTE_LOGO_URL
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LiveDisplayMode
+import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.WinProbPoint
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.estimateLotteWinProb
 import com.bossxor.lottegiants.domain.inningLabel
-import com.bossxor.lottegiants.domain.teamAccentColor
+import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.teamNameToCode
 import com.bossxor.lottegiants.widget.WidgetAssets
@@ -104,6 +105,22 @@ object NotificationHelper {
         runCatching { nm.deleteNotificationChannel("event_lineup") }
     }
 
+    /**
+     * 실시간 스코어 알림에 올릴 경기.
+     * 오늘 롯데 경기(라이브·예정·종료·취소)를 우선하고, 없으면 다음 경기를 쓴다.
+     * [allowUpcoming]이 false면 오늘 날짜만 (앱 시작 시 어제 카드가 다시 뜨는 걸 막음).
+     */
+    fun liveNotificationGame(snap: LiveSnapshot?, allowUpcoming: Boolean = true): LotteGameInfo? {
+        if (snap == null) return null
+        val today = kboToday().toString()
+        val g = snap.lotteGame
+        if (g != null && g.status == GameStatus.LIVE) return g
+        if (g != null && (g.gameDate == today || g.gameDate.isBlank())) return g
+        if (allowUpcoming) snap.nextLotteGame?.let { return it }
+        snap.lastLotteGame?.takeIf { it.gameDate == today }?.let { return it }
+        return if (allowUpcoming) g else g?.takeIf { it.gameDate == today }
+    }
+
     fun buildLiveNotification(
         context: Context,
         game: LotteGameInfo?,
@@ -156,7 +173,8 @@ object NotificationHelper {
             LiveDisplayMode.LOCK_NOW -> scoreTitle to headerLine
         }
 
-        // `상세 알림`만 스코어카드. 경기 전·중·종료·취소 모두 같은 카드. `라이브 바`는 ProgressStyle이어야 Now Bar 칩으로 승격된다.
+        // `상세 알림`만 스코어카드. 오늘 경기가 없으면 다음 경기를 쓴다.
+        // 경기가 전혀 없으면 ProgressStyle(예전 점선 바)로 떨어지지 않게 한다.
         val useCustom = mode == LiveDisplayMode.FULL && game != null
         // 경기가 끝나면 서비스가 멈춰도 알림은 남는다. 손으로 지울 수 있게 두고 스스로 만료시킨다.
         val finished = game != null &&
@@ -202,6 +220,10 @@ object NotificationHelper {
                 .setDeleteIntent(hide)
                 .setSubText(null)
                 .setShortCriticalText(null)
+                .setRequestPromotedOngoing(false)
+        } else if (mode == LiveDisplayMode.FULL) {
+            builder
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text.ifBlank { "예정 경기 없음" }))
                 .setRequestPromotedOngoing(false)
         } else {
             builder
@@ -569,14 +591,8 @@ object NotificationHelper {
         }
         rv.setTextViewText(R.id.notif_pitcher_line, pitcherLine)
         rv.setTextViewText(R.id.notif_batter_line, batterLine)
-        rv.setViewVisibility(
-            R.id.notif_winprob_bar,
-            if (game.status == GameStatus.LIVE || game.status == GameStatus.ENDED) {
-                View.VISIBLE
-            } else {
-                View.GONE
-            },
-        )
+        val showWinProb = game.status != GameStatus.CANCELED
+        rv.setViewVisibility(R.id.notif_winprob_row, if (showWinProb) View.VISIBLE else View.GONE)
         fun setDots(ids: IntArray, count: Int, kind: Char) {
             ids.forEachIndexed { i, id ->
                 rv.setImageViewResource(id, WidgetAssets.countDot(i < count, kind))
@@ -592,12 +608,19 @@ object NotificationHelper {
         val lotteProb = winProbSeries.lastOrNull()?.homeProb
             ?: estimateLotteWinProb(game)
         val awayProb = if (game.isHome) (1.0 - lotteProb) else lotteProb
-        val bar = WidgetAssets.winProbBarBitmap(
-            leftProb = awayProb.toFloat(),
-            leftColor = teamAccentColor(awayCode),
-            rightColor = teamAccentColor(homeCode),
-        )
-        rv.setImageViewBitmap(R.id.notif_winprob_bar, bar)
+        val homeProb = 1.0 - awayProb
+        if (showWinProb) {
+            val awayPct = (awayProb * 100).toInt().coerceIn(1, 99)
+            val homePct = (100 - awayPct).coerceIn(1, 99)
+            rv.setTextViewText(R.id.notif_winprob_left, "${awayName} ${awayPct}%")
+            rv.setTextViewText(R.id.notif_winprob_right, "${homePct}% ${homeName}")
+            val bar = WidgetAssets.winProbBarBitmap(
+                leftProb = awayProb.toFloat(),
+                leftColor = WidgetAssets.winProbBarColor(awayCode),
+                rightColor = WidgetAssets.winProbBarColor(homeCode),
+            )
+            rv.setImageViewBitmap(R.id.notif_winprob_bar, bar)
+        }
 
         val awayBmp = runBlocking {
             WidgetAssets.loadTeamLogoBitmap(context, awayCode, awayLogoUrl, awayName)

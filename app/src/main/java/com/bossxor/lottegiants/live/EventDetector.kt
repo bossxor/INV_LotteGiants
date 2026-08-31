@@ -620,10 +620,14 @@ class EventDetector(private val store: SnapshotStore) {
         }
     }
 
-    suspend fun processRace(context: Context, standings: List<TeamStanding>) {
+    suspend fun processRace(
+        context: Context,
+        standings: List<TeamStanding>,
+        recentGames: List<com.bossxor.lottegiants.domain.MiniGame> = emptyList(),
+    ) {
         val now = racePulse(standings) ?: return
         val prev = parseRacePulse(store.lastRaceFingerprint())
-        val alert = raceChangeAlert(prev, now)
+        val alert = raceChangeAlert(prev, now, standings, recentGames)
         store.setLastRaceFingerprint(now.fingerprint())
         if (alert != null) {
             val live = emittingForLive

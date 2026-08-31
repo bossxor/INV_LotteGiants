@@ -8,7 +8,6 @@ import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.IMAGE_USER_AGENT
 import com.bossxor.lottegiants.domain.imageRefererForHost
-import com.bossxor.lottegiants.domain.kboNow
 import com.bossxor.lottegiants.live.EventDetector
 import com.bossxor.lottegiants.live.GameSchedulerWorker
 import com.bossxor.lottegiants.live.LiveScoreService
@@ -43,14 +42,9 @@ class GiantsApp : Application(), ImageLoaderFactory {
                     detector.processRosterMoves(this@GiantsApp, repo.fetchRecentRosterMoves(3))
                 }
                 if (repo.store.isLiveScoreEnabled()) {
-                    val game = snap.lotteGame
+                    val game = NotificationHelper.liveNotificationGame(snap, allowUpcoming = false)
                     // 어제 끝난 경기를 다시 띄우면 다음날 새벽까지 스코어카드가 남는다. 오늘 경기만.
-                    val today = kboNow().toLocalDate().toString()
-                    val showCard = game != null && when (game.status) {
-                        GameStatus.LIVE -> true
-                        GameStatus.BEFORE, GameStatus.ENDED -> game.gameDate == today
-                        GameStatus.CANCELED -> false
-                    }
+                    val showCard = game != null && game.status != GameStatus.CANCELED
                     if (game != null && showCard) {
                         val n = NotificationHelper.buildLiveNotification(
                             this@GiantsApp,

@@ -387,27 +387,113 @@ fun racePulse(
     }
 }
 
+fun latestEndedFor(games: List<MiniGame>, teamCode: String): MiniGame? =
+    games.filter { it.status == GameStatus.ENDED && it.involvesTeam(teamCode) }
+        .maxWithOrNull(compareBy({ it.gameDate }, { it.doubleHeaderNo }))
+
+/** 예: `롯데, 두산 5:3 승` */
+fun formatEndedResult(game: MiniGame, teamCode: String): String {
+    val name = teamCodeToName(teamCode).ifBlank { teamCode }
+    val home = game.isTeamHome(teamCode) == true
+    val opp = if (home) game.awayName else game.homeName
+    val ts = if (home) game.homeScore else game.awayScore
+    val os = if (home) game.awayScore else game.homeScore
+    val result = when (game.teamWon(teamCode)) {
+        true -> "승"
+        false -> "패"
+        null -> "무"
+    }
+    return "$name, $opp $ts:$os $result"
+}
+
+fun raceRelevantGames(snap: LiveSnapshot?): List<MiniGame> {
+    if (snap == null) return emptyList()
+    val out = mutableListOf<MiniGame>()
+    out += snap.yesterdayGames
+    out += snap.otherGames.filter { it.status == GameStatus.ENDED }
+    out += snap.todayLotteGames.filter { it.status == GameStatus.ENDED }
+    fun add(g: LotteGameInfo?) {
+        if (g == null || g.status != GameStatus.ENDED) return
+        out += g.toRaceMiniGame()
+    }
+    add(snap.lotteGame)
+    add(snap.lastLotteGame)
+    snap.recentLotteGames.forEach { add(it) }
+    return out.distinctBy { it.gameId }.filter { it.status == GameStatus.ENDED }
+}
+
+fun raceChangeCause(
+    prev: RacePulse,
+    now: RacePulse,
+    standings: List<TeamStanding> = emptyList(),
+    recentGames: List<MiniGame> = emptyList(),
+): String {
+    val events = mutableListOf<String>()
+    val lotteGame = latestEndedFor(recentGames, LOTTE_TEAM_CODE)
+    if (lotteGame != null) events += formatEndedResult(lotteGame, LOTTE_TEAM_CODE)
+
+    val vsRank = when {
+        now.tragic != null || prev.tragic != null -> KBO_POSTSEASON_SPOTS
+        else -> raceOpponentRank(now.rank) ?: raceOpponentRank(prev.rank)
+    }
+    if (vsRank != null) {
+        val vs = standings.firstOrNull { it.ranking == vsRank }
+        if (vs != null && !vs.teamId.equals(LOTTE_TEAM_CODE, ignoreCase = true)) {
+            val vsGame = latestEndedFor(recentGames, vs.teamId)
+            if (vsGame != null && vsGame.gameId != lotteGame?.gameId) {
+                events += formatEndedResult(vsGame, vs.teamId)
+            }
+        }
+    }
+    val delta = when {
+        now.magic != null && prev.magic != null && now.magic != prev.magic ->
+            "${prev.magic} → ${now.magic}"
+        now.tragic != null && prev.tragic != null && now.tragic != prev.tragic ->
+            "${prev.tragic} → ${now.tragic}"
+        now.rank != prev.rank ->
+            "${prev.rank}위 → ${now.rank}위 · ${prev.slot} → ${now.slot}"
+        else -> ""
+    }
+    val why = events.joinToString(" · ")
+    val fallback = when {
+        now.tragic != null || prev.tragic != null -> "5위 승 또는 롯데 패"
+        else -> "롯데 승 또는 상대 패"
+    }
+    return when {
+        delta.isNotBlank() && why.isNotBlank() -> "$delta · $why"
+        why.isNotBlank() -> why
+        delta.isNotBlank() -> "$delta · $fallback"
+        else -> fallback
+    }
+}
+
 /**
  * 이전 펄스와 비교해 알림 제목·본문. 첫 관측(prev=null)이거나 변화 없으면 null.
  */
-fun raceChangeAlert(prev: RacePulse?, now: RacePulse): Pair<String, String>? {
+fun raceChangeAlert(
+    prev: RacePulse?,
+    now: RacePulse,
+    standings: List<TeamStanding> = emptyList(),
+    recentGames: List<MiniGame> = emptyList(),
+): Pair<String, String>? {
     if (prev == null) return null
     if (prev.fingerprint() == now.fingerprint()) return null
+    val cause = raceChangeCause(prev, now, standings, recentGames)
     if (now.tragic != null && now.tragic <= 0 && (prev.tragic == null || prev.tragic > 0)) {
-        return "포스트시즌 탈락" to "트래직넘버 소멸 · ${now.rank}위"
+        return "포스트시즌 탈락" to cause.ifBlank { "트래직넘버 소멸 · ${now.rank}위" }
     }
     if (now.magic != null && now.magic <= 0 && (prev.magic == null || prev.magic > 0) && now.rank <= KBO_POSTSEASON_SPOTS) {
-        return "${now.slot} 확정" to "매직넘버 소멸 · 롯데 ${now.rank}위"
+        return "${now.slot} 확정" to cause.ifBlank { "매직넘버 소멸 · 롯데 ${now.rank}위" }
     }
     if (now.magic != null && prev.magic != null && now.magic < prev.magic) {
         val label = now.magicLabel.ifBlank { "매직넘버" }
-        return "$label ${now.magic}" to "${prev.magic} → ${now.magic} (롯데 승+상대 패)"
+        return "$label ${now.magic}" to cause
     }
     if (now.tragic != null && prev.tragic != null && now.tragic < prev.tragic) {
-        return "트래직넘버 ${now.tragic}" to "${prev.tragic} → ${now.tragic} (5위 승+롯데 패)"
+        return "트래직넘버 ${now.tragic}" to cause
     }
     if (now.rank != prev.rank) {
-        return "롯데 ${now.rank}위" to "${prev.slot} → ${now.slot}"
+        return "롯데 ${now.rank}위" to cause
     }
     return null
 }

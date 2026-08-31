@@ -199,16 +199,30 @@ object WidgetAssets {
             ?: teamInitialBitmap(code, teamName)
     }
 
-    /** 좌(원정)·우(홈) 실시간 승률 바 */
+    /** 좌(원정)·우(홈) 실시간 승률 바. 어두운 팀색은 알림 배경에 묻히지 않게 밝힌다. */
+    fun winProbBarColor(teamCode: String): Int {
+        val c = com.bossxor.lottegiants.domain.teamAccentColor(teamCode)
+        val r = (c shr 16) and 0xFF
+        val g = (c shr 8) and 0xFF
+        val b = c and 0xFF
+        val lum = 0.299 * r + 0.587 * g + 0.114 * b
+        if (lum >= 48) return c
+        fun mix(ch: Int) = (ch + ((255 - ch) * 0.42)).toInt().coerceIn(0, 255)
+        return (0xFF shl 24) or (mix(r) shl 16) or (mix(g) shl 8) or mix(b)
+    }
+
     fun winProbBarBitmap(
         leftProb: Float,
         leftColor: Int,
         rightColor: Int,
         width: Int = 480,
-        height: Int = 16,
+        height: Int = 20,
     ): Bitmap {
         val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
+        val radius = height / 2f
+        val track = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFD0D4DC.toInt() }
+        canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), radius, radius, track)
         val leftW = (width * leftProb.coerceIn(0.02f, 0.98f)).toInt().coerceIn(2, width - 2)
         val leftPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = leftColor }
         val rightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = rightColor }

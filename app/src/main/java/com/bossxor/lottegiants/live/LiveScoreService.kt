@@ -19,6 +19,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * 경기 중 5초(라이브)·20초(경기 전) 간격으로 폴링해 위젯·알림·이벤트를 갱신한다.
@@ -33,28 +34,28 @@ class LiveScoreService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         NotificationHelper.createChannels(this)
-        scope.launch {
-            val store = GiantsRepository.get(this@LiveScoreService).store
-            if (!store.isLiveScoreEnabled()) {
-                stopSelf()
-                return@launch
-            }
-            val mode = store.liveDisplayMode()
-            val snap = store.loadSnapshot()
-            val notification = NotificationHelper.buildLiveNotification(
-                this@LiveScoreService,
-                snap?.lotteGame,
-                mode,
-                snap?.winProbSeries.orEmpty(),
-            )
-            ServiceCompat.startForeground(
-                this@LiveScoreService,
-                NotificationHelper.LIVE_NOTIFICATION_ID,
-                notification,
-                if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
-            )
-            startPolling()
+        val repo = GiantsRepository.get(this)
+        val enabled = runBlocking { repo.store.isLiveScoreEnabled() }
+        if (!enabled) {
+            stopSelf()
+            return START_NOT_STICKY
         }
+        val snap = runBlocking { repo.store.loadSnapshot() }
+        val mode = runBlocking { repo.store.liveDisplayMode() }
+        val game = NotificationHelper.liveNotificationGame(snap, allowUpcoming = true)
+        val notification = NotificationHelper.buildLiveNotification(
+            this,
+            game,
+            mode,
+            snap?.winProbSeries.orEmpty(),
+        )
+        ServiceCompat.startForeground(
+            this,
+            NotificationHelper.LIVE_NOTIFICATION_ID,
+            notification,
+            if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
+        )
+        startPolling()
         return START_STICKY
     }
 
@@ -69,7 +70,7 @@ class LiveScoreService : Service() {
                 }
                 val mode = repo.store.liveDisplayMode()
                 val snap = runCatching { repo.refreshSnapshot(force = true) }.getOrNull()
-                val game = snap?.lotteGame
+                val game = NotificationHelper.liveNotificationGame(snap, allowUpcoming = true)
                 val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
                 val live = NotificationHelper.buildLiveNotification(
                     this@LiveScoreService,
@@ -87,7 +88,11 @@ class LiveScoreService : Service() {
                 detector.process(this@LiveScoreService, game)
                 if (game?.status == GameStatus.ENDED) {
                     val st = runCatching { repo.fetchStandings() }.getOrDefault(emptyList())
-                    detector.processRace(this@LiveScoreService, st)
+                    detector.processRace(
+                        this@LiveScoreService,
+                        st,
+                        com.bossxor.lottegiants.domain.raceRelevantGames(snap),
+                    )
                 }
                 // 등말소는 매 폴링마다 — 다른 앱보다 빠르게
                 val moves = runCatching { repo.fetchRecentRosterMoves(2) }.getOrDefault(emptyList())
@@ -95,7 +100,20 @@ class LiveScoreService : Service() {
 
                 when (game?.status) {
                     GameStatus.LIVE -> delay(5_000L)
-                    GameStatus.BEFORE -> delay(20_000L)
+                    GameStatus.BEFORE -> {
+                        val today = com.bossxor.lottegiants.domain.kboToday().toString()
+                        if (game.gameDate == today || game.gameDate.isBlank()) {
+                            delay(20_000L)
+                        } else {
+                            ServiceCompat.stopForeground(
+                                this@LiveScoreService,
+                                ServiceCompat.STOP_FOREGROUND_DETACH,
+                            )
+                            nm.notify(NotificationHelper.LIVE_NOTIFICATION_ID, live)
+                            stopSelf()
+                            break
+                        }
+                    }
                     GameStatus.ENDED, GameStatus.CANCELED, null -> {
                         delay(3_000L)
                         // 서비스를 멈추면 알림도 같이 사라진다. 최종 스코어카드는 떼어 놓고
@@ -133,10 +151,33 @@ class LiveScoreService : Service() {
             context.stopService(Intent(context, LiveScoreService::class.java))
         }
 
-        /** 설정 변경 후 알림 즉시 반영 */
+        /** 설정 변경 후 알림 즉시 반영. 이미 떠 있으면 같은 ID로 덮어써서 예전 디자인이 깜빡이지 않게 한다. */
         fun restart(context: Context) {
-            stop(context)
             start(context)
+        }
+
+        /** `다시 표시`: 스냅샷을 새로 받은 뒤 점수 카드를 바로 올린다. */
+        suspend fun reshow(context: Context) {
+            val app = context.applicationContext
+            val repo = GiantsRepository.get(app)
+            repo.store.setLiveScoreEnabled(true)
+            NotificationHelper.createChannels(app)
+            val snap = runCatching { repo.refreshSnapshot(force = true) }.getOrNull()
+                ?: repo.store.loadSnapshot()
+            val savedMode = repo.store.liveDisplayMode()
+            val game = NotificationHelper.liveNotificationGame(snap, allowUpcoming = true)
+            // 다시 표시는 점수 카드(승률 게이지)를 보여 준다. 라이브 바 모드는 경기 중 폴링이 이어받으면 그때 바뀐다.
+            val n = NotificationHelper.buildLiveNotification(
+                app,
+                game,
+                LiveDisplayMode.FULL,
+                snap?.winProbSeries.orEmpty(),
+            )
+            val nm = app.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            nm.notify(NotificationHelper.LIVE_NOTIFICATION_ID, n)
+            if (savedMode == LiveDisplayMode.FULL || game?.status == GameStatus.LIVE) {
+                start(app)
+            }
         }
     }
 }

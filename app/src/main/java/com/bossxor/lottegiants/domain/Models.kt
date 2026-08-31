@@ -592,6 +592,20 @@ fun LotteGameInfo.focusName(): String =
 fun LotteGameInfo.isFocusLotte(): Boolean =
     focusTeamCode.isBlank() || focusTeamCode.equals(LOTTE_TEAM_CODE, ignoreCase = true)
 
+fun LotteGameInfo.toRaceMiniGame(): MiniGame = MiniGame(
+    gameId = gameId,
+    homeName = if (isHome) "롯데" else opponentName,
+    awayName = if (isHome) opponentName else "롯데",
+    homeScore = if (isHome) lotteScore else opponentScore,
+    awayScore = if (isHome) opponentScore else lotteScore,
+    status = status,
+    statusText = statusText,
+    gameDate = gameDate,
+    homeTeamCode = if (isHome) LOTTE_TEAM_CODE else opponentCode,
+    awayTeamCode = if (isHome) opponentCode else LOTTE_TEAM_CODE,
+    doubleHeaderNo = doubleHeaderNo,
+)
+
 /** 루타식 프리뷰 묶음 */
 @Serializable
 data class GamePreview(

@@ -360,7 +360,7 @@ fun SettingsScreen(
                         LiveDisplayMode.LOCK_NOW ->
                             "이닝 진행 바 알림. Now Bar·잠금화면 칩에 점수가 뜹니다."
                         LiveDisplayMode.FULL ->
-                            "팀 로고·점수 카드. 경기 전에는 시각·선발·구장, 중에는 루상·투수·타자, 끝나면 승·패. 카드는 Now Bar 칩으로 승격되지 않습니다."
+                            "팀 로고·점수 카드. 하단에 양 팀 승리 예측 게이지. 경기 전에는 시각·선발·구장, 중에는 루상·투수·타자, 끝나면 승·패. 카드는 Now Bar 칩으로 승격되지 않습니다."
                         LiveDisplayMode.STATUS_SCORE ->
                             "점수·이닝만 한 줄. 칩에는 점수가 뜹니다."
                     },
@@ -405,9 +405,7 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         scope.launch {
-                            store.setLiveScoreEnabled(true)
-                            NotificationHelper.createChannels(context)
-                            LiveScoreService.restart(context)
+                            LiveScoreService.reshow(context)
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),

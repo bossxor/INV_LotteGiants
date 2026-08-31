@@ -43,7 +43,11 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         }
         runCatching {
             val st = repo.fetchStandings()
-            detector.processRace(applicationContext, st)
+            detector.processRace(
+                applicationContext,
+                st,
+                com.bossxor.lottegiants.domain.raceRelevantGames(snap),
+            )
         }
 
         val todayGames = snap.todayLotteGames

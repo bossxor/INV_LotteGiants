@@ -144,10 +144,40 @@ class MagicNumberTest {
         val b = a.copy(magic = 11)
         val drop = raceChangeAlert(a, b)!!
         assertTrue(drop.first.contains("11"))
+        assertTrue(drop.second.contains("12 → 11"))
         val clinch = raceChangeAlert(b, b.copy(magic = 0))!!
         assertTrue(clinch.first.contains("확정"))
         assertNull(raceChangeAlert(null, a))
         assertNull(raceChangeAlert(a, a))
+    }
+
+    @Test
+    fun raceChangeAlertIncludesGameResultReason() {
+        val prev = RacePulse(5, "와일드카드", magic = 12, tragic = null, magicLabel = "와일드카드 매직넘버")
+        val now = prev.copy(magic = 11)
+        val standings = listOf(
+            team(LOTTE_TEAM_CODE, 5, 72, 58),
+            team("KT", 6, 68, 62),
+        )
+        val games = listOf(
+            mini("OB", "2026-08-30", home = true, status = GameStatus.ENDED, oppName = "두산")
+                .copy(homeScore = 5, awayScore = 3),
+            MiniGame(
+                gameId = "2026-08-30-KT",
+                homeName = "KT",
+                awayName = "키움",
+                homeScore = 2,
+                awayScore = 4,
+                status = GameStatus.ENDED,
+                statusText = "",
+                gameDate = "2026-08-30",
+                homeTeamCode = "KT",
+                awayTeamCode = "WO",
+            ),
+        )
+        val alert = raceChangeAlert(prev, now, standings, games)!!
+        assertTrue(alert.second.contains("롯데, 두산 5:3 승"))
+        assertTrue(alert.second.contains("KT, 키움 2:4 패"))
     }
 
     @Test
