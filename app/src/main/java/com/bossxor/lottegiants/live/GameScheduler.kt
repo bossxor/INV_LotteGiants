@@ -58,35 +58,35 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             cancelGameAlarms(applicationContext, g.gameId)
         }
 
+        val lead = repo.store.liveLeadMinutes()
         val hasLive = todayGames.any { it.status == GameStatus.LIVE } || game?.status == GameStatus.LIVE
         if (hasLive) {
             LiveScoreService.start(applicationContext)
         }
         val befores = todayGames.filter { it.status == GameStatus.BEFORE && !it.isCanceledGame() }
         if (befores.isNotEmpty()) {
-            befores.forEach { mini -> scheduleForMini(applicationContext, mini) }
-            val within90 = befores.any { mini ->
+            befores.forEach { mini -> scheduleForMini(applicationContext, mini, lead) }
+            val withinLead = befores.any { mini ->
                 val date = mini.gameDate.ifBlank { com.bossxor.lottegiants.domain.kboToday().toString() }
                 val start = parseGameMillis(date, mini.startTime) ?: return@any false
-                start - System.currentTimeMillis() in 0..(90 * 60_000L)
+                start - System.currentTimeMillis() in 0..(lead * 60_000L)
             }
-            if (within90) LiveScoreService.start(applicationContext)
+            if (withinLead) LiveScoreService.start(applicationContext)
         } else if (game?.status == GameStatus.BEFORE && !game.isCanceledGame()) {
-            scheduleExactStart(applicationContext, game.gameDate, game.startTime, game.gameId)
+            scheduleExactStart(applicationContext, game.gameDate, game.startTime, game.gameId, lead)
             schedulePregameReminder(
                 applicationContext, game.gameDate, game.startTime,
                 game.opponentName, game.stadium, game.lotteStartingPitcher, game.gameId,
             )
             val start = parseGameMillis(game.gameDate, game.startTime)
-            if (start != null && start - System.currentTimeMillis() in 0..(90 * 60_000L)) {
+            if (start != null && start - System.currentTimeMillis() in 0..(lead * 60_000L)) {
                 LiveScoreService.start(applicationContext)
             }
         } else if (!hasLive) {
             when {
                 game == null || game.status == GameStatus.ENDED || game.isCanceledGame() -> {
-                    LiveScoreService.stop(applicationContext)
                     snap.nextLotteGame?.takeIf { !it.isCanceledGame() }?.let { next ->
-                        scheduleExactStart(applicationContext, next.gameDate, next.startTime, next.gameId)
+                        scheduleExactStart(applicationContext, next.gameDate, next.startTime, next.gameId, lead)
                         schedulePregameReminder(
                             applicationContext, next.gameDate, next.startTime,
                             next.opponentName, next.stadium, next.lotteStartingPitcher, next.gameId,
@@ -112,10 +112,16 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             )
         }
 
-        fun scheduleExactStart(context: Context, date: String, time: String, gameId: String = "") {
+        fun scheduleExactStart(
+            context: Context,
+            date: String,
+            time: String,
+            gameId: String = "",
+            leadMinutes: Int = com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTES_DEFAULT,
+        ) {
             val trigger = parseGameMillis(date, time) ?: return
-            // 경기 90분 전부터 폴링 시작 → 라인업·취소·등말소를 다른 앱보다 먼저 잡음
-            val at = (trigger - 90 * 60_000L).coerceAtLeast(System.currentTimeMillis() + 5_000L)
+            val lead = com.bossxor.lottegiants.domain.clampLiveLeadMinutes(leadMinutes)
+            val at = (trigger - lead * 60_000L).coerceAtLeast(System.currentTimeMillis() + 5_000L)
             val am = context.getSystemService(AlarmManager::class.java)
             val intent = Intent(context, GameAlarmReceiver::class.java).setAction(ACTION_START_LIVE)
                 .putExtra("gameId", gameId)
@@ -178,7 +184,11 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             setAlarmSafe(am, at, pi)
         }
 
-        private fun scheduleForMini(context: Context, mini: MiniGame) {
+        private fun scheduleForMini(
+            context: Context,
+            mini: MiniGame,
+            leadMinutes: Int = com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTES_DEFAULT,
+        ) {
             if (mini.isCanceledGame()) {
                 cancelGameAlarms(context, mini.gameId)
                 return
@@ -188,7 +198,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             val opponent = if (lotteHome) mini.awayName else mini.homeName
             val pitcher = if (lotteHome) mini.homeStarter else mini.awayStarter
             val date = mini.gameDate.ifBlank { com.bossxor.lottegiants.domain.kboToday().toString() }
-            scheduleExactStart(context, date, mini.startTime, mini.gameId)
+            scheduleExactStart(context, date, mini.startTime, mini.gameId, leadMinutes)
             schedulePregameReminder(
                 context, date, mini.startTime, opponent, mini.stadium, pitcher, mini.gameId,
             )
@@ -330,6 +340,7 @@ class GameAlarmReceiver : BroadcastReceiver() {
             }
             GameSchedulerWorker.ACTION_HIDE_LIVE -> {
                 LiveScoreService.stop(context)
+                NotificationHelper.cancelLive(context)
             }
             GameSchedulerWorker.ACTION_FAST_POLL -> {
                 val gameId = intent?.getStringExtra("gameId").orEmpty()

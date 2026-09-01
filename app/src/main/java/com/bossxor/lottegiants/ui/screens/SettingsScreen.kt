@@ -63,8 +63,13 @@ import com.bossxor.lottegiants.data.UpdateCheckResult
 import com.bossxor.lottegiants.data.UpdateChecker
 import com.bossxor.lottegiants.domain.AlertPreset
 import com.bossxor.lottegiants.domain.KBO_ZONE
+import com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTES_MAX
+import com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTES_MIN
+import com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTES_STEP
 import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.ThemeMode
+import com.bossxor.lottegiants.domain.clampLiveLeadMinutes
+import com.bossxor.lottegiants.domain.liveLeadLabel
 import com.bossxor.lottegiants.live.LiveScoreService
 import com.bossxor.lottegiants.live.NotificationHelper
 import com.bossxor.lottegiants.widget.WidgetUpdater
@@ -364,6 +369,40 @@ fun SettingsScreen(
                         LiveDisplayMode.STATUS_SCORE ->
                             "점수·이닝만 한 줄. 칩에는 점수가 뜹니다."
                     },
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(14.dp))
+                val liveLead by store.liveLeadMinutesFlow.collectAsState(initial = 120)
+                Text("Now Bar 표시 시작", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "경기 시작 ${liveLeadLabel(liveLead)}부터 알림이 뜹니다. 경기 중에는 항상 표시되고, 끝나면 밀어 지울 수 있습니다.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    liveLeadLabel(liveLead),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                )
+                Slider(
+                    value = liveLead.toFloat(),
+                    onValueChange = { raw ->
+                        scope.launch {
+                            store.setLiveLeadMinutes(clampLiveLeadMinutes(raw.toInt()))
+                        }
+                    },
+                    onValueChangeFinished = {
+                        scope.launch {
+                            if (store.isLiveScoreEnabled()) LiveScoreService.restart(context)
+                        }
+                    },
+                    valueRange = LIVE_LEAD_MINUTES_MIN.toFloat()..LIVE_LEAD_MINUTES_MAX.toFloat(),
+                    steps = (LIVE_LEAD_MINUTES_MAX - LIVE_LEAD_MINUTES_MIN) / LIVE_LEAD_MINUTES_STEP - 1,
+                )
+                Text(
+                    "30분 단위 · 최소 30분 · 최대 6시간",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

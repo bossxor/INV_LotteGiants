@@ -26,6 +26,8 @@ import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.WinProbPoint
+import com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTES_DEFAULT
+import com.bossxor.lottegiants.domain.shouldPostLiveNotification
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.suspendLabel
 import com.bossxor.lottegiants.domain.estimateLotteWinProb
@@ -109,18 +111,33 @@ object NotificationHelper {
 
     /**
      * 실시간 스코어 알림에 올릴 경기.
-     * 오늘 롯데 경기(라이브·예정·종료·취소)를 우선하고, 없으면 다음 경기를 쓴다.
-     * [allowUpcoming]이 false면 오늘 날짜만 (앱 시작 시 어제 카드가 다시 뜨는 걸 막음).
+     * 경기 중이면 그 경기. 오늘 종료·취소는 결과 카드. 예정은 시작 [leadMinutes] 전부터만.
+     * 다음 경기(내일)는 창에 들어왔을 때만.
      */
-    fun liveNotificationGame(snap: LiveSnapshot?, allowUpcoming: Boolean = true): LotteGameInfo? {
+    fun liveNotificationGame(
+        snap: LiveSnapshot?,
+        allowUpcoming: Boolean = true,
+        leadMinutes: Int = LIVE_LEAD_MINUTES_DEFAULT,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): LotteGameInfo? {
         if (snap == null) return null
         val today = kboToday().toString()
         val g = snap.lotteGame
         if (g != null && g.status == GameStatus.LIVE) return g
-        if (g != null && (g.gameDate == today || g.gameDate.isBlank())) return g
-        if (allowUpcoming) snap.nextLotteGame?.let { return it }
+        if (g != null && (g.gameDate == today || g.gameDate.isBlank())) {
+            if (g.status == GameStatus.ENDED || g.status == GameStatus.CANCELED) return g
+            if (shouldPostLiveNotification(g, leadMinutes, nowMillis)) return g
+            return null
+        }
+        if (allowUpcoming) {
+            snap.nextLotteGame?.takeIf { shouldPostLiveNotification(it, leadMinutes, nowMillis) }?.let { return it }
+        }
         snap.lastLotteGame?.takeIf { it.gameDate == today }?.let { return it }
-        return if (allowUpcoming) g else g?.takeIf { it.gameDate == today }
+        return null
+    }
+
+    fun cancelLive(context: Context) {
+        context.getSystemService(NotificationManager::class.java).cancel(LIVE_NOTIFICATION_ID)
     }
 
     fun buildLiveNotification(

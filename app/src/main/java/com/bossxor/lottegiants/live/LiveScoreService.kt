@@ -10,6 +10,7 @@ import androidx.core.app.ServiceCompat
 import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LiveDisplayMode
+import com.bossxor.lottegiants.domain.shouldPostLiveNotification
 import com.bossxor.lottegiants.widget.WidgetUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,7 +43,8 @@ class LiveScoreService : Service() {
         }
         val snap = runBlocking { repo.store.loadSnapshot() }
         val mode = runBlocking { repo.store.liveDisplayMode() }
-        val game = NotificationHelper.liveNotificationGame(snap, allowUpcoming = true)
+        val lead = runBlocking { repo.store.liveLeadMinutes() }
+        val game = NotificationHelper.liveNotificationGame(snap, allowUpcoming = true, leadMinutes = lead)
         val notification = NotificationHelper.buildLiveNotification(
             this,
             game,
@@ -55,6 +57,14 @@ class LiveScoreService : Service() {
             notification,
             if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
         )
+        if (!shouldPostLiveNotification(game, lead)) {
+            hideLiveAndStop(remove = true)
+            return START_NOT_STICKY
+        }
+        if (game?.status == GameStatus.ENDED || game?.status == GameStatus.CANCELED) {
+            detachFinished(notification)
+            return START_NOT_STICKY
+        }
         startPolling()
         return START_STICKY
     }
@@ -69,9 +79,14 @@ class LiveScoreService : Service() {
                     break
                 }
                 val mode = repo.store.liveDisplayMode()
+                val lead = repo.store.liveLeadMinutes()
                 val snap = runCatching { repo.refreshSnapshot(force = false) }.getOrNull()
-                val game = NotificationHelper.liveNotificationGame(snap, allowUpcoming = true)
+                val game = NotificationHelper.liveNotificationGame(snap, allowUpcoming = true, leadMinutes = lead)
                 val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+                if (!shouldPostLiveNotification(game, lead)) {
+                    hideLiveAndStop(remove = true)
+                    break
+                }
                 val live = NotificationHelper.buildLiveNotification(
                     this@LiveScoreService,
                     game,
@@ -101,36 +116,37 @@ class LiveScoreService : Service() {
                 when (game?.status) {
                     GameStatus.LIVE -> delay(5_000L)
                     GameStatus.BEFORE -> {
-                        val today = com.bossxor.lottegiants.domain.kboToday().toString()
-                        if (game.gameDate == today || game.gameDate.isBlank()) {
+                        if (shouldPostLiveNotification(game, lead)) {
                             delay(20_000L)
                         } else {
-                            ServiceCompat.stopForeground(
-                                this@LiveScoreService,
-                                ServiceCompat.STOP_FOREGROUND_DETACH,
-                            )
-                            nm.notify(NotificationHelper.LIVE_NOTIFICATION_ID, live)
-                            stopSelf()
+                            hideLiveAndStop(remove = true)
                             break
                         }
                     }
                     GameStatus.ENDED, GameStatus.CANCELED, null -> {
                         delay(3_000L)
-                        // 서비스를 멈추면 알림도 같이 사라진다. 최종 스코어카드는 떼어 놓고
-                        // 한 번 더 올려야 NO_CLEAR가 빠져 손으로 지울 수 있다. 만료는 setTimeoutAfter.
-                        if (game != null) {
-                            ServiceCompat.stopForeground(
-                                this@LiveScoreService,
-                                ServiceCompat.STOP_FOREGROUND_DETACH,
-                            )
-                            nm.notify(NotificationHelper.LIVE_NOTIFICATION_ID, live)
-                        }
-                        stopSelf()
+                        detachFinished(live)
                         break
                     }
                 }
             }
         }
+    }
+
+    private fun detachFinished(notification: android.app.Notification) {
+        val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
+        nm.notify(NotificationHelper.LIVE_NOTIFICATION_ID, notification)
+        stopSelf()
+    }
+
+    private fun hideLiveAndStop(remove: Boolean) {
+        ServiceCompat.stopForeground(
+            this,
+            if (remove) ServiceCompat.STOP_FOREGROUND_REMOVE else ServiceCompat.STOP_FOREGROUND_DETACH,
+        )
+        if (remove) NotificationHelper.cancelLive(this)
+        stopSelf()
     }
 
     override fun onDestroy() {
@@ -165,8 +181,12 @@ class LiveScoreService : Service() {
             val snap = runCatching { repo.refreshSnapshot(force = true) }.getOrNull()
                 ?: repo.store.loadSnapshot()
             val savedMode = repo.store.liveDisplayMode()
-            val game = NotificationHelper.liveNotificationGame(snap, allowUpcoming = true)
-            // 다시 표시는 점수 카드(승률 게이지)를 보여 준다. 라이브 바 모드는 경기 중 폴링이 이어받으면 그때 바뀐다.
+            val lead = repo.store.liveLeadMinutes()
+            val game = NotificationHelper.liveNotificationGame(snap, allowUpcoming = true, leadMinutes = lead)
+            if (!shouldPostLiveNotification(game, lead)) {
+                NotificationHelper.cancelLive(app)
+                return
+            }
             val n = NotificationHelper.buildLiveNotification(
                 app,
                 game,

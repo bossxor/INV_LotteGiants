@@ -8,6 +8,7 @@ import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.IMAGE_USER_AGENT
 import com.bossxor.lottegiants.domain.imageRefererForHost
+import com.bossxor.lottegiants.domain.shouldPostLiveNotification
 import com.bossxor.lottegiants.live.EventDetector
 import com.bossxor.lottegiants.live.GameSchedulerWorker
 import com.bossxor.lottegiants.live.LiveScoreService
@@ -42,10 +43,13 @@ class GiantsApp : Application(), ImageLoaderFactory {
                     detector.processRosterMoves(this@GiantsApp, repo.fetchRecentRosterMoves(3))
                 }
                 if (repo.store.isLiveScoreEnabled()) {
-                    val game = NotificationHelper.liveNotificationGame(snap, allowUpcoming = false)
-                    // 어제 끝난 경기를 다시 띄우면 다음날 새벽까지 스코어카드가 남는다. 오늘 경기만.
-                    val showCard = game != null && game.status != GameStatus.CANCELED
-                    if (game != null && showCard) {
+                    val lead = repo.store.liveLeadMinutes()
+                    val game = NotificationHelper.liveNotificationGame(
+                        snap,
+                        allowUpcoming = false,
+                        leadMinutes = lead,
+                    )
+                    if (shouldPostLiveNotification(game, lead)) {
                         val n = NotificationHelper.buildLiveNotification(
                             this@GiantsApp,
                             game,
@@ -54,9 +58,9 @@ class GiantsApp : Application(), ImageLoaderFactory {
                         )
                         getSystemService(NotificationManager::class.java)
                             .notify(NotificationHelper.LIVE_NOTIFICATION_ID, n)
-                    }
-                    if (game?.status == GameStatus.LIVE) {
-                        LiveScoreService.start(this@GiantsApp)
+                        if (game?.status == GameStatus.LIVE || game?.status == GameStatus.BEFORE) {
+                            LiveScoreService.start(this@GiantsApp)
+                        }
                     }
                 }
             }

@@ -325,6 +325,52 @@ enum class LiveDisplayMode {
     LOCK_NOW,
 }
 
+const val LIVE_LEAD_MINUTES_MIN = 30
+const val LIVE_LEAD_MINUTES_MAX = 360
+const val LIVE_LEAD_MINUTES_STEP = 30
+const val LIVE_LEAD_MINUTES_DEFAULT = 120
+
+fun clampLiveLeadMinutes(raw: Int): Int {
+    val stepped = (raw / LIVE_LEAD_MINUTES_STEP) * LIVE_LEAD_MINUTES_STEP
+    return stepped.coerceIn(LIVE_LEAD_MINUTES_MIN, LIVE_LEAD_MINUTES_MAX)
+}
+
+fun liveLeadLabel(minutes: Int): String {
+    val m = clampLiveLeadMinutes(minutes)
+    val h = m / 60
+    val rem = m % 60
+    return when {
+        h == 0 -> "${rem}분 전"
+        rem == 0 -> "${h}시간 전"
+        else -> "${h}시간 ${rem}분 전"
+    }
+}
+
+/** 경기 시작 [leadMinutes] 전부터면 true. 시각을 모르면 하루 종일 뜨지 않게 false. */
+fun isWithinLiveLeadWindow(
+    date: String,
+    startTime: String,
+    leadMinutes: Int,
+    nowMillis: Long = System.currentTimeMillis(),
+): Boolean {
+    val start = parseKboStartMillis(date, startTime) ?: return false
+    val leadMs = clampLiveLeadMinutes(leadMinutes) * 60_000L
+    return nowMillis >= start - leadMs
+}
+
+fun shouldPostLiveNotification(
+    game: LotteGameInfo?,
+    leadMinutes: Int,
+    nowMillis: Long = System.currentTimeMillis(),
+): Boolean {
+    if (game == null) return false
+    return when (game.status) {
+        GameStatus.LIVE -> true
+        GameStatus.ENDED, GameStatus.CANCELED -> true
+        GameStatus.BEFORE -> isWithinLiveLeadWindow(game.gameDate, game.startTime, leadMinutes, nowMillis)
+    }
+}
+
 @Serializable
 data class LeaderPlayer(
     val rank: Int = 0,

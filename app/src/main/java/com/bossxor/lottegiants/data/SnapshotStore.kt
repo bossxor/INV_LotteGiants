@@ -11,8 +11,10 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.bossxor.lottegiants.domain.AlertPreset
 import com.bossxor.lottegiants.domain.FavoritePlayer
 import com.bossxor.lottegiants.domain.LiveDisplayMode
+import com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTES_DEFAULT
 import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.ThemeMode
+import com.bossxor.lottegiants.domain.clampLiveLeadMinutes
 import com.bossxor.lottegiants.domain.typesForPreset
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -88,6 +90,16 @@ class SnapshotStore(private val context: Context) {
 
     suspend fun setLiveDisplayMode(mode: LiveDisplayMode) {
         context.dataStore.edit { it[KEY_LIVE_MODE] = mode.name }
+    }
+
+    val liveLeadMinutesFlow: Flow<Int> = context.dataStore.data.map { prefs ->
+        clampLiveLeadMinutes(prefs[KEY_LIVE_LEAD_MINUTES] ?: LIVE_LEAD_MINUTES_DEFAULT)
+    }
+
+    suspend fun liveLeadMinutes(): Int = liveLeadMinutesFlow.first()
+
+    suspend fun setLiveLeadMinutes(minutes: Int) {
+        context.dataStore.edit { it[KEY_LIVE_LEAD_MINUTES] = clampLiveLeadMinutes(minutes) }
     }
 
     /** v1.3.40: ProgressStyle 라이브 바 → 점수판 카드로 한 번만 전환 */
@@ -363,6 +375,7 @@ class SnapshotStore(private val context: Context) {
         private val KEY_THEME = stringPreferencesKey("theme_mode")
         private val KEY_LIVE_ENABLED = booleanPreferencesKey("live_score_display_enabled")
         private val KEY_LIVE_MODE = stringPreferencesKey("live_display_mode")
+        private val KEY_LIVE_LEAD_MINUTES = intPreferencesKey("live_lead_minutes")
         private val KEY_SCORECARD_MIGRATED = booleanPreferencesKey("scorecard_notif_migrated_140")
         private val KEY_ONBOARDING = booleanPreferencesKey("onboarding_done")
         private val KEY_NOWBAR_GUIDE = booleanPreferencesKey("nowbar_guide_133")
