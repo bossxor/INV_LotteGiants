@@ -9,7 +9,7 @@
         android:fillColor="#00000000"
         android:pathData="M24,5.5 L29.5,11 L24,16.5 L18.5,11 Z"
         android:strokeWidth="1.8"
-        android:strokeColor="#66AAB4CB" />
+        android:strokeColor="#8A9099" />
     <!-- 3루 occupied -->
     <path
         android:fillColor="#CCFF00"

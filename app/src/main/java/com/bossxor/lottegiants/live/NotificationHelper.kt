@@ -471,6 +471,14 @@ object NotificationHelper {
         else -> game.inningLabel.ifBlank { "LIVE" }
     }
 
+    private fun inningPillBackground(game: LotteGameInfo): Int = when {
+        game.isSuspended -> R.drawable.notif_inning_pill_gold
+        game.status == GameStatus.LIVE -> R.drawable.notif_inning_pill
+        game.status == GameStatus.CANCELED -> R.drawable.notif_inning_pill_cancel
+        game.status == GameStatus.ENDED -> R.drawable.notif_inning_pill_muted
+        else -> R.drawable.notif_inning_pill_gold
+    }
+
     private fun awayStarter(game: LotteGameInfo): String =
         if (game.isHome) game.opponentStartingPitcher else game.lotteStartingPitcher
 
@@ -484,6 +492,7 @@ object NotificationHelper {
         rv.setTextViewText(R.id.notif_c_away_score, "${side.awayScore}")
         rv.setTextViewText(R.id.notif_c_home_score, "${side.homeScore}")
         rv.setTextViewText(R.id.notif_c_inning, statusPillText(game))
+        rv.setInt(R.id.notif_c_inning, "setBackgroundResource", inningPillBackground(game))
 
         val live = game.status == GameStatus.LIVE && !game.isSuspended
         val before = game.status == GameStatus.BEFORE
@@ -543,9 +552,9 @@ object NotificationHelper {
         rv.setTextViewText(R.id.notif_away_score, "${side.awayScore}")
         rv.setTextViewText(R.id.notif_home_score, "${side.homeScore}")
         rv.setTextViewText(R.id.notif_inning, statusPillText(game))
+        rv.setInt(R.id.notif_inning, "setBackgroundResource", inningPillBackground(game))
         // 루상·BSO는 진행 중일 때만 뜻이 있다. 끝난 경기에 빈 다이아몬드를 두면 주자가 있는 것처럼 읽힌다.
         val showBases = game.status == GameStatus.LIVE && !game.isSuspended
-        rv.setViewVisibility(R.id.notif_bases, if (showBases) View.VISIBLE else View.GONE)
         rv.setViewVisibility(R.id.notif_bso_row, if (showBases) View.VISIBLE else View.GONE)
         if (showBases) {
             rv.setImageViewResource(

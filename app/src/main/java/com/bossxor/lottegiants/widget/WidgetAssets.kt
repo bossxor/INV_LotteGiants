@@ -221,12 +221,14 @@ object WidgetAssets {
         val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
         val radius = height / 2f
-        val track = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFD0D4DC.toInt() }
-        canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), radius, radius, track)
+        val clip = Path().apply {
+            addRoundRect(0f, 0f, width.toFloat(), height.toFloat(), radius, radius, Path.Direction.CW)
+        }
+        canvas.clipPath(clip)
         val leftW = (width * leftProb.coerceIn(0.02f, 0.98f)).toInt().coerceIn(2, width - 2)
         val leftPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = leftColor }
         val rightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = rightColor }
-        val divider = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() }
+        val divider = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x66FFFFFF.toInt() }
         canvas.drawRect(0f, 0f, leftW.toFloat(), height.toFloat(), leftPaint)
         canvas.drawRect(leftW.toFloat(), 0f, width.toFloat(), height.toFloat(), rightPaint)
         canvas.drawRect((leftW - 1).toFloat(), 0f, (leftW + 1).toFloat(), height.toFloat(), divider)
