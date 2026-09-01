@@ -1885,7 +1885,7 @@ class GiantsRepository private constructor(context: Context) {
         private const val STANDINGS_TTL_MS = 5 * 60_000L
         private const val KBO_TODAY_TTL_MS = 30_000L
         private const val KBO_PAST_TTL_MS = 10 * 60_000L
-        private const val SNAPSHOT_FRESH_MS = 3_000L
+        private const val SNAPSHOT_FRESH_MS = 8_000L
 
         @Volatile
         private var instance: GiantsRepository? = null

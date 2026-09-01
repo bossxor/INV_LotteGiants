@@ -69,7 +69,7 @@ class LiveScoreService : Service() {
                     break
                 }
                 val mode = repo.store.liveDisplayMode()
-                val snap = runCatching { repo.refreshSnapshot(force = true) }.getOrNull()
+                val snap = runCatching { repo.refreshSnapshot(force = false) }.getOrNull()
                 val game = NotificationHelper.liveNotificationGame(snap, allowUpcoming = true)
                 val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
                 val live = NotificationHelper.buildLiveNotification(
