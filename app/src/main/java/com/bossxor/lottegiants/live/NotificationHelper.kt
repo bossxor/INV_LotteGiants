@@ -18,6 +18,7 @@ import androidx.core.graphics.drawable.IconCompat
 import com.bossxor.lottegiants.MainActivity
 import com.bossxor.lottegiants.R
 import com.bossxor.lottegiants.data.NotificationType
+import com.bossxor.lottegiants.data.destination
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LOTTE_LOGO_URL
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
@@ -130,9 +131,7 @@ object NotificationHelper {
     ): Notification {
         val intent = PendingIntent.getActivity(
             context, 0,
-            Intent(context, MainActivity::class.java)
-                .putExtra(MainActivity.EXTRA_OPEN_TAB, "live")
-                .putExtra(MainActivity.EXTRA_GAME_ID, game?.gameId.orEmpty()),
+            openAppIntent(context, "live", game?.gameId.orEmpty()),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
@@ -645,6 +644,40 @@ object NotificationHelper {
         return rv
     }
 
+    fun openAppIntent(
+        context: Context,
+        openTab: String = "live",
+        gameId: String = "",
+        detailTab: String? = null,
+    ): Intent {
+        val uri = when (openTab.lowercase()) {
+            "entry", "roster" -> Uri.parse("sajik://entry")
+            "standings", "standing" -> Uri.parse("sajik://standings")
+            else -> {
+                val id = gameId.trim()
+                val tab = detailTab?.trim().orEmpty()
+                when {
+                    id.isNotBlank() && tab.isNotBlank() -> Uri.parse("sajik://game/$id?tab=$tab")
+                    id.isNotBlank() -> Uri.parse("sajik://game/$id")
+                    else -> Uri.parse("sajik://live")
+                }
+            }
+        }
+        return Intent(context, MainActivity::class.java)
+            .setAction(Intent.ACTION_VIEW)
+            .setData(uri)
+            .putExtra(MainActivity.EXTRA_OPEN_TAB, openTab)
+            .putExtra(MainActivity.EXTRA_GAME_ID, gameId)
+            .apply {
+                if (!detailTab.isNullOrBlank()) putExtra(MainActivity.EXTRA_DETAIL_TAB, detailTab)
+            }
+            .addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP,
+            )
+    }
+
     fun notifyEvent(
         context: Context,
         type: NotificationType,
@@ -675,30 +708,13 @@ object NotificationHelper {
             -> CHANNEL_FAVORITE
             NotificationType.RACE_NUMBER -> CHANNEL_RACE
         }
-        val openTab = when (type) {
-            NotificationType.ROSTER, NotificationType.FAVORITE_ROSTER -> "entry"
-            NotificationType.RACE_NUMBER -> "standings"
-            else -> "live"
-        }
-        val tab = detailTab ?: when (type) {
-            NotificationType.SCORE, NotificationType.HOMERUN,
-            NotificationType.CONCEDING, NotificationType.LEAD_CHANGE,
-            NotificationType.PITCHER_CHANGE, NotificationType.FAVORITE_PITCHING,
-            -> "relay"
-            else -> null
-        }
+        val dest = type.destination()
+        val openTab = dest.first
+        val tab = detailTab ?: dest.second
         val content = PendingIntent.getActivity(
             context,
             id,
-            Intent(context, MainActivity::class.java)
-                .putExtra(MainActivity.EXTRA_OPEN_TAB, openTab)
-                .putExtra(MainActivity.EXTRA_GAME_ID, gameId)
-                .apply { if (!tab.isNullOrBlank()) putExtra(MainActivity.EXTRA_DETAIL_TAB, tab) }
-                .addFlags(
-                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP,
-                ),
+            openAppIntent(context, openTab, gameId, tab),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val n = NotificationCompat.Builder(context, channel)

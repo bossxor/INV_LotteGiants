@@ -342,22 +342,44 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         applyOpenIntent(intent)
-        openTabNonce.intValue++
     }
 
     private fun applyOpenIntent(intent: Intent?) {
-        openTabExtra.value = intent?.getStringExtra(EXTRA_OPEN_TAB)
-        openGameIdExtra.value = intent?.getStringExtra(EXTRA_GAME_ID)
-        openDetailTabExtra.value = intent?.getStringExtra(EXTRA_DETAIL_TAB)
-        val data = intent?.data ?: return
-        if (data.scheme == "sajik" && data.host == "game") {
-            val id = data.pathSegments.firstOrNull().orEmpty()
-            if (id.isNotBlank()) {
-                openGameIdExtra.value = id
-                openTabExtra.value = "live"
-                openDetailTabExtra.value = data.getQueryParameter("tab") ?: "relay"
+        var tab = intent?.getStringExtra(EXTRA_OPEN_TAB)
+        var gameId = intent?.getStringExtra(EXTRA_GAME_ID)
+        var detail = intent?.getStringExtra(EXTRA_DETAIL_TAB)
+        val data = intent?.data
+        if (data?.scheme == "sajik") {
+            when (data.host) {
+                "entry", "roster" -> {
+                    tab = "entry"
+                    gameId = ""
+                    detail = null
+                }
+                "standings", "standing" -> {
+                    tab = "standings"
+                    gameId = ""
+                    detail = null
+                }
+                "game" -> {
+                    tab = "live"
+                    val id = data.pathSegments.firstOrNull().orEmpty()
+                    if (id.isNotBlank()) gameId = id
+                    detail = data.getQueryParameter("tab") ?: detail
+                }
+                "live" -> {
+                    tab = tab ?: "live"
+                }
             }
         }
+        openTabExtra.value = tab
+        openGameIdExtra.value = gameId
+        openDetailTabExtra.value = detail
+        val meaningful = !tab.isNullOrBlank() ||
+            !gameId.isNullOrBlank() ||
+            !detail.isNullOrBlank() ||
+            data?.scheme == "sajik"
+        if (meaningful) openTabNonce.intValue++
     }
 
     private fun requestNotifIfNeeded() {
@@ -471,19 +493,17 @@ private fun AppScaffold(
         }
     }
     LaunchedEffect(initialTab) { tab = initialTab }
-    LaunchedEffect(openEntry, openEntryNonce) {
+    LaunchedEffect(openEntryNonce) {
+        if (openEntryNonce == 0) return@LaunchedEffect
         if (openEntry) {
             overlay = Overlay.EntryBoard
             onOpenEntrySmart()
+            return@LaunchedEffect
         }
-    }
-    LaunchedEffect(openGameId, openEntryNonce) {
+        overlay = Overlay.None
+        tab = initialTab
         val id = openGameId?.trim().orEmpty()
-        if (id.isNotBlank()) {
-            tab = 0
-            overlay = Overlay.None
-            onOpenGame(id)
-        }
+        if (id.isNotBlank()) onOpenGame(id)
     }
 
     BackHandler {
@@ -700,6 +720,7 @@ private fun AppScaffold(
                         onOpenGame = onOpenGame,
                         onBackToLotte = onBackToLotte,
                         initialDetailTab = openDetailTab,
+                        focusNonce = openEntryNonce,
                     )
                     1 -> ResultsScreen(
                         selectedDate = selectedDate,

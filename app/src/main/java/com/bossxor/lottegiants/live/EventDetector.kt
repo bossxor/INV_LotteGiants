@@ -93,10 +93,11 @@ class EventDetector(private val store: SnapshotStore) {
         val prevStatus = lastStatus
         if (prevStatus != null && prevStatus != game.status) {
             when (game.status) {
-                GameStatus.LIVE -> maybeNotify(
-                    context, NotificationType.GAME_START, 2001,
-                    "경기 시작!", "${game.opponentName}전 시작 · ${game.stadium}"
-                )
+                GameStatus.LIVE ->             maybeNotify(
+                context, NotificationType.GAME_START, 2001,
+                "경기 시작!", "${game.opponentName}전 시작 · ${game.stadium}",
+                gameId = game.gameId,
+            )
                 GameStatus.ENDED -> notifyEnded(context, game)
                 GameStatus.CANCELED -> notifyCanceled(context, game)
                 else -> {}
@@ -126,7 +127,8 @@ class EventDetector(private val store: SnapshotStore) {
                 ?.ifBlank { game.currentBatterName } ?: game.currentBatterName
             maybeNotify(
                 context, NotificationType.FAVORITE_AT_BAT, 2711,
-                "즐겨찾기 타석", "$favName · ${game.inningLabel}"
+                "즐겨찾기 타석", "$favName · ${game.inningLabel}",
+                gameId = game.gameId, detailTab = "relay",
             )
         }
         if (batterCode.isNotBlank()) lastFavoriteBatterCode = batterCode
@@ -221,7 +223,8 @@ class EventDetector(private val store: SnapshotStore) {
             if (game.out == 0 || game.inning != lastInning) {
                 maybeNotify(
                     context, NotificationType.INNING_CHANGE, 2501,
-                    game.inningLabel, "중간 스코어 롯데 ${game.lotteScore}:${game.opponentScore}"
+                    game.inningLabel, "중간 스코어 롯데 ${game.lotteScore}:${game.opponentScore}",
+                    gameId = game.gameId,
                 )
             }
         }
@@ -232,7 +235,8 @@ class EventDetector(private val store: SnapshotStore) {
         ) {
             maybeNotify(
                 context, NotificationType.EIGHTH_INNING, 2510,
-                "8회말!", "롯데 ${game.lotteScore}:${game.opponentScore} · ${game.opponentName}"
+                "8회말!", "롯데 ${game.lotteScore}:${game.opponentScore} · ${game.opponentName}",
+                gameId = game.gameId,
             )
             eighthNotifiedFor = "${game.gameId}-8b"
         }
@@ -241,7 +245,8 @@ class EventDetector(private val store: SnapshotStore) {
         if (game.inning >= 10 && extraNotifiedFor != game.gameId) {
             maybeNotify(
                 context, NotificationType.EXTRA_INNINGS, 2520,
-                "연장 시작!", "${game.inningLabel} · ${game.lotteScore}:${game.opponentScore}"
+                "연장 시작!", "${game.inningLabel} · ${game.lotteScore}:${game.opponentScore}",
+                gameId = game.gameId,
             )
             extraNotifiedFor = game.gameId
         }
@@ -408,11 +413,13 @@ class EventDetector(private val store: SnapshotStore) {
             maybeNotify(
                 context, NotificationType.LINEUP, ID_LINEUP_FULL,
                 "선발 라인업 등록", "$matchup\n$pitchers\n$lines",
+                gameId = game.gameId, detailTab = "lineup",
             )
         } else {
             maybeNotify(
                 context, NotificationType.LINEUP, ID_LINEUP_FLAG,
                 "라인업 발표", "$matchup\n$pitchers",
+                gameId = game.gameId, detailTab = "lineup",
             )
         }
         lineupNotifiedState = key
@@ -430,7 +437,8 @@ class EventDetector(private val store: SnapshotStore) {
         }
         maybeNotify(
             context, NotificationType.GAME_END, 2002,
-            result, "최종 ${game.lotteScore}:${game.opponentScore} vs ${game.opponentName}"
+            result, "최종 ${game.lotteScore}:${game.opponentScore} vs ${game.opponentName}",
+            gameId = game.gameId,
         )
         store.setNotifiedEndGameId(game.gameId)
     }
@@ -448,7 +456,7 @@ class EventDetector(private val store: SnapshotStore) {
                 append(game.stadium)
             }
         }
-        maybeNotify(context, NotificationType.CANCELED, 2003, title, text)
+        maybeNotify(context, NotificationType.CANCELED, 2003, title, text, gameId = game.gameId)
         store.setNotifiedCancelGameId(game.gameId)
         GameSchedulerWorker.cancelGameAlarms(context, game.gameId)
     }

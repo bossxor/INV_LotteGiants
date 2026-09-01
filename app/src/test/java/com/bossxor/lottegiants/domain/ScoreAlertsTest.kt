@@ -1,5 +1,7 @@
 package com.bossxor.lottegiants.domain
 
+import com.bossxor.lottegiants.data.NotificationType
+import com.bossxor.lottegiants.data.destination
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -119,6 +121,18 @@ class ScoreAlertsTest {
         assertEquals(3, detailTabIndex("relay"))
         assertEquals(3, detailTabIndex("중계"))
         assertEquals(2, detailTabIndex("요약"))
+        assertEquals(1, detailTabIndex("lineup"))
         assertEquals(0, detailTabIndex(null))
+    }
+
+    @Test
+    fun notificationTypesOpenTheMatchingScreen() {
+        assertEquals("live" to "relay", NotificationType.SCORE.destination())
+        assertEquals("live" to "lineup", NotificationType.LINEUP.destination())
+        assertEquals("entry" to null, NotificationType.ROSTER.destination())
+        assertEquals("entry" to null, NotificationType.FAVORITE_ROSTER.destination())
+        assertEquals("standings" to null, NotificationType.RACE_NUMBER.destination())
+        assertEquals("live" to "relay", NotificationType.FAVORITE_AT_BAT.destination())
+        assertEquals("live" to null, NotificationType.GAME_START.destination())
     }
 }

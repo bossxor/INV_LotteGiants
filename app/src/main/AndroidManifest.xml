@@ -36,6 +36,9 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="sajik" android:host="game" />
+                <data android:scheme="sajik" android:host="entry" />
+                <data android:scheme="sajik" android:host="standings" />
+                <data android:scheme="sajik" android:host="live" />
             </intent-filter>
         </activity>
 

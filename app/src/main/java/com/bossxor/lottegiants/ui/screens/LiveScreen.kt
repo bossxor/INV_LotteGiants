@@ -125,12 +125,10 @@ fun LiveScreen(
     onOpenGame: (String) -> Unit = {},
     onBackToLotte: () -> Unit = {},
     initialDetailTab: String? = null,
+    focusNonce: Int = 0,
 ) {
     var selectedTab by remember { mutableIntStateOf(detailTabIndex(initialDetailTab)) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(initialDetailTab) {
-        selectedTab = detailTabIndex(initialDetailTab)
-    }
     val listState = rememberLazyListState()
     // 탭 내용이 짧아도 한 화면을 채우게 해서, 어떤 탭에서든 스크롤로 히어로를 접을 수 있게 한다.
     val viewportPx by remember {
@@ -158,6 +156,15 @@ fun LiveScreen(
     val showHero = viewingOther || snapshot?.lotteGame != null || snapshot?.nextLotteGame != null
     val showSpinner = (loading && snapshot == null && viewingGame == null) ||
         (viewingLoading && viewingGame == null)
+
+    LaunchedEffect(initialDetailTab, focusNonce, showSpinner, game?.gameId) {
+        if (focusNonce == 0 && initialDetailTab.isNullOrBlank()) return@LaunchedEffect
+        val idx = detailTabIndex(initialDetailTab)
+        selectedTab = idx
+        if (idx > 0 && !showSpinner && game != null) {
+            listState.animateScrollToItem(2)
+        }
+    }
 
     PullToRefreshBox(
         isRefreshing = isRefreshing,

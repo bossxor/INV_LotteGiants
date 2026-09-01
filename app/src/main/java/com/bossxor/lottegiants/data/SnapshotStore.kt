@@ -408,3 +408,20 @@ enum class NotificationType(val label: String, val description: String) {
     FAVORITE_ROSTER("즐겨찾기 등말소", "즐겨찾기 선수 등록·말소 시"),
     RACE_NUMBER("매직·트래직", "매직넘버·트래직넘버가 줄거나 확정·탈락될 때"),
 }
+
+/** 알림을 눌렀을 때 열 화면. `openTab`은 하단 탭/오버레이, `detailTab`은 라이브 상세. */
+fun NotificationType.destination(): Pair<String, String?> = when (this) {
+    NotificationType.ROSTER, NotificationType.FAVORITE_ROSTER -> "entry" to null
+    NotificationType.RACE_NUMBER -> "standings" to null
+    NotificationType.LINEUP -> "live" to "lineup"
+    NotificationType.SCORE,
+    NotificationType.HOMERUN,
+    NotificationType.CONCEDING,
+    NotificationType.LEAD_CHANGE,
+    NotificationType.PITCHER_CHANGE,
+    NotificationType.FAVORITE_PITCHING,
+    NotificationType.FAVORITE_AT_BAT,
+    NotificationType.SCORING_CHANCE,
+    -> "live" to "relay"
+    else -> "live" to null
+}
