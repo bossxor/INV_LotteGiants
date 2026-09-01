@@ -29,7 +29,11 @@ import com.bossxor.lottegiants.domain.TeamStanding
 import com.bossxor.lottegiants.domain.WinProbPoint
 import com.bossxor.lottegiants.domain.cancelDisplayLabel
 import com.bossxor.lottegiants.domain.estimateLotteWinProb
+import com.bossxor.lottegiants.domain.isDelayText
+import com.bossxor.lottegiants.domain.parseResumeClock
 import com.bossxor.lottegiants.domain.resolveCancelReason
+import com.bossxor.lottegiants.domain.suspendDisplayLabel
+import com.bossxor.lottegiants.domain.withSuspendFilled
 import com.bossxor.lottegiants.domain.isPitcherPosition
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.runnerOccupied
@@ -304,7 +308,10 @@ class GiantsRepository private constructor(context: Context) {
             weather = runCatching { fetchStadiumWeather(weatherStadium) }.getOrNull() ?: weather
         }
         lotteInfo = lotteInfo?.let { g ->
-            g.copy(preview = g.preview?.copy(weather = weather) ?: g.preview).normalizedIfCanceled()
+            val extra = g.recentTexts.joinToString(" ") { it.text }
+            g.copy(preview = g.preview?.copy(weather = weather) ?: g.preview)
+                .normalizedIfCanceled()
+                .withSuspendFilled(extra)
         }
 
         val standingsNow = runCatching { fetchStandings() }.getOrDefault(emptyList())
@@ -393,7 +400,7 @@ class GiantsRepository private constructor(context: Context) {
                 }
             }
             val season = fetchKboGamesCached(date.minusDays(45), date.plusDays(1))
-            return withStadiumWeather(enrichGameSummary(info, season, kbo))
+            return withStadiumWeather(enrichGameSummary(info, season, kbo)).fillSuspendFromRelay()
         }
         val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
         val dto = runCatching {
@@ -411,8 +418,11 @@ class GiantsRepository private constructor(context: Context) {
             info = mergeRelay(info, relay)
         }
         val season = fetchKboGamesCached(date.minusDays(45), date.plusDays(1))
-        return withStadiumWeather(enrichGameSummary(info, season, null))
+        return withStadiumWeather(enrichGameSummary(info, season, null)).fillSuspendFromRelay()
     }
+
+    private fun LotteGameInfo.fillSuspendFromRelay(): LotteGameInfo =
+        withSuspendFilled(recentTexts.joinToString(" ") { it.text })
 
     private suspend fun withStadiumWeather(game: LotteGameInfo): LotteGameInfo {
         val stadium = game.stadium.ifBlank { game.preview?.stadium.orEmpty() }
@@ -1443,10 +1453,17 @@ class GiantsRepository private constructor(context: Context) {
             .toMap()
     }
 
+    private fun GameDto.delayBlob(): String =
+        listOfNotNull(statusInfo, specialMatchInfo).joinToString(" ")
+
+    private fun GameDto.isSuspendedGame(): Boolean =
+        (suspended && !cancel) || isDelayText(delayBlob())
+
     private fun GameDto.status(): GameStatus = when {
-        cancel || suspended -> GameStatus.CANCELED
-        statusInfo?.contains("취소") == true -> GameStatus.CANCELED
-        statusInfo?.contains("순연") == true -> GameStatus.CANCELED
+        isSuspendedGame() -> GameStatus.LIVE
+        cancel -> GameStatus.CANCELED
+        statusInfo?.contains("취소") == true && !isDelayText(statusInfo) -> GameStatus.CANCELED
+        statusInfo?.contains("순연") == true && !isDelayText(statusInfo) -> GameStatus.CANCELED
         statusCode == "RESULT" || statusNum == 4 -> GameStatus.ENDED
         statusCode == "BEFORE" || statusNum == 1 -> GameStatus.BEFORE
         else -> GameStatus.LIVE
@@ -1458,11 +1475,14 @@ class GiantsRepository private constructor(context: Context) {
 
     private fun GameDto.toMiniGame(kboCancelLabel: String? = null): MiniGame {
         val st = status()
+        val delayed = isSuspendedGame()
         val reason = if (st == GameStatus.CANCELED) {
             resolveCancelReason(kboCancelLabel?.takeIf { it.isNotBlank() } ?: statusInfo).orEmpty()
         } else {
             ""
         }
+        val blob = delayBlob()
+        val clock = parseResumeClock(blob)
         val label = if (st == GameStatus.CANCELED) cancelDisplayLabel(reason.ifBlank { null }) else ""
         return MiniGame(
             gameId = gameId,
@@ -1471,14 +1491,17 @@ class GiantsRepository private constructor(context: Context) {
             homeScore = homeTeamScore,
             awayScore = awayTeamScore,
             status = st,
-            statusText = statusInfo?.takeIf { it.isNotBlank() && st != GameStatus.CANCELED }?.let { it }
-                ?: when (st) {
-                    GameStatus.BEFORE -> startTimeText()
-                    GameStatus.CANCELED -> label
-                    GameStatus.ENDED -> "종료"
-                    GameStatus.LIVE -> "진행 중"
-                },
+            statusText = when {
+                delayed -> suspendDisplayLabel(blob, clock)
+                statusInfo?.isNotBlank() == true && st != GameStatus.CANCELED -> statusInfo!!
+                st == GameStatus.BEFORE -> startTimeText()
+                st == GameStatus.CANCELED -> label
+                st == GameStatus.ENDED -> "종료"
+                else -> "진행 중"
+            },
             cancelReason = reason,
+            isSuspended = delayed,
+            resumeTime = clock,
             stadium = stadium.orEmpty(),
             startTime = startTimeText(),
             homeLogoUrl = teamLogoUrl(homeTeamCode),
@@ -1504,6 +1527,9 @@ class GiantsRepository private constructor(context: Context) {
         val oppCode = if (isHome) awayTeamCode else homeTeamCode
         val focusName = (if (isHome) homeTeamName else awayTeamName)
             .ifBlank { teamCodeToName(focus) }
+        val delayed = isSuspendedGame()
+        val blob = delayBlob()
+        val clock = parseResumeClock(blob)
         val cancelReason = if (status() == GameStatus.CANCELED) {
             resolveCancelReason(kboCancelLabel?.takeIf { it.isNotBlank() } ?: statusInfo).orEmpty()
         } else {
@@ -1522,11 +1548,14 @@ class GiantsRepository private constructor(context: Context) {
             lotteScore = if (isHome) homeTeamScore else awayTeamScore,
             opponentScore = if (isHome) awayTeamScore else homeTeamScore,
             status = status(),
-            statusText = when (status()) {
-                GameStatus.CANCELED -> cancelDisplayLabel(cancelReason)
+            statusText = when {
+                delayed -> suspendDisplayLabel(blob, clock)
+                status() == GameStatus.CANCELED -> cancelDisplayLabel(cancelReason)
                 else -> statusInfo.orEmpty()
             },
             cancelReason = cancelReason,
+            isSuspended = delayed,
+            resumeTime = clock,
             broadChannel = broadChannel.orEmpty(),
             lotteStartingPitcher = (if (isHome) homeStarterName else awayStarterName).orEmpty(),
             opponentStartingPitcher = (if (isHome) awayStarterName else homeStarterName).orEmpty(),

@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.sp
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.MiniGame
+import com.bossxor.lottegiants.domain.suspendLabel
+import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
 
 /** 레거시: 라이브 스냅샷의 타구장 목록. 결과 탭은 [ResultsScreen] 사용. */
@@ -58,14 +60,16 @@ private fun MiniGameCard(g: MiniGame) {
         Column(Modifier.weight(1f)) {
             Text("${g.awayName} vs ${g.homeName}", fontWeight = FontWeight.SemiBold)
             Text(
-                when (g.status) {
-                    GameStatus.LIVE -> g.statusText.ifBlank { "진행 중" }
-                    GameStatus.BEFORE -> g.startTime
-                    GameStatus.ENDED -> "종료"
-                    GameStatus.CANCELED -> g.statusText.ifBlank { "취소" }
+                when {
+                    g.isSuspended -> g.suspendLabel
+                    g.status == GameStatus.LIVE -> g.statusText.ifBlank { "진행 중" }
+                    g.status == GameStatus.BEFORE -> g.startTime
+                    g.status == GameStatus.ENDED -> "종료"
+                    g.status == GameStatus.CANCELED -> g.statusText.ifBlank { "취소" }
+                    else -> g.statusText
                 },
                 fontSize = 12.sp,
-                color = if (g.status == GameStatus.LIVE) LotteRed else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (g.isSuspended) LotteGold else if (g.status == GameStatus.LIVE) LotteRed else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         if (g.status != GameStatus.BEFORE && g.status != GameStatus.CANCELED) {

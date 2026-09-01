@@ -72,6 +72,7 @@ import com.bossxor.lottegiants.domain.isFocusLotte
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.StadiumWeather
 import com.bossxor.lottegiants.domain.cancelLabel
+import com.bossxor.lottegiants.domain.suspendLabel
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.ui.LoseRed
 import com.bossxor.lottegiants.ui.LotteGold
@@ -447,6 +448,8 @@ private fun ScoreTicker(
                         status = g.status,
                         statusText = g.inningLabel,
                         startTime = g.startTime,
+                        isSuspended = g.isSuspended,
+                        resumeTime = g.resumeTime,
                         homeLogoUrl = if (g.isHome) g.lotteLogoUrl.ifBlank { LOTTE_LOGO_URL } else g.opponentLogoUrl,
                         awayLogoUrl = if (g.isHome) g.opponentLogoUrl else g.lotteLogoUrl.ifBlank { LOTTE_LOGO_URL },
                         homeTeamCode = if (g.isHome) "LT" else g.opponentCode,
@@ -480,20 +483,24 @@ private fun ScoreTicker(
                     Modifier.padding(horizontal = 14.dp, vertical = 12.dp).width(148.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    val pill = when (g.status) {
-                        GameStatus.LIVE -> g.statusText.ifBlank { "LIVE" }
-                        GameStatus.ENDED -> "종료"
-                        GameStatus.BEFORE -> g.startTime.ifBlank { "예정" }
-                        GameStatus.CANCELED -> g.statusText.ifBlank { "취소" }
+                    val delayed = g.isSuspended
+                    val pill = when {
+                        delayed -> g.suspendLabel
+                        g.status == GameStatus.LIVE -> g.statusText.ifBlank { "LIVE" }
+                        g.status == GameStatus.ENDED -> "종료"
+                        g.status == GameStatus.BEFORE -> g.startTime.ifBlank { "예정" }
+                        g.status == GameStatus.CANCELED -> g.statusText.ifBlank { "취소" }
+                        else -> g.statusText
                     }
                     Text(
-                        if (g.status == GameStatus.LIVE) "LIVE" else pill,
+                        if (g.status == GameStatus.LIVE && !delayed) "LIVE" else pill,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Black,
-                        color = when (g.status) {
-                            GameStatus.LIVE -> WinGreen
-                            GameStatus.ENDED -> MaterialTheme.colorScheme.onSurface
-                            GameStatus.CANCELED -> LoseRed
+                        color = when {
+                            delayed -> LotteGold
+                            g.status == GameStatus.LIVE -> WinGreen
+                            g.status == GameStatus.ENDED -> MaterialTheme.colorScheme.onSurface
+                            g.status == GameStatus.CANCELED -> LoseRed
                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                         },
                     )
@@ -520,7 +527,7 @@ private fun ScoreTicker(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                     )
-                    if (g.status == GameStatus.LIVE) {
+                    if (g.status == GameStatus.LIVE && !delayed) {
                         Spacer(Modifier.height(4.dp))
                         Text(
                             pill,
@@ -1440,11 +1447,13 @@ private fun DhGameSwitcher(
                 g.doubleHeaderNo in 1..2 -> "${g.doubleHeaderNo}차전"
                 else -> "${idx + 1}차전"
             }
-            val sub = when (g.status) {
-                GameStatus.LIVE -> "LIVE"
-                GameStatus.ENDED -> "종료"
-                GameStatus.CANCELED -> "취소"
-                GameStatus.BEFORE -> g.startTime.ifBlank { "예정" }
+            val sub = when {
+                g.isSuspended -> g.suspendLabel
+                g.status == GameStatus.LIVE -> "LIVE"
+                g.status == GameStatus.ENDED -> "종료"
+                g.status == GameStatus.CANCELED -> "취소"
+                g.status == GameStatus.BEFORE -> g.startTime.ifBlank { "예정" }
+                else -> g.statusText
             }
             LineupTeamChip("$label · $sub", selected = g.gameId == selectedId) {
                 onSelect(g.gameId)
@@ -2012,43 +2021,35 @@ private fun HeroTeam(
     onHero: Color,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
-        color = onHero.copy(alpha = 0.08f),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
+    Column(
+        modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
-            Modifier.padding(horizontal = 8.dp, vertical = 12.dp).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            TeamLogo(logoUrl, size = 52)
-            Spacer(Modifier.height(8.dp))
+        TeamLogo(logoUrl, size = 52)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            name,
+            fontWeight = FontWeight.Bold,
+            fontSize = 13.sp,
+            color = onHero,
+            maxLines = 1,
+        )
+        if (starter.isNotBlank()) {
+            Spacer(Modifier.height(2.dp))
             Text(
-                name,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                color = onHero,
+                starter,
+                fontSize = 11.sp,
+                color = onHero.copy(alpha = 0.55f),
                 maxLines = 1,
             )
-            if (starter.isNotBlank()) {
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    starter,
-                    fontSize = 11.sp,
-                    color = onHero.copy(alpha = 0.55f),
-                    maxLines = 1,
-                )
-            }
         }
     }
 }
 
 @Composable
-private fun InningPill(text: String, live: Boolean) {
-    val bg = if (live) WinGreen else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f)
-    val fg = if (live) Color.White else MaterialTheme.colorScheme.onSurface
+private fun InningPill(text: String, live: Boolean, onHero: Color) {
+    val bg = if (live) WinGreen else onHero.copy(alpha = 0.14f)
+    val fg = if (live) Color.White else onHero.copy(alpha = 0.85f)
     Text(
         text,
         modifier = Modifier
@@ -2121,26 +2122,21 @@ private fun HeroCard(
             CompactRefresh(secondsUntilRefresh, isRefreshing, onRefresh, onDark = dark)
         }
         Spacer(Modifier.height(10.dp))
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
-            shadowElevation = if (dark) 0.dp else 2.dp,
-            tonalElevation = if (dark) 2.dp else 0.dp,
-        ) {
-            Column(
-                Modifier.padding(horizontal = 12.dp, vertical = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-        when (g.status) {
-            GameStatus.LIVE -> Text(
+        when {
+            g.isSuspended -> Text(
+                g.suspendLabel,
+                fontWeight = FontWeight.Black,
+                fontSize = 16.sp,
+                color = LotteGold,
+            )
+            g.status == GameStatus.LIVE -> Text(
                 "LIVE",
                 fontWeight = FontWeight.Black,
                 fontSize = 18.sp,
                 color = WinGreen,
                 letterSpacing = 1.2.sp,
             )
-            GameStatus.ENDED -> {
+            g.status == GameStatus.ENDED -> {
                 val (label, color) = when {
                     g.lotteScore > g.opponentScore -> "WIN" to WinGreen
                     g.lotteScore < g.opponentScore -> "LOSE" to LoseRed
@@ -2148,13 +2144,13 @@ private fun HeroCard(
                 }
                 Text(label, fontWeight = FontWeight.Black, fontSize = 18.sp, color = color, letterSpacing = 1.2.sp)
             }
-            GameStatus.BEFORE -> Text(
+            g.status == GameStatus.BEFORE -> Text(
                 g.startTime.ifBlank { "예정" },
                 fontWeight = FontWeight.Black,
                 fontSize = 16.sp,
                 color = LotteGold,
             )
-            GameStatus.CANCELED -> Text(
+            g.status == GameStatus.CANCELED -> Text(
                 g.cancelLabel.ifBlank { "취소" },
                 fontWeight = FontWeight.Black,
                 fontSize = 16.sp,
@@ -2193,17 +2189,25 @@ private fun HeroCard(
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                val pill = when (g.status) {
-                    GameStatus.LIVE -> g.inningLabel.ifBlank { "LIVE" }
-                    GameStatus.ENDED -> "종료"
-                    GameStatus.BEFORE -> g.startTime.ifBlank { "예정" }
-                    GameStatus.CANCELED -> g.cancelLabel.ifBlank { "취소" }
+                val pill = when {
+                    g.isSuspended -> if (g.inning > 0) {
+                        "${g.inning}회${if (g.isTopInning) "초" else "말"}"
+                    } else {
+                        ""
+                    }
+                    g.status == GameStatus.LIVE -> g.inningLabel.ifBlank { "LIVE" }
+                    g.status == GameStatus.ENDED -> "종료"
+                    g.status == GameStatus.BEFORE -> g.startTime.ifBlank { "예정" }
+                    g.status == GameStatus.CANCELED -> g.cancelLabel.ifBlank { "취소" }
+                    else -> g.statusText
                 }
-                InningPill(pill, live = g.status == GameStatus.LIVE)
+                if (pill.isNotBlank()) {
+                    InningPill(pill, live = g.status == GameStatus.LIVE && !g.isSuspended, onHero = onHero)
+                }
             }
             HeroTeam(homeName, homeLogo, homeStarter, onHero, Modifier.weight(1f))
         }
-        if (g.status == GameStatus.LIVE) {
+        if (g.status == GameStatus.LIVE && !g.isSuspended) {
             Spacer(Modifier.height(12.dp))
             DiamondView(
                 on1 = g.onBase1,
@@ -2225,8 +2229,6 @@ private fun HeroCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
-            }
-        }
             }
         }
         val sub = buildList {

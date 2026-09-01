@@ -51,6 +51,7 @@ import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.inningLabel
+import com.bossxor.lottegiants.domain.suspendLabel
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.teamNameToCode
@@ -238,7 +239,7 @@ private fun CompactLive(
             homeRank = homeRank(g, snap),
         )
         Spacer(GlanceModifier.defaultWeight())
-        StatusPill("LIVE  ${g.inningLabel}")
+        StatusPill(if (g.isSuspended) g.suspendLabel else "LIVE  ${g.inningLabel}")
         val footer = widgetFooterLine(snap?.lotteRemainingGames ?: 0)
         if (footer.isNotBlank()) {
             Text(footer, style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 8.sp), maxLines = 1)
@@ -458,7 +459,7 @@ private fun LiveWide(
         Spacer(GlanceModifier.height(2.dp))
     }
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        StatusPill("LIVE  ${g.inningLabel}")
+        StatusPill(if (g.isSuspended) g.suspendLabel else "LIVE  ${g.inningLabel}")
         Spacer(GlanceModifier.width(8.dp))
         Text(
             if (g.isLotteBatting) "롯데 공격" else "롯데 수비",

@@ -139,6 +139,10 @@ data class MiniGame(
     val statusText: String,
     /** 취소·순연 사유 (폭염, 우천 등) */
     val cancelReason: String = "",
+    /** 우천중단처럼 취소가 아니라 잠시 멈춘 경기 */
+    val isSuspended: Boolean = false,
+    /** 재개 예정 시각 (19:50) */
+    val resumeTime: String = "",
     val stadium: String = "",
     val startTime: String = "",
     val homeLogoUrl: String = "",
@@ -528,6 +532,8 @@ data class LotteGameInfo(
     val statusText: String = "",
     /** 취소·순연 사유 (API statusInfo, 예: 폭염) */
     val cancelReason: String = "",
+    val isSuspended: Boolean = false,
+    val resumeTime: String = "",
     val broadChannel: String = "",
     // 실시간 (relay)
     val inning: Int = 0,
@@ -600,6 +606,9 @@ fun LotteGameInfo.toRaceMiniGame(): MiniGame = MiniGame(
     awayScore = if (isHome) opponentScore else lotteScore,
     status = status,
     statusText = statusText,
+    cancelReason = cancelReason,
+    isSuspended = isSuspended,
+    resumeTime = resumeTime,
     gameDate = gameDate,
     homeTeamCode = if (isHome) LOTTE_TEAM_CODE else opponentCode,
     awayTeamCode = if (isHome) opponentCode else LOTTE_TEAM_CODE,
@@ -922,6 +931,92 @@ fun cancelDisplayLabel(reason: String?): String {
     return if (r.isBlank()) "취소" else "취소($r)"
 }
 
+/** 우천중단·서스펜디드처럼 취소가 아니라 재개를 기다리는 상태 */
+fun isDelayText(raw: String?): Boolean {
+    val t = raw.orEmpty()
+    if (t.isBlank()) return false
+    if ((t.contains("취소") || t.contains("순연") || t.contains("노게임")) && !t.contains("중단")) {
+        return false
+    }
+    return t.contains("중단") ||
+        t.contains("서스펜") ||
+        t.contains("suspend", ignoreCase = true) ||
+        (t.contains("재개") && (t.contains("예정") || t.contains("우천") || t.contains("강우")))
+}
+
+fun parseResumeClock(raw: String?): String {
+    val t = raw.orEmpty()
+    if (t.isBlank()) return ""
+    val nearResume = Regex(
+        """(?:재개|예정)[^\d]{0,8}(\d{1,2})\s*[:시]\s*(\d{2})|(\d{1,2})\s*[:시]\s*(\d{2})\s*(?:분)?[^\n]{0,8}(?:재개|예정)""",
+    ).find(t)
+    val h: String
+    val m: String
+    if (nearResume != null) {
+        h = nearResume.groupValues[1].ifBlank { nearResume.groupValues[3] }
+        m = nearResume.groupValues[2].ifBlank { nearResume.groupValues[4] }
+    } else {
+        return ""
+    }
+    val hour = h.toIntOrNull()?.coerceIn(0, 23) ?: return ""
+    val min = m.toIntOrNull()?.coerceIn(0, 59) ?: return ""
+    return "%d:%02d".format(hour, min)
+}
+
+fun suspendReasonLabel(raw: String?): String {
+    val t = raw.orEmpty()
+    return when {
+        t.contains("우천") || t.contains("강우") || t.contains("비") -> "우천중단"
+        t.contains("조명") -> "조명중단"
+        t.contains("정전") -> "정전중단"
+        t.contains("그라운드") || t.contains("구장") -> "그라운드 중단"
+        t.contains("기타") -> "기타중단"
+        t.contains("서스펜") || t.contains("suspend", ignoreCase = true) -> "경기중단"
+        t.contains("중단") -> {
+            val stripped = t.replace(Regex("""[\s·\-_/():（）\[\]]+"""), "")
+                .replace("경기", "")
+            if (stripped.length <= 8 && stripped.contains("중단")) stripped else "경기중단"
+        }
+        else -> "경기중단"
+    }
+}
+
+/** 예: 우천중단 (19:50 예정) */
+fun suspendDisplayLabel(reasonRaw: String?, resumeTime: String = ""): String {
+    val reason = suspendReasonLabel(reasonRaw)
+    val clock = resumeTime.trim().ifBlank { parseResumeClock(reasonRaw) }
+    return if (clock.isNotBlank()) "$reason ($clock 예정)" else reason
+}
+
+val MiniGame.suspendLabel: String
+    get() = suspendDisplayLabel(
+        listOf(statusText, cancelReason).filter { it.isNotBlank() }.joinToString(" "),
+        resumeTime,
+    )
+
+val LotteGameInfo.suspendLabel: String
+    get() = suspendDisplayLabel(
+        listOf(statusText, cancelReason).filter { it.isNotBlank() }.joinToString(" "),
+        resumeTime,
+    )
+
+fun LotteGameInfo.withSuspendFilled(extraText: String = ""): LotteGameInfo {
+    val blob = listOf(statusText, cancelReason, extraText).filter { it.isNotBlank() }.joinToString(" ")
+    val delay = isSuspended || isDelayText(blob)
+    if (!delay) return this
+    val clock = resumeTime.ifBlank { parseResumeClock(blob) }
+    return copy(
+        isSuspended = true,
+        resumeTime = clock,
+        status = if (status == GameStatus.CANCELED) GameStatus.LIVE else status,
+        statusText = if (status == GameStatus.CANCELED || isDelayText(statusText) || statusText.isBlank()) {
+            suspendDisplayLabel(blob, clock)
+        } else {
+            statusText
+        },
+    )
+}
+
 val LotteGameInfo.cancelLabel: String
     get() = cancelDisplayLabel(cancelReason.ifBlank { null })
 
@@ -947,7 +1042,14 @@ val MiniGame.cancelShortLabel: String
     get() = cancelReasonText.ifBlank { "취소" }
 
 /** KBO·네이버 취소 경기 판별 (status 누락·폴백 데이터 보강) */
-fun isCanceledGameStatus(status: GameStatus, cancelReason: String, statusText: String): Boolean {
+fun isCanceledGameStatus(
+    status: GameStatus,
+    cancelReason: String,
+    statusText: String,
+    isSuspended: Boolean = false,
+): Boolean {
+    if (isSuspended) return false
+    if (isDelayText(statusText) || isDelayText(cancelReason)) return false
     if (status == GameStatus.CANCELED) return true
     if (cancelReason.isNotBlank()) return true
     val text = statusText.trim()
@@ -955,15 +1057,14 @@ fun isCanceledGameStatus(status: GameStatus, cancelReason: String, statusText: S
     return text.contains("취소") ||
         text.contains("순연") ||
         text.contains("폭염") ||
-        text.contains("우천") ||
         text.contains("취소됨", ignoreCase = true)
 }
 
 fun MiniGame.isCanceledGame(): Boolean =
-    isCanceledGameStatus(status, cancelReason, statusText)
+    isCanceledGameStatus(status, cancelReason, statusText, isSuspended)
 
 fun LotteGameInfo.isCanceledGame(): Boolean =
-    isCanceledGameStatus(status, cancelReason, statusText)
+    isCanceledGameStatus(status, cancelReason, statusText, isSuspended)
 
 /** 취소로 판별됐는데 status만 BEFORE/ENDED인 경우 CANCELED로 정규화 */
 fun LotteGameInfo.normalizedIfCanceled(): LotteGameInfo {
@@ -981,6 +1082,7 @@ fun LotteGameInfo.normalizedIfCanceled(): LotteGameInfo {
 
 val LotteGameInfo.inningLabel: String
     get() = when {
+        isSuspended -> suspendLabel
         status == GameStatus.BEFORE -> startTime
         status == GameStatus.CANCELED -> cancelLabel
         status == GameStatus.ENDED -> "종료"

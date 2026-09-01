@@ -32,6 +32,7 @@ data class GameDto(
     val statusInfo: String? = null,
     val cancel: Boolean = false,
     val suspended: Boolean = false,
+    val specialMatchInfo: String? = null,
     val gameOnAir: Boolean = false,
     val homeStarterName: String? = null,
     val awayStarterName: String? = null,

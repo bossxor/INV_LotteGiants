@@ -70,6 +70,7 @@ import com.bossxor.lottegiants.domain.KBO_TEAMS
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.cancelLabel
+import com.bossxor.lottegiants.domain.suspendLabel
 import com.bossxor.lottegiants.domain.cancelShortLabel
 import com.bossxor.lottegiants.domain.involvesTeam
 import com.bossxor.lottegiants.domain.isCanceledGame
@@ -797,6 +798,7 @@ private fun ResultGameCard(
                         StatusPill("라인업", WinGreen)
                     }
                     when {
+                        g.isSuspended -> StatusPill(g.suspendLabel, LotteGold)
                         g.status == GameStatus.LIVE -> StatusPill("LIVE", LotteRed)
                         canceled -> StatusPill(
                             g.cancelLabel,

@@ -6,9 +6,12 @@ import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.teamCodeToName
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.cancelDisplayLabel
+import com.bossxor.lottegiants.domain.isDelayText
 import com.bossxor.lottegiants.domain.kboCancelReasonById
+import com.bossxor.lottegiants.domain.parseResumeClock
 import com.bossxor.lottegiants.domain.resolveCancelReason
 import com.bossxor.lottegiants.domain.resolveTeamLogoUrl
+import com.bossxor.lottegiants.domain.suspendDisplayLabel
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -167,8 +170,26 @@ data class KboOfficialGame(
 
     val isTopInning: Boolean get() = !topBottom.equals("B", ignoreCase = true)
 
-    /** GAME_STATE_SC: 1 예정 / 2·5 진행 / 3 종료 / 4 취소·서스펜디드 */
+    fun delayBlob(): String = listOf(cancelScNm, gameScNm).filter { it.isNotBlank() }.joinToString(" ")
+        .ifBlank { kboCancelReasonById(cancelScId).orEmpty() }
+
+    fun isSuspendedGame(): Boolean {
+        val blob = delayBlob()
+        if (isDelayText(blob)) return true
+        val inProgress = gameState == 2 || gameState == 5
+        if (!inProgress) return false
+        if (blob.contains("취소") || blob.contains("순연") || blob.contains("노게임")) return false
+        if (cancelScId >= 1) return true
+        return blob.contains("우천") ||
+            blob.contains("강우") ||
+            blob.contains("서스펜") ||
+            blob.contains("중단") ||
+            blob.contains("그라운드")
+    }
+
+    /** GAME_STATE_SC: 1 예정 / 2·5 진행 / 3 종료 / 4 취소. 우천중단은 4가 아니라 진행 중 멈춤. */
     fun status(): GameStatus = when {
+        isSuspendedGame() -> GameStatus.LIVE
         gameState == 4 || cancelScId >= 1 -> GameStatus.CANCELED
         cancelScNm.contains("취소") && !cancelScNm.contains("정상") -> GameStatus.CANCELED
         gameState == 3 -> GameStatus.ENDED
@@ -204,10 +225,10 @@ data class KboOfficialGame(
     /** 이 경기의 진행 상태를 사람이 읽는 한 줄로 (예: "7회말", "취소 (폭염)") */
     fun statusText(): String = when (status()) {
         GameStatus.BEFORE -> startTime
-        GameStatus.LIVE -> if (inning > 0) {
-            "${inning}회${if (isTopInning) "초" else "말"}"
-        } else {
-            "진행 중"
+        GameStatus.LIVE -> when {
+            isSuspendedGame() -> suspendDisplayLabel(delayBlob(), parseResumeClock(delayBlob()))
+            inning > 0 -> "${inning}회${if (isTopInning) "초" else "말"}"
+            else -> "진행 중"
         }
         GameStatus.ENDED -> "종료"
         GameStatus.CANCELED -> cancelStatusText()
@@ -225,6 +246,8 @@ data class KboOfficialGame(
         status = status(),
         statusText = statusText(),
         cancelReason = if (status() == GameStatus.CANCELED) cancelReasonLabel().orEmpty() else "",
+        isSuspended = isSuspendedGame(),
+        resumeTime = parseResumeClock(delayBlob()),
         stadium = stadium.trim(),
         startTime = startTime.trim(),
         homeLogoUrl = resolveTeamLogoUrl(homeId.trim().uppercase(), homeEmblem, seasonId),
@@ -260,6 +283,7 @@ data class KboOfficialGame(
             .ifBlank { teamCodeToName(focus) }
         val state = status()
         val live = state == GameStatus.LIVE
+        val delayed = isSuspendedGame()
         val reason = if (state == GameStatus.CANCELED) {
             cancelReasonLabel().orEmpty()
         } else {
@@ -294,6 +318,8 @@ data class KboOfficialGame(
             status = state,
             statusText = statusText(),
             cancelReason = reason,
+            isSuspended = delayed,
+            resumeTime = parseResumeClock(delayBlob()),
             broadChannel = broadChannel.trim(),
             inning = if (live) inning else 0,
             isTopInning = isTopInning,

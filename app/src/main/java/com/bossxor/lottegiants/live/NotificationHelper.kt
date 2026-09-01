@@ -26,6 +26,7 @@ import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.WinProbPoint
 import com.bossxor.lottegiants.domain.cancelLabel
+import com.bossxor.lottegiants.domain.suspendLabel
 import com.bossxor.lottegiants.domain.estimateLotteWinProb
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.domain.kboToday
@@ -143,7 +144,7 @@ object NotificationHelper {
         val summary = gameSummary(game)
         val compactLine = gameCompactLine(game)
         val chipText = nowBarChipText(game)
-        val headerLine = if (game != null && game.status == GameStatus.LIVE) {
+        val headerLine = if (game != null && game.status == GameStatus.LIVE && !game.isSuspended) {
             buildString {
                 append(game.inningLabel)
                 append(if (game.isLotteBatting) " · 롯데 공격" else " · 상대 공격")
@@ -151,7 +152,7 @@ object NotificationHelper {
         } else {
             compactLine
         }
-        val countBmp = game?.takeIf { it.status == GameStatus.LIVE }?.let {
+        val countBmp = game?.takeIf { it.status == GameStatus.LIVE && !it.isSuspended }?.let {
             WidgetAssets.ballCountBitmap(
                 context,
                 it.ball,
@@ -367,6 +368,7 @@ object NotificationHelper {
     /** 알림 접힘 상태용 한 줄 */
     private fun gameCompactLine(game: LotteGameInfo?): String {
         if (game == null) return "대기 중"
+        if (game.isSuspended) return game.suspendLabel
         if (game.status != GameStatus.LIVE) {
             return game.inningLabel.ifBlank { game.opponentName }
         }
@@ -461,10 +463,11 @@ object NotificationHelper {
         return Regex("""\d{1,2}:\d{2}""").find(t)?.value ?: t.ifBlank { "예정" }
     }
 
-    private fun statusPillText(game: LotteGameInfo): String = when (game.status) {
-        GameStatus.ENDED -> "종료"
-        GameStatus.CANCELED -> game.cancelLabel.ifBlank { "취소" }
-        GameStatus.BEFORE -> kickoffTime(game)
+    private fun statusPillText(game: LotteGameInfo): String = when {
+        game.isSuspended -> game.suspendLabel
+        game.status == GameStatus.ENDED -> "종료"
+        game.status == GameStatus.CANCELED -> game.cancelLabel.ifBlank { "취소" }
+        game.status == GameStatus.BEFORE -> kickoffTime(game)
         else -> game.inningLabel.ifBlank { "LIVE" }
     }
 
@@ -482,7 +485,7 @@ object NotificationHelper {
         rv.setTextViewText(R.id.notif_c_home_score, "${side.homeScore}")
         rv.setTextViewText(R.id.notif_c_inning, statusPillText(game))
 
-        val live = game.status == GameStatus.LIVE
+        val live = game.status == GameStatus.LIVE && !game.isSuspended
         val before = game.status == GameStatus.BEFORE
         rv.setViewVisibility(R.id.notif_c_bases, if (live) View.VISIBLE else View.GONE)
         if (live) {
@@ -541,7 +544,7 @@ object NotificationHelper {
         rv.setTextViewText(R.id.notif_home_score, "${side.homeScore}")
         rv.setTextViewText(R.id.notif_inning, statusPillText(game))
         // 루상·BSO는 진행 중일 때만 뜻이 있다. 끝난 경기에 빈 다이아몬드를 두면 주자가 있는 것처럼 읽힌다.
-        val showBases = game.status == GameStatus.LIVE
+        val showBases = game.status == GameStatus.LIVE && !game.isSuspended
         rv.setViewVisibility(R.id.notif_bases, if (showBases) View.VISIBLE else View.GONE)
         rv.setViewVisibility(R.id.notif_bso_row, if (showBases) View.VISIBLE else View.GONE)
         if (showBases) {
