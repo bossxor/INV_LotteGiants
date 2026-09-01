@@ -74,18 +74,18 @@ fun kboPostseasonSlot(rank: Int): String = when {
     else -> "포스트시즌 밖"
 }
 
-fun widgetRaceLine(rank: Int, remaining: Int, starter: String, countdown: String = ""): String {
+fun widgetRaceLine(rank: Int, remaining: Int, starter: String = "", countdown: String = ""): String {
     val parts = buildList {
         if (rank > 0) add("${rank}위")
         if (remaining > 0) add("잔여 ${remaining}")
         else if (rank > 0) add("잔여 0")
-        val s = starter.trim()
-        if (s.isNotBlank() && s != "-") add("선발 $s")
-        val c = countdown.trim()
-        if (c.isNotBlank()) add(c)
     }
     return parts.joinToString(" · ")
 }
+
+/** 위젯 하단. 순위·선발·카운트다운은 로고/선발 줄에 있어서 넣지 않는다. */
+fun widgetFooterLine(remaining: Int): String =
+    if (remaining > 0) "잔여 $remaining" else ""
 
 fun formatRemainingOpponents(list: List<RemainingOpponent>, limit: Int = 6): String {
     if (list.isEmpty()) return ""

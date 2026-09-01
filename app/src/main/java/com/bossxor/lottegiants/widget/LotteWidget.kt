@@ -56,6 +56,7 @@ import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.teamNameToCode
 import com.bossxor.lottegiants.domain.parseKboStartMillis
 import com.bossxor.lottegiants.domain.gameCountdownLabel
+import com.bossxor.lottegiants.domain.widgetFooterLine
 import com.bossxor.lottegiants.live.WearBridge
 
 private val Red = Color(0xFFC8102E)
@@ -231,12 +232,16 @@ private fun CompactLive(
     val awayScore = if (g.isHome) g.opponentScore else g.lotteScore
     val homeScore = if (g.isHome) g.lotteScore else g.opponentScore
     CompactFrame(lotteLogo) {
-        CompactScoreboard(awayLogo, homeLogo, awayScore, homeScore)
+        CompactScoreboard(
+            awayLogo, homeLogo, awayScore, homeScore,
+            awayRank = awayRank(g, snap),
+            homeRank = homeRank(g, snap),
+        )
         Spacer(GlanceModifier.defaultWeight())
         StatusPill("LIVE  ${g.inningLabel}")
-        val race = snap?.widgetRaceLine.orEmpty()
-        if (race.isNotBlank()) {
-            Text(race, style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 8.sp), maxLines = 1)
+        val footer = widgetFooterLine(snap?.lotteRemainingGames ?: 0)
+        if (footer.isNotBlank()) {
+            Text(footer, style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 8.sp), maxLines = 1)
         }
     }
 }
@@ -253,7 +258,11 @@ private fun CompactScore(
     val awayScore = if (g.isHome) g.opponentScore else g.lotteScore
     val homeScore = if (g.isHome) g.lotteScore else g.opponentScore
     CompactFrame(lotteLogo) {
-        CompactScoreboard(awayLogo, homeLogo, awayScore, homeScore)
+        CompactScoreboard(
+            awayLogo, homeLogo, awayScore, homeScore,
+            awayRank = if (g.isHome) g.opponentRank else g.lotteRank,
+            homeRank = if (g.isHome) g.lotteRank else g.opponentRank,
+        )
         Spacer(GlanceModifier.defaultWeight())
         StatusPill(label)
     }
@@ -272,19 +281,9 @@ private fun CompactBefore(
     val homeLogo = if (g.isHome) lotteLogo else oppLogo
     CompactFrame(lotteLogo) {
         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(
-                modifier = GlanceModifier.defaultWeight(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Image(awayLogo, contentDescription = null, modifier = GlanceModifier.size(32.dp))
-            }
+            LogoWithRank(awayLogo, awayRank(g, snap), modifier = GlanceModifier.defaultWeight())
             Text("VS", style = TextStyle(color = muted, fontSize = 12.sp, fontWeight = FontWeight.Bold))
-            Column(
-                modifier = GlanceModifier.defaultWeight(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Image(homeLogo, contentDescription = null, modifier = GlanceModifier.size(32.dp))
-            }
+            LogoWithRank(homeLogo, homeRank(g, snap), modifier = GlanceModifier.defaultWeight())
         }
         Spacer(GlanceModifier.defaultWeight())
         val cd = gameCountdownLabel(g.gameDate, g.startTime)
@@ -295,9 +294,9 @@ private fun CompactBefore(
             style = TextStyle(color = white, fontSize = 9.sp),
             maxLines = 1,
         )
-        val race = snap?.widgetRaceLine.orEmpty()
-        if (race.isNotBlank()) {
-            Text(race, style = TextStyle(color = muted, fontSize = 8.sp), maxLines = 1)
+        val footer = widgetFooterLine(snap?.lotteRemainingGames ?: 0)
+        if (footer.isNotBlank()) {
+            Text(footer, style = TextStyle(color = muted, fontSize = 8.sp), maxLines = 1)
         }
     }
 }
@@ -327,11 +326,37 @@ private fun CompactFrame(
 }
 
 @Composable
+private fun LogoWithRank(
+    logo: ImageProvider,
+    rank: Int,
+    size: Int = 32,
+    modifier: GlanceModifier = GlanceModifier,
+) {
+    val gold = ColorProvider(Gold, Gold)
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        if (rank > 0) {
+            Text(
+                "${rank}위",
+                style = TextStyle(color = gold, fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                maxLines = 1,
+            )
+            Spacer(GlanceModifier.height(2.dp))
+        }
+        Image(logo, contentDescription = null, modifier = GlanceModifier.size(size.dp))
+    }
+}
+
+@Composable
 private fun CompactScoreboard(
     awayLogo: ImageProvider,
     homeLogo: ImageProvider,
     awayScore: Int,
     homeScore: Int,
+    awayRank: Int = 0,
+    homeRank: Int = 0,
 ) {
     val white = ColorProvider(Color.White, Color.White)
     val muted = ColorProvider(Muted, Muted)
@@ -340,7 +365,7 @@ private fun CompactScoreboard(
             modifier = GlanceModifier.defaultWeight(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Image(awayLogo, contentDescription = null, modifier = GlanceModifier.size(32.dp))
+            LogoWithRank(awayLogo, awayRank, modifier = GlanceModifier)
             Spacer(GlanceModifier.height(4.dp))
             Text("$awayScore", style = TextStyle(color = white, fontSize = 24.sp, fontWeight = FontWeight.Bold))
         }
@@ -349,7 +374,7 @@ private fun CompactScoreboard(
             modifier = GlanceModifier.defaultWeight(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Image(homeLogo, contentDescription = null, modifier = GlanceModifier.size(32.dp))
+            LogoWithRank(homeLogo, homeRank, modifier = GlanceModifier)
             Spacer(GlanceModifier.height(4.dp))
             Text("$homeScore", style = TextStyle(color = white, fontSize = 24.sp, fontWeight = FontWeight.Bold))
         }
@@ -442,7 +467,12 @@ private fun LiveWide(
     }
     Spacer(GlanceModifier.height(4.dp))
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        TeamSide(if (g.isHome) oppLogo else lotteLogo, if (g.isHome) g.opponentName else "롯데", if (g.isHome) g.opponentScore else g.lotteScore)
+        TeamSide(
+            if (g.isHome) oppLogo else lotteLogo,
+            if (g.isHome) g.opponentName else "롯데",
+            if (g.isHome) g.opponentScore else g.lotteScore,
+            awayRank(g, snap),
+        )
         Spacer(GlanceModifier.width(6.dp))
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Image(
@@ -454,7 +484,12 @@ private fun LiveWide(
             BsoDotsRow(g.ball, g.strike, g.out)
         }
         Spacer(GlanceModifier.width(6.dp))
-        TeamSide(if (g.isHome) lotteLogo else oppLogo, if (g.isHome) "롯데" else g.opponentName, if (g.isHome) g.lotteScore else g.opponentScore)
+        TeamSide(
+            if (g.isHome) lotteLogo else oppLogo,
+            if (g.isHome) "롯데" else g.opponentName,
+            if (g.isHome) g.lotteScore else g.opponentScore,
+            homeRank(g, snap),
+        )
     }
     Spacer(GlanceModifier.height(6.dp))
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -483,9 +518,9 @@ private fun LiveWide(
         Text("득점권!", style = TextStyle(color = gold, fontSize = 10.sp, fontWeight = FontWeight.Bold))
     }
     FormRow(snap)
-    val race = snap?.widgetRaceLine.orEmpty()
-    if (race.isNotBlank()) {
-        Text(race, style = TextStyle(color = muted, fontSize = 10.sp), maxLines = 1)
+    val footer = widgetFooterLine(snap?.lotteRemainingGames ?: 0)
+    if (footer.isNotBlank()) {
+        Text(footer, style = TextStyle(color = muted, fontSize = 10.sp), maxLines = 1)
     }
 }
 
@@ -545,7 +580,13 @@ private fun BeforeWide(
     )
     Spacer(GlanceModifier.height(4.dp))
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Image(lotteLogo, contentDescription = "lotte", modifier = GlanceModifier.size(28.dp))
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            val lr = g.lotteRank.takeIf { it > 0 } ?: snap?.lotteSeasonRank ?: 0
+            if (lr > 0) {
+                Text("${lr}위", style = TextStyle(color = gold, fontSize = 9.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+            }
+            Image(lotteLogo, contentDescription = "lotte", modifier = GlanceModifier.size(28.dp))
+        }
         Spacer(GlanceModifier.width(6.dp))
         Text("롯데", style = TextStyle(color = white, fontSize = 13.sp, fontWeight = FontWeight.Bold))
         Spacer(GlanceModifier.width(8.dp))
@@ -553,7 +594,12 @@ private fun BeforeWide(
         Spacer(GlanceModifier.width(8.dp))
         Text(g.opponentName, style = TextStyle(color = white, fontSize = 13.sp, fontWeight = FontWeight.Bold))
         Spacer(GlanceModifier.width(6.dp))
-        Image(oppLogo, contentDescription = "opp", modifier = GlanceModifier.size(28.dp))
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            if (g.opponentRank > 0) {
+                Text("${g.opponentRank}위", style = TextStyle(color = gold, fontSize = 9.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+            }
+            Image(oppLogo, contentDescription = "opp", modifier = GlanceModifier.size(28.dp))
+        }
     }
     Spacer(GlanceModifier.height(4.dp))
     Text(
@@ -566,9 +612,9 @@ private fun BeforeWide(
         style = TextStyle(color = white, fontSize = 11.sp),
         maxLines = 1,
     )
-    val race = snap?.widgetRaceLine.orEmpty()
-    if (race.isNotBlank()) {
-        Text(race, style = TextStyle(color = muted, fontSize = 11.sp), maxLines = 1)
+    val footer = widgetFooterLine(snap?.lotteRemainingGames ?: 0)
+    if (footer.isNotBlank()) {
+        Text(footer, style = TextStyle(color = muted, fontSize = 11.sp), maxLines = 1)
     }
     if (pregame && snap?.weather != null) {
         val w = snap.weather!!
@@ -614,9 +660,13 @@ private fun EndedWide(
 }
 
 @Composable
-private fun TeamSide(logo: ImageProvider, name: String, score: Int) {
+private fun TeamSide(logo: ImageProvider, name: String, score: Int, rank: Int = 0) {
     val white = ColorProvider(Color.White, Color.White)
+    val gold = ColorProvider(Gold, Gold)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        if (rank > 0) {
+            Text("${rank}위", style = TextStyle(color = gold, fontSize = 9.sp, fontWeight = FontWeight.Bold), maxLines = 1)
+        }
         Image(logo, contentDescription = name, modifier = GlanceModifier.size(26.dp))
         Text(name, style = TextStyle(color = white, fontSize = 11.sp), maxLines = 1)
         Text("$score", style = TextStyle(color = white, fontSize = 22.sp, fontWeight = FontWeight.Bold))
@@ -643,6 +693,15 @@ private fun FormRow(snap: LiveSnapshot?) {
         }
     }
 }
+
+private fun lotteRankOf(g: LotteGameInfo, snap: LiveSnapshot?): Int =
+    g.lotteRank.takeIf { it > 0 } ?: snap?.lotteSeasonRank ?: 0
+
+private fun awayRank(g: LotteGameInfo, snap: LiveSnapshot?): Int =
+    if (g.isHome) g.opponentRank else lotteRankOf(g, snap)
+
+private fun homeRank(g: LotteGameInfo, snap: LiveSnapshot?): Int =
+    if (g.isHome) lotteRankOf(g, snap) else g.opponentRank
 
 private fun startersAwayVsHome(g: LotteGameInfo): String {
     val away = if (g.isHome) g.opponentStartingPitcher else g.lotteStartingPitcher

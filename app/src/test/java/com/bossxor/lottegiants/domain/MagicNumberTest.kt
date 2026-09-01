@@ -181,10 +181,12 @@ class MagicNumberTest {
     }
 
     @Test
-    fun widgetRaceLineJoinsRankRemainingStarter() {
-        assertEquals("6위 · 잔여 23 · 선발 박세웅", widgetRaceLine(6, 23, "박세웅"))
+    fun widgetRaceLineJoinsRankRemainingOnly() {
+        assertEquals("6위 · 잔여 23", widgetRaceLine(6, 23, "박세웅"))
         assertEquals("4위 · 잔여 0", widgetRaceLine(4, 0, ""))
-        assertEquals("6위 · 잔여 23 · D-2", widgetRaceLine(6, 23, "", "D-2"))
+        assertEquals("6위 · 잔여 23", widgetRaceLine(6, 23, "", "D-2"))
+        assertEquals("잔여 31", widgetFooterLine(31))
+        assertEquals("", widgetFooterLine(0))
     }
 
     @Test
