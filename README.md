@@ -6,21 +6,30 @@
 
 현재 버전: **`1.3.54`** (`versionCode` **1062**). `app/build.gradle.kts`에서만 올립니다.
 
+패키지: `com.bossxor.lottegiants`. 원격: `https://github.com/bossxor/INV_LotteGiants.git` (private).
+
 ## 기능
 
-- **라이브**: 점수판이 화면 상단(큰 점수). 상세는 세그먼트 탭. 다른 팀 경기도 상세 확인(메인·위젯·알림은 항상 롯데). 하단 **라이브** 탭은 롯데 경기로 돌아옴
+- **라이브**: 상단 히어로 카드(초록 LIVE / 종료 시 WIN·LOSE·DRAW, 가운데 `0 : 0`, 이닝 알약, 팀 로고·이름·선발). 경기 중에는 다이아몬드·BSO·투수/타자. 오늘 경기는 가로 카드. 상세는 프리뷰·라인업·요약·중계·기록 탭. 다른 팀 경기도 상세 확인(메인·위젯·알림은 항상 롯데). 하단 **라이브** 탭은 롯데 경기로 돌아옴
+- **하단 탭**: 라이브·결과·순위·설정 **이름을 항상 표시**. 선택된 탭은 볼드·롯데 레드
 - **중계**: 이닝 칩 + **아웃카운트·타석**으로 묶인 문자중계. 안타·득점·아웃 색 구분. 알림을 누르면 해당 경기 **중계** 탭
 - **요약**: 현재 타석, 주요 장면, 루타 하이라이트(있으면 영상 열기), 승률 곡선
-- **결과 / 일정**: 일별·월별 경기. 팀을 고르면 그 팀 시즌만. 리스트는 좌우 스와이프로 날짜 이동. 캘린더는 달력 스와이프로 월 이동, 하단 결과 스와이프로 일 이동. DH·순위·취소 사유 표시
+- **결과 / 일정**: 일별·월별 경기. 팀을 고르면 그 팀 시즌만. 리스트는 좌우 스와이프로 날짜 이동. 캘린더는 달력 스와이프로 월 이동, 하단 결과 스와이프로 일 이동. DH·순위·취소 사유. 예정 경기는 **홈=파랑, 원정=빨강**
 - **KBO 순위** · 타이틀 순위 · 등록/말소 공시 (엔트리·타이틀은 보고 있는 팀 기준). 롯데 카드에 **가을야구 컷·매직/트래직·자력·페이스·홈/원정·연전·다음 5경기**. 카드 공유 가능
-- **홈 위젯** / **Now Bar** / **이벤트 알림** / **Wear OS**
-  - Now Bar 칩은 **라이브 바**·**점수만** 모드에서만 뜬다. **상세 알림**은 커스텀 카드라 승격되지 않는다. 시스템에서 Now Bar 앱 허용 필요. 온보딩·설정에서 안내
-  - 갤럭시 워치4(44mm, Wear OS 3) 포함: 워치 앱·타일·시계 컴플리케이션에 같은 롯데 점수. 폰 설치 시 워치 APK가 포함됨
+- **홈 위젯**: 각 팀 로고 위에 순위, 선발은 `로드리게스 vs 보스` 한 줄, 하단은 `잔여 n`만. 경기 전 카운트다운. 새로고침 시 캐시가 없으면 한 번 받아 옴
+- **알림 / Now Bar / Wear OS**
+  - 표시 모드 3개: **라이브 바** · **상세 알림** · **점수만**
+  - Now Bar 칩은 **라이브 바**·**점수만**이고 **경기 중**일 때만 승격. **상세 알림**은 커스텀 카드라 칩과 동시에 못 씀. 시스템에서 사직스코어 라이브 알림(Now Bar) 허용 필요
+  - 펼친 상세 카드 하단에 양 팀 승률 게이지. **다시 표시**는 점수 카드(다음 경기 포함)
+  - 매직/트래직 변동 알림에 당일·어제 경기 결과 사유 (`12 → 11 · 롯데, 두산 5:3 승`)
   - 득점 알림에 **누가 어떤 타구로 몇 타점** (`롯데 득점! 전준우 좌전 적시타 · 2타점 · 5:4`)
   - 득점권 알림에 **누가 어떻게** (`전준우 2루타, 득점권` · `2루 황성빈 · 타석 윤동희`)
   - **역전**은 지고 있던 팀이 앞설 때만 (`3:4 → 5:4`). 동점에서의 선취(`0:0 → 0:1`)는 역전이 아님
   - 홈런, 투수 교체, 라인업, 취소, 즐겨찾기 **타석·등판·등말소** 등
-- **설정**: 즐겨찾기 선수, 알림 종류별 토글, 테마, 자동 업데이트
+  - 갤럭시 워치4(44mm, Wear OS 3) 포함: 워치 앱·타일·시계 컴플리케이션에 같은 롯데 점수. 폰 설치 시 워치 APK가 포함됨
+- **설정**: 즐겨찾기 선수, 알림 종류별 토글, 표시 모드, 테마, 자동 업데이트
+
+폴드 커버·ICS 캘린더 구독·TalkBack 전용 레이아웃은 넣지 않는다.
 
 ## 데이터 출처
 
@@ -34,6 +43,8 @@
 | **보완 (Keubo)** | `keubo.kr` | 타이틀 순위, 팀 카드, 선수 시즌 스탯, 등록 말소 이력 |
 | **보완 (루타)** | `ruta.co.kr` | 승률 곡선, 하이라이트 문구·링크 (연결 시) |
 | **날씨** | Open-Meteo | 구장 날씨 |
+
+점수는 앱·백그라운드 서비스·위젯이 **8초 이내 스냅샷을 재사용**한다. 당겨서 새로고침만 강제 fetch.
 
 ### KBO 공식 API (주요 엔드포인트)
 
@@ -53,24 +64,36 @@
 
 ## 빌드
 
-**요구:** JDK 17, Android SDK (`local.properties`에 `sdk.dir`), minSdk 31
+**요구:** JDK 17, Android SDK (`local.properties`에 `sdk.dir`), minSdk 31 / targetSdk 36
+
+네트워크 공유(UNC·한글 경로)에서는 Gradle이 자주 깨진다. 먼저 환경을 올린다.
 
 ```powershell
-# Windows (권장)
-.\scripts\build.ps1 -Type release
-
-# 또는 직접
-.\gradlew.bat :app:assembleRelease
-
-# 단위 테스트
-.\gradlew.bat :app:testReleaseUnitTest
+. .\scripts\env.ps1          # JAVA_HOME 탐색, 필요 시 subst L:
+.\scripts\build.ps1 -Type debug    # 또는 release
 ```
 
-APK: `app/build/outputs/apk/release/app-release.apk`
+`env.ps1`이 `L:\`를 저장소에 붙이면 이후는 `L:\`에서 돌린다.
+
+```powershell
+Set-Location L:\
+.\gradlew.bat :app:assembleDebug
+.\gradlew.bat :app:testDebugUnitTest
+adb install -r "L:\app\build\outputs\apk\debug\app-debug.apk"
+```
+
+| 산출물 | 경로 |
+|--------|------|
+| debug APK | `app/build/outputs/apk/debug/app-debug.apk` |
+| release APK | `app/build/outputs/apk/release/app-release.apk` |
 
 서명: 루트에 `keystore.properties` + `lotte-release.jks` (git 제외).  
 CI 서명 시크릿 등록: `.\scripts\setup-ci-signing.ps1`  
-debug/release 모두 이 키로 서명합니다. 디버그 키로 설치하면 GitHub 업데이트가 서명이 달라 실패합니다.
+**debug/release 모두 이 키로 서명**한다. 디버그 키로 깔린 기기는 서명이 달라 덮어쓰기가 실패하므로 한 번 지운 뒤 다시 설치한다.
+
+릴리스 `mergeReleaseResources`는 NAS 잠금으로 실패하는 경우가 있다. 그때는 debug APK로 실기한다.
+
+APK·`.gradle`·`app/build`·시크릿은 커밋하지 않는다.
 
 ## 버전 관리
 
@@ -117,13 +140,13 @@ debug/release 모두 이 키로 서명합니다. 디버그 키로 설치하면 G
 
 ```
 app/src/main/java/com/bossxor/lottegiants/
-  data/          KboOfficialApi, GiantsRepository, UpdateChecker …
-  domain/        Models, 중계 그룹핑, 득점·역전 알림 문구
+  data/          KboOfficialApi, GiantsRepository, SnapshotStore, UpdateChecker …
+  domain/        Models, MagicNumber, 중계 그룹핑, 득점·역전 알림 문구
   ui/screens/    라이브, 결과, 순위, 설정 …
-  live/          알림, Now Bar, 이벤트 감지
-  widget/        홈 화면 위젯
-app/src/test/    중계 분류·역전/득점 문구 단위 테스트
+  live/          LiveScoreService, NotificationHelper, EventDetector, WearBridge
+  widget/        LotteWidget, WidgetAssets
+app/src/test/    중계 분류·역전/득점·매직 사유 단위 테스트
 wear/            Wear OS 타일·컴플리케이션 (폰 앱과 동기화)
-scripts/         build, publish-latest, CI 서명 설정
+scripts/         env.ps1, build.ps1, publish-latest, CI 서명 설정
 .github/workflows/publish-latest.yml
 ```
