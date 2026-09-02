@@ -281,6 +281,25 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        // 잠금화면은 커스텀 뷰(로고 비트맵)가 빠질 수 있어 공개용 텍스트 알림을 따로 둔다.
+        val publicNotification = NotificationCompat.Builder(context, CHANNEL_LIVE_CARD)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setSilent(true)
+            .setShowWhen(false)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .build()
+        builder.setPublicVersion(publicNotification)
+
+        val showChip = mode == LiveDisplayMode.LOCK_NOW || mode == LiveDisplayMode.STATUS_SCORE
+        val promoteNowBar = showChip &&
+            mode == LiveDisplayMode.LOCK_NOW &&
+            game != null &&
+            game.status == GameStatus.LIVE &&
+            !finished &&
+            canPostNowBar(context)
+
         if (useScorecard) {
             val compact = buildLiveCompactViews(context, game!!)
             val big = if (useBigCard) buildLiveRemoteViews(context, game, winProbSeries) else compact
@@ -291,15 +310,25 @@ object NotificationHelper {
                 .setCustomBigContentView(big)
                 .setCustomHeadsUpContentView(compact)
                 .setDeleteIntent(hide)
-                .setSubText(if (mode == LiveDisplayMode.LOCK_NOW) chipText else null)
-                .setShortCriticalText(if (mode == LiveDisplayMode.LOCK_NOW) chipText else null)
+            if (showChip && chipText.isNotBlank()) {
+                builder
+                    .setSubText(chipText)
+                    .setShortCriticalText(chipText)
+            }
+            if (promoteNowBar) {
+                builder.setRequestPromotedOngoing(true)
+            }
         } else {
             builder
                 .setStyle(NotificationCompat.BigTextStyle().bigText(text.ifBlank { "예정 경기 없음" }))
                 .setDeleteIntent(hide)
         }
 
-        return builder.build()
+        val notification = builder.build()
+        if (showChip && chipText.isNotBlank()) {
+            notification.extras.putString("android.shortCriticalText", chipText)
+        }
+        return notification
     }
 
     /** Now Bar 칩은 대략 7자면 잘린다. 점수는 `3:2`, 전이면 `18:30`. */

@@ -1,20 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 상태표시줄: 알파 마스크만 쓰이므로 속이 찬 원은 점으로 보인다. 테두리+실밥 실루엣. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M12,12m-9,0a9,9 0,1 1,18 0a9,9 0,1 1,-18 0" />
-    <path
-        android:strokeColor="#D00F31"
-        android:strokeWidth="1.4"
         android:fillColor="#00000000"
-        android:pathData="M5.5,7.5 Q10,12 5.5,16.5" />
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.6"
+        android:pathData="M12,12m-7.5,0a7.5,7.5 0,1 1,15 0a7.5,7.5 0,1 1,-15 0" />
     <path
-        android:strokeColor="#D00F31"
-        android:strokeWidth="1.4"
         android:fillColor="#00000000"
-        android:pathData="M18.5,7.5 Q14,12 18.5,16.5" />
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:pathData="M5.8,7.8 Q10,12 5.8,16.2" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:pathData="M18.2,7.8 Q14,12 18.2,16.2" />
 </vector>
