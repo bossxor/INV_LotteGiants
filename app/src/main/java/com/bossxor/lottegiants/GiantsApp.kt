@@ -9,6 +9,7 @@ import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.IMAGE_USER_AGENT
 import com.bossxor.lottegiants.domain.imageRefererForHost
 import com.bossxor.lottegiants.domain.shouldPostLiveNotification
+import com.bossxor.lottegiants.live.AlertBootstrap
 import com.bossxor.lottegiants.live.EventDetector
 import com.bossxor.lottegiants.live.GameSchedulerWorker
 import com.bossxor.lottegiants.live.LiveScoreService
@@ -28,8 +29,7 @@ class GiantsApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         NotificationHelper.createChannels(this)
-        GameSchedulerWorker.enqueue(this)
-        GameSchedulerWorker.scheduleRosterPoll(this)
+        AlertBootstrap.runAsync(this)
         scope.launch {
             runCatching {
                 val repo = GiantsRepository.get(this@GiantsApp)

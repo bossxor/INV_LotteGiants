@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `1.3.62` (`versionCode` **1070**) |
+| **버전** | `1.3.63` (`versionCode` **1071**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 
@@ -106,6 +106,22 @@
 
 - **역전**: 지고 있던 팀이 앞설 때만 (`3:4 → 5:4`). 동점 선취(`0:0 → 0:1`)는 역전이 아님
 - 홈런, 투수 교체, 라인업, 취소, 즐겨찾기 **타석·등판·등말소** 등
+
+### 엔트리·라인업 실시간 감시 (1.3.63~)
+
+앱을 열지 않아도 공시를 잡기 위해 **3중 백업**을 둔다.
+
+| 계층 | 역할 | 주기 |
+|------|------|------|
+| **AlertWatchService** | 포그라운드 감시 (삼성 배터리 최적화 대비) | **20초** (07~24시, 라인업/엔트리 알림 켜져 있을 때) |
+| **AlarmManager** | fast poll(라인업) + roster poll(엔트리) | 20~30초 |
+| **WorkManager** | 전체 스냅샷·알람 재등록 | 15분 (보조) |
+
+- 엔트리: KBO 공식 `GetRoster`(당일) 우선 → 없으면 Keubo
+- 라인업: 당일 KBO `lineupCk` + 네이버 relay (전체 스냅샷 없이 경량 조회)
+- 부팅·앱 시작 시 `AlertBootstrap`이 즉시 1회 폴링 + 오늘 경기 fast poll 예약
+- 상태 표시줄에 **「엔트리·라인업 감시 중」** 최소 알림이 뜰 수 있음 (무음·접어두기 가능)
+- **배터리 사용량 최적화 제외**를 권장 (설정 → 위젯/배터리)
 
 ### Wear OS
 
@@ -240,7 +256,7 @@ app/src/main/java/com/bossxor/lottegiants/
   data/          KboOfficialApi, GiantsRepository, SnapshotStore, UpdateChecker …
   domain/        Models, MagicNumber, WinProb, 중계 그룹핑, 득점·역전 알림 문구
   ui/screens/    라이브, 결과, 순위, 엔트리, 설정 …
-  live/          LiveScoreService, NotificationHelper, EventDetector, WearBridge
+  live/          LiveScoreService, AlertWatchService, NotificationHelper, EventDetector …
   widget/        LotteWidget, WidgetAssets
 app/src/test/    중계 분류, 역전/득점, 매직 사유, 승률 파싱 단위 테스트
 wear/            Wear OS 타일·컴플리케이션 (폰 앱과 동기화)

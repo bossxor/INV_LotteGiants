@@ -69,6 +69,7 @@ object NotificationHelper {
     const val CHANNEL_FAVORITE = "event_favorite"
     const val CHANNEL_ROSTER = "event_roster"
     const val CHANNEL_RACE = "event_race"
+    const val CHANNEL_ALERT_WATCH = "alert_watch_v1"
 
     const val LIVE_NOTIFICATION_ID = 1001
 
@@ -106,9 +107,21 @@ object NotificationHelper {
         ch(CHANNEL_FAVORITE, "즐겨찾기 선수", NotificationManager.IMPORTANCE_DEFAULT)
         ch(CHANNEL_ROSTER, "엔트리 등말소", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_RACE, "매직·트래직", NotificationManager.IMPORTANCE_DEFAULT)
+        ch(CHANNEL_ALERT_WATCH, "엔트리·라인업 감시", NotificationManager.IMPORTANCE_MIN)
 
         runCatching { nm.deleteNotificationChannel("event_lineup") }
     }
+
+    fun buildAlertWatchNotification(context: Context): Notification =
+        NotificationCompat.Builder(context, CHANNEL_ALERT_WATCH)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("엔트리·라인업 감시 중")
+            .setContentText("앱을 열지 않아도 공시를 확인합니다")
+            .setOngoing(true)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .build()
 
     /**
      * 실시간 스코어 알림에 올릴 경기.

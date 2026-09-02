@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.PowerManager
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -95,11 +96,12 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             }
         }
         scheduleRosterPoll(applicationContext)
+        AlertWatchService.startIfNeeded(applicationContext)
         return Result.success()
     }
 
     companion object {
-        private const val WORK_NAME = "giants_scheduler"
+        const val WORK_NAME = "giants_scheduler"
         /** 라인업 fast poll 간격 (경기 6시간 전~시작 후 30분) */
         private const val FAST_POLL_INTERVAL_MS = 20_000L
         /** 엔트리 등말소 전용 poll 간격 (08:00~23:00) */
@@ -140,16 +142,17 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             scheduleFastPoll(context, date, time, gameId)
         }
 
-        /** 경기 당일 6시간 전부터 20초마다 라인업·스냅샷 검사 */
+        /** 경기 당일 08:00 또는 6시간 전부터 20초마다 라인업 검사 */
         fun scheduleFastPoll(context: Context, date: String, time: String, gameId: String = "") {
             val start = parseGameMillis(date, time) ?: return
-            val windowStart = start - LINEUP_POLL_WINDOW_MS
+            val dayEight = parseGameMillis(date, "08:00") ?: (start - LINEUP_POLL_WINDOW_MS)
+            val windowStart = minOf(dayEight, start - LINEUP_POLL_WINDOW_MS)
             val windowEnd = start + 30 * 60_000L
             val now = System.currentTimeMillis()
             if (now > windowEnd) return
             val nextAt = when {
                 now < windowStart -> windowStart
-                else -> now + FAST_POLL_INTERVAL_MS
+                else -> (now + FAST_POLL_INTERVAL_MS).coerceAtMost(windowEnd)
             }
             if (nextAt <= now) return
             val am = context.getSystemService(AlarmManager::class.java)
@@ -321,130 +324,135 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
 
 class GameAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        when (intent?.action) {
-            GameSchedulerWorker.ACTION_START_LIVE,
-            Intent.ACTION_BOOT_COMPLETED -> {
-                val gameId = intent?.getStringExtra("gameId").orEmpty()
-                val goAsync = goAsync()
-                Thread {
-                    try {
-                        runBlocking {
-                            if (gameId.isNotBlank() &&
-                                !GameSchedulerWorker.isGameStillScheduled(context, gameId)
-                            ) {
-                                return@runBlocking
+        val pending = goAsync()
+        Thread {
+            try {
+                withWakeLock(context) {
+                    when (intent?.action) {
+                        GameSchedulerWorker.ACTION_START_LIVE,
+                        Intent.ACTION_BOOT_COMPLETED -> {
+                            runBlocking {
+                                if (intent?.action == Intent.ACTION_BOOT_COMPLETED) {
+                                    AlertBootstrap.run(context)
+                                } else {
+                                    val gameId = intent?.getStringExtra("gameId").orEmpty()
+                                    if (gameId.isNotBlank() &&
+                                        !GameSchedulerWorker.isGameStillScheduled(context, gameId)
+                                    ) {
+                                        return@runBlocking
+                                    }
+                                    if (gameId.isNotBlank()) {
+                                        GiantsRepository.get(context).store.setPreferredLiveGameId(gameId)
+                                    }
+                                    LiveScoreService.start(context)
+                                    AlertBootstrap.run(context)
+                                }
                             }
-                            if (gameId.isNotBlank()) {
-                                GiantsRepository.get(context).store.setPreferredLiveGameId(gameId)
-                            }
-                            LiveScoreService.start(context)
-                            GameSchedulerWorker.enqueue(context)
-                            GameSchedulerWorker.scheduleRosterPoll(context)
                         }
-                    } finally {
-                        goAsync.finish()
-                    }
-                }.start()
-            }
-            GameSchedulerWorker.ACTION_PREGAME -> {
-                val opponent = intent?.getStringExtra("opponent").orEmpty()
-                val stadium = intent?.getStringExtra("stadium").orEmpty()
-                val pitcher = intent?.getStringExtra("pitcher").orEmpty()
-                val gameId = intent?.getStringExtra("gameId").orEmpty()
-                val goAsync = goAsync()
-                Thread {
-                    try {
-                        val store = GiantsRepository.get(context).store
-                        runBlocking {
-                            if (gameId.isNotBlank() &&
-                                !GameSchedulerWorker.isGameStillScheduled(context, gameId)
-                            ) {
-                                return@runBlocking
-                            }
-                            val allow = shouldEmitAlert(
-                                typeEnabled = store.isNotificationEnabled(NotificationType.PREGAME_REMINDER),
-                                liveOnly = store.alertsLiveOnly(),
-                                gameIsLive = false,
-                                quietEnabled = store.quietHoursEnabled(),
-                                quietStartHour = store.quietStartHour(),
-                                quietEndHour = store.quietEndHour(),
-                                now = LocalTime.now(KBO_ZONE),
-                                type = NotificationType.PREGAME_REMINDER,
-                            )
-                            if (allow) {
-                                NotificationHelper.createChannels(context)
-                                val nid = 2701 + (gameId.hashCode() and 0xFF)
-                                NotificationHelper.notifyEvent(
-                                    context,
-                                    NotificationType.PREGAME_REMINDER,
-                                    "30분 뒤 경기 시작",
-                                    "vs $opponent · $stadium · 선발 ${pitcher.ifBlank { "미정" }}",
-                                    nid,
-                                    gameId,
+                        GameSchedulerWorker.ACTION_PREGAME -> {
+                            val opponent = intent?.getStringExtra("opponent").orEmpty()
+                            val stadium = intent?.getStringExtra("stadium").orEmpty()
+                            val pitcher = intent?.getStringExtra("pitcher").orEmpty()
+                            val gameId = intent?.getStringExtra("gameId").orEmpty()
+                            runBlocking {
+                                if (gameId.isNotBlank() &&
+                                    !GameSchedulerWorker.isGameStillScheduled(context, gameId)
+                                ) {
+                                    return@runBlocking
+                                }
+                                val store = GiantsRepository.get(context).store
+                                val allow = shouldEmitAlert(
+                                    typeEnabled = store.isNotificationEnabled(NotificationType.PREGAME_REMINDER),
+                                    liveOnly = store.alertsLiveOnly(),
+                                    gameIsLive = false,
+                                    quietEnabled = store.quietHoursEnabled(),
+                                    quietStartHour = store.quietStartHour(),
+                                    quietEndHour = store.quietEndHour(),
+                                    now = LocalTime.now(KBO_ZONE),
+                                    type = NotificationType.PREGAME_REMINDER,
                                 )
+                                if (allow) {
+                                    NotificationHelper.createChannels(context)
+                                    val nid = 2701 + (gameId.hashCode() and 0xFF)
+                                    NotificationHelper.notifyEvent(
+                                        context,
+                                        NotificationType.PREGAME_REMINDER,
+                                        "30분 뒤 경기 시작",
+                                        "vs $opponent · $stadium · 선발 ${pitcher.ifBlank { "미정" }}",
+                                        nid,
+                                        gameId,
+                                    )
+                                }
                             }
                         }
-                    } finally {
-                        goAsync.finish()
-                    }
-                }.start()
-            }
-            GameSchedulerWorker.ACTION_HIDE_LIVE -> {
-                LiveScoreService.stop(context)
-                NotificationHelper.cancelLive(context)
-            }
-            GameSchedulerWorker.ACTION_FAST_POLL -> {
-                val gameId = intent?.getStringExtra("gameId").orEmpty()
-                val date = intent?.getStringExtra("gameDate").orEmpty()
-                val time = intent?.getStringExtra("startTime").orEmpty()
-                val goAsync = goAsync()
-                Thread {
-                    try {
-                        runBlocking {
-                            if (gameId.isNotBlank() &&
-                                !GameSchedulerWorker.isGameStillScheduled(context, gameId)
-                            ) {
-                                return@runBlocking
-                            }
-                            val repo = GiantsRepository.get(context)
-                            NotificationHelper.createChannels(context)
-                            val detector = EventDetector(repo.store)
-                            GameSchedulerWorker.pollLineupAlert(context, detector, repo)
-                            GameSchedulerWorker.pollRosterAlerts(context, detector, repo)
-                            WidgetUpdater.updateAll(context)
-                            val game = repo.refreshLineupAlert()
-                            val status = game?.status
-                            if (status == GameStatus.LIVE || status == GameStatus.BEFORE) {
-                                LiveScoreService.start(context)
-                            }
-                            if (date.isNotBlank() && time.isNotBlank() &&
-                                status != GameStatus.ENDED && status != GameStatus.CANCELED
-                            ) {
-                                GameSchedulerWorker.scheduleFastPoll(context, date, time, gameId)
-                            }
+                        GameSchedulerWorker.ACTION_HIDE_LIVE -> {
+                            LiveScoreService.stop(context)
+                            NotificationHelper.cancelLive(context)
                         }
-                    } finally {
-                        goAsync.finish()
-                    }
-                }.start()
-            }
-            GameSchedulerWorker.ACTION_ROSTER_POLL -> {
-                val goAsync = goAsync()
-                Thread {
-                    try {
-                        runBlocking {
-                            val repo = GiantsRepository.get(context)
-                            NotificationHelper.createChannels(context)
-                            val detector = EventDetector(repo.store)
-                            GameSchedulerWorker.pollRosterAlerts(context, detector, repo)
-                            GameSchedulerWorker.pollLineupAlert(context, detector, repo)
-                            GameSchedulerWorker.scheduleRosterPoll(context)
+                        GameSchedulerWorker.ACTION_FAST_POLL -> {
+                            val gameId = intent?.getStringExtra("gameId").orEmpty()
+                            val date = intent?.getStringExtra("gameDate").orEmpty()
+                            val time = intent?.getStringExtra("startTime").orEmpty()
+                            var shouldReschedule = date.isNotBlank() && time.isNotBlank()
+                            runBlocking {
+                                try {
+                                    if (gameId.isNotBlank() &&
+                                        !GameSchedulerWorker.isGameStillScheduled(context, gameId)
+                                    ) {
+                                        shouldReschedule = false
+                                        return@runBlocking
+                                    }
+                                    val repo = GiantsRepository.get(context)
+                                    NotificationHelper.createChannels(context)
+                                    val detector = EventDetector(repo.store)
+                                    GameSchedulerWorker.pollLineupAlert(context, detector, repo)
+                                    GameSchedulerWorker.pollRosterAlerts(context, detector, repo)
+                                    WidgetUpdater.updateAll(context)
+                                    val game = repo.refreshLineupAlert()
+                                    val status = game?.status
+                                    if (status == GameStatus.LIVE || status == GameStatus.BEFORE) {
+                                        LiveScoreService.start(context)
+                                    }
+                                    if (status == GameStatus.ENDED || status == GameStatus.CANCELED) {
+                                        shouldReschedule = false
+                                    }
+                                } finally {
+                                    if (shouldReschedule) {
+                                        GameSchedulerWorker.scheduleFastPoll(context, date, time, gameId)
+                                    }
+                                }
+                            }
+                            AlertWatchService.startIfNeeded(context)
                         }
-                    } finally {
-                        goAsync.finish()
+                        GameSchedulerWorker.ACTION_ROSTER_POLL -> {
+                            runBlocking {
+                                val repo = GiantsRepository.get(context)
+                                NotificationHelper.createChannels(context)
+                                val detector = EventDetector(repo.store)
+                                GameSchedulerWorker.pollRosterAlerts(context, detector, repo)
+                                GameSchedulerWorker.pollLineupAlert(context, detector, repo)
+                                GameSchedulerWorker.scheduleRosterPoll(context)
+                            }
+                            AlertWatchService.startIfNeeded(context)
+                        }
                     }
-                }.start()
+                }
+            } finally {
+                pending.finish()
             }
+        }.start()
+    }
+
+    private fun withWakeLock(context: Context, block: () -> Unit) {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "lottegiants:alert").apply {
+            setReferenceCounted(false)
+            acquire(60_000L)
+        }
+        try {
+            block()
+        } finally {
+            if (wl.isHeld) wl.release()
         }
     }
 }

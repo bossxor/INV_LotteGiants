@@ -47,6 +47,11 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <service
+            android:name=".live.AlertWatchService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <receiver
             android:name=".widget.LotteWidgetReceiver"
             android:exported="true"
@@ -61,13 +66,15 @@
 
         <receiver
             android:name=".live.GameAlarmReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:directBootAware="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="com.bossxor.lottegiants.START_LIVE" />
                 <action android:name="com.bossxor.lottegiants.PREGAME" />
                 <action android:name="com.bossxor.lottegiants.HIDE_LIVE" />
                 <action android:name="com.bossxor.lottegiants.FAST_POLL" />
+                <action android:name="com.bossxor.lottegiants.ROSTER_POLL" />
             </intent-filter>
         </receiver>
 
