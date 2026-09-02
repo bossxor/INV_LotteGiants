@@ -326,13 +326,27 @@ enum class LiveDisplayMode {
 }
 
 const val LIVE_LEAD_MINUTES_MIN = 30
-const val LIVE_LEAD_MINUTES_MAX = 360
+const val LIVE_LEAD_MINUTES_MAX = 240
 const val LIVE_LEAD_MINUTES_STEP = 30
 const val LIVE_LEAD_MINUTES_DEFAULT = 120
+
+val LIVE_LEAD_MINUTE_OPTIONS: List<Int> =
+    (LIVE_LEAD_MINUTES_MIN..LIVE_LEAD_MINUTES_MAX step LIVE_LEAD_MINUTES_STEP).toList()
 
 fun clampLiveLeadMinutes(raw: Int): Int {
     val stepped = (raw / LIVE_LEAD_MINUTES_STEP) * LIVE_LEAD_MINUTES_STEP
     return stepped.coerceIn(LIVE_LEAD_MINUTES_MIN, LIVE_LEAD_MINUTES_MAX)
+}
+
+fun liveLeadChipLabel(minutes: Int): String {
+    val m = clampLiveLeadMinutes(minutes)
+    val h = m / 60
+    val rem = m % 60
+    return when {
+        h == 0 -> "${rem}분"
+        rem == 0 -> "${h}시간"
+        else -> "${h}시간 ${rem}분"
+    }
 }
 
 fun liveLeadLabel(minutes: Int): String {

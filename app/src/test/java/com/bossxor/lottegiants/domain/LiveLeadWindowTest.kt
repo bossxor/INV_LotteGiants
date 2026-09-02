@@ -27,7 +27,8 @@ class LiveLeadWindowTest {
         assertEquals(30, clampLiveLeadMinutes(10))
         assertEquals(120, clampLiveLeadMinutes(120))
         assertEquals(90, clampLiveLeadMinutes(100))
-        assertEquals(360, clampLiveLeadMinutes(999))
+        assertEquals(240, clampLiveLeadMinutes(999))
+        assertEquals(180, clampLiveLeadMinutes(180))
     }
 
     @Test
@@ -35,6 +36,15 @@ class LiveLeadWindowTest {
         assertEquals("30분 전", liveLeadLabel(30))
         assertEquals("2시간 전", liveLeadLabel(120))
         assertEquals("1시간 30분 전", liveLeadLabel(90))
+        assertEquals("3시간 전", liveLeadLabel(180))
+    }
+
+    @Test
+    fun optionsAreThirtyMinuteStepsUpToFourHours() {
+        assertEquals(
+            listOf(30, 60, 90, 120, 150, 180, 210, 240),
+            LIVE_LEAD_MINUTE_OPTIONS,
+        )
     }
 
     @Test

@@ -63,12 +63,10 @@ import com.bossxor.lottegiants.data.UpdateCheckResult
 import com.bossxor.lottegiants.data.UpdateChecker
 import com.bossxor.lottegiants.domain.AlertPreset
 import com.bossxor.lottegiants.domain.KBO_ZONE
-import com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTES_MAX
-import com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTES_MIN
-import com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTES_STEP
+import com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTE_OPTIONS
 import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.ThemeMode
-import com.bossxor.lottegiants.domain.clampLiveLeadMinutes
+import com.bossxor.lottegiants.domain.liveLeadChipLabel
 import com.bossxor.lottegiants.domain.liveLeadLabel
 import com.bossxor.lottegiants.live.LiveScoreService
 import com.bossxor.lottegiants.live.NotificationHelper
@@ -220,9 +218,6 @@ fun SettingsScreen(
         )
         Spacer(Modifier.height(8.dp))
         val liveOnly by store.alertsLiveOnlyFlow.collectAsState(initial = false)
-        val quietOn by store.quietHoursEnabledFlow.collectAsState(initial = false)
-        val quietStart by store.quietStartHourFlow.collectAsState(initial = 23)
-        val quietEnd by store.quietEndHourFlow.collectAsState(initial = 8)
         SectionCard {
             Column {
                 Text("프리셋", fontWeight = FontWeight.SemiBold)
@@ -248,30 +243,6 @@ fun SettingsScreen(
                         checked = liveOnly,
                         onCheckedChange = { on -> scope.launch { store.setAlertsLiveOnly(on) } },
                     )
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("무음 시간", fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "${quietStart}시–${quietEnd}시에는 알림 없음",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = quietOn,
-                        onCheckedChange = { on -> scope.launch { store.setQuietHoursEnabled(on) } },
-                    )
-                }
-                if (quietOn) {
-                    Spacer(Modifier.height(8.dp))
-                    HourStepper("시작", quietStart) { h ->
-                        scope.launch { store.setQuietHours(h, quietEnd) }
-                    }
-                    HourStepper("끝", quietEnd) { h ->
-                        scope.launch { store.setQuietHours(quietStart, h) }
-                    }
                 }
             }
         }
@@ -376,42 +347,23 @@ fun SettingsScreen(
                 val liveLead by store.liveLeadMinutesFlow.collectAsState(initial = 120)
                 Text("Now Bar 표시 시작", fontWeight = FontWeight.SemiBold)
                 Text(
-                    "경기 시작 ${liveLeadLabel(liveLead)}부터 알림이 뜹니다. 경기 중에는 항상 표시되고, 끝나면 밀어 지울 수 있습니다.",
+                    "경기 시작 ${liveLeadLabel(liveLead)}부터 · 30분~4시간",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    liveLeadLabel(liveLead),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                )
-                Slider(
-                    value = liveLead.toFloat(),
-                    onValueChange = { raw ->
-                        scope.launch {
-                            store.setLiveLeadMinutes(clampLiveLeadMinutes(raw.toInt()))
+                Spacer(Modifier.height(8.dp))
+                LIVE_LEAD_MINUTE_OPTIONS.chunked(4).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        row.forEach { mins ->
+                            ModeChip(liveLeadChipLabel(mins), liveLead == mins) {
+                                scope.launch {
+                                    store.setLiveLeadMinutes(mins)
+                                    if (store.isLiveScoreEnabled()) LiveScoreService.restart(context)
+                                }
+                            }
                         }
-                    },
-                    onValueChangeFinished = {
-                        scope.launch {
-                            if (store.isLiveScoreEnabled()) LiveScoreService.restart(context)
-                        }
-                    },
-                    valueRange = LIVE_LEAD_MINUTES_MIN.toFloat()..LIVE_LEAD_MINUTES_MAX.toFloat(),
-                    steps = (LIVE_LEAD_MINUTES_MAX - LIVE_LEAD_MINUTES_MIN) / LIVE_LEAD_MINUTES_STEP - 1,
-                )
-                Text(
-                    "30분 단위 · 최소 30분 · 최대 6시간",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "워치4 등 Wear OS는 폰과 페어링되면 워치 앱·타일·컴플리케이션에 같은 점수와 순위·선발이 갑니다. 워치에 앱이 없으면 갤럭시 웨어러블에서 사직스코어를 설치하세요.",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                    }
+                }
                 val wearSync by store.wearLastSyncFlow.collectAsState(initial = 0L)
                 if (wearSync > 0L) {
                     val clock = Instant.ofEpochMilli(wearSync).atZone(KBO_ZONE).toLocalTime()
@@ -685,33 +637,6 @@ fun SettingsScreen(
             confirmButton = {
                 Text("잠시만요…", color = MaterialTheme.colorScheme.onSurfaceVariant)
             },
-        )
-    }
-}
-
-@Composable
-private fun HourStepper(label: String, hour: Int, onChange: (Int) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, modifier = Modifier.width(48.dp), fontSize = 13.sp)
-        Text(
-            "−",
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .clickable { onChange((hour + 23) % 24) }
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            fontWeight = FontWeight.Bold,
-        )
-        Text("${hour}시", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 8.dp))
-        Text(
-            "+",
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .clickable { onChange((hour + 1) % 24) }
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            fontWeight = FontWeight.Bold,
         )
     }
 }
