@@ -155,15 +155,13 @@ data class RutaGameExtras(
 fun parseRutaWinRate(obj: JsonObject?, isHome: Boolean): List<com.bossxor.lottegiants.domain.WinProbPoint> {
     if (obj == null) return emptyList()
     val points = mutableListOf<com.bossxor.lottegiants.domain.WinProbPoint>()
-    fun norm(v: Double): Double = (if (v > 1.5) v / 100.0 else v).coerceIn(0.0, 1.0)
     fun addRate(seq: Int, label: String, home: Double?, away: Double?) {
-        val raw = if (isHome) home else away
-        val rate = raw ?: home ?: return
+        val focus = com.bossxor.lottegiants.domain.WinProb.focusWinProb(home, away, isHome) ?: return
         points.add(
             com.bossxor.lottegiants.domain.WinProbPoint(
                 seq = seq,
                 label = label,
-                homeProb = norm(rate),
+                homeProb = focus,
             ),
         )
     }

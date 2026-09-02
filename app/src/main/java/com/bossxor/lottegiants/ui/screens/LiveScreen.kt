@@ -73,6 +73,7 @@ import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.StadiumWeather
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.suspendLabel
+import com.bossxor.lottegiants.domain.WinProb
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.ui.LoseRed
 import com.bossxor.lottegiants.ui.LotteGold
@@ -251,11 +252,7 @@ fun LiveScreen(
                             }
                             if (error != null) {
                                 Spacer(Modifier.height(8.dp))
-                                Text(
-                                    error,
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
+                                ErrorRetryLine(error, onRefresh)
                             }
                             if (!viewingOther && snapshot?.lotteGame != null) {
                                 val liveChoices = snapshot.todayLotteGames
@@ -427,7 +424,7 @@ fun LiveScreen(
                         }
                         if (error != null) {
                             Spacer(Modifier.height(8.dp))
-                            Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                            ErrorRetryLine(error, onRefresh)
                         }
                     }
                 }
@@ -1135,11 +1132,11 @@ private fun SummaryTab(
     Spacer(Modifier.height(10.dp))
 
     val winSeries = if (g.isFocusLotte()) snapshot?.winProbSeries.orEmpty() else emptyList()
-    if (winSeries.isNotEmpty()) {
+    val lotteProb = WinProb.resolveDisplayFocusProb(g, winSeries.lastOrNull()?.homeProb)
+    if (lotteProb != null) {
         SectionCard {
             Column {
                 SectionHeader("${g.focusName()} 승리 확률")
-                val lotteProb = winSeries.last().homeProb
                 val last = (lotteProb * 100).toInt()
                 Text(
                     "$last%",
@@ -1149,8 +1146,7 @@ private fun SummaryTab(
                 )
                 Spacer(Modifier.height(8.dp))
                 // 좌(원정) · 우(홈) 실시간 승률 바
-                val awayProb = if (g.isHome) 1.0 - lotteProb else lotteProb
-                val homeProb = 1.0 - awayProb
+                val (awayProb, homeProb) = WinProb.awayHomeFromFocus(g, lotteProb)
                 val awayName = if (g.isHome) g.opponentName.ifBlank { "상대" } else g.focusName()
                 val homeName = if (g.isHome) g.focusName() else g.opponentName.ifBlank { "상대" }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1188,13 +1184,17 @@ private fun SummaryTab(
                             .background(if (g.isHome) LotteRed else Color(0xFF9AA0A6)),
                     )
                 }
-                Spacer(Modifier.height(8.dp))
-                com.bossxor.lottegiants.ui.components.SparklineChart(
-                    values = winSeries.map { it.homeProb * 100.0 },
-                    height = 56.dp,
-                    yMin = 0.0,
-                    yMax = 100.0,
-                )
+                if (winSeries.size >= 2) {
+                    Spacer(Modifier.height(8.dp))
+                    com.bossxor.lottegiants.ui.components.SparklineChart(
+                        values = winSeries.map {
+                            WinProb.clampForDisplay(g, it.homeProb) * 100.0
+                        },
+                        height = 56.dp,
+                        yMin = 0.0,
+                        yMax = 100.0,
+                    )
+                }
                 Text(
                     if (winSeries.size <= 1) "현재 추정" else "타석별 변화",
                     style = MaterialTheme.typography.labelSmall,
@@ -2487,6 +2487,32 @@ private fun KeyPlayerChip(
                 Text(pick.metric, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+    }
+}
+
+@Composable
+private fun ErrorRetryLine(message: String, onRetry: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            message,
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            "다시 시도",
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onRetry)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 12.sp,
+        )
     }
 }
 

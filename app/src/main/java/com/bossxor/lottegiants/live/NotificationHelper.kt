@@ -30,6 +30,7 @@ import com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTES_DEFAULT
 import com.bossxor.lottegiants.domain.shouldPostLiveNotification
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.suspendLabel
+import com.bossxor.lottegiants.domain.WinProb
 import com.bossxor.lottegiants.domain.estimateLotteWinProb
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.domain.kboToday
@@ -623,7 +624,7 @@ object NotificationHelper {
         }
         rv.setTextViewText(R.id.notif_pitcher_line, pitcherLine)
         rv.setTextViewText(R.id.notif_batter_line, batterLine)
-        val showWinProb = game.status != GameStatus.CANCELED
+        val showWinProb = WinProb.shouldShowWinProbBar(game)
         rv.setViewVisibility(R.id.notif_winprob_row, if (showWinProb) View.VISIBLE else View.GONE)
         fun setDots(ids: IntArray, count: Int, kind: Char) {
             ids.forEachIndexed { i, id ->
@@ -637,13 +638,13 @@ object NotificationHelper {
         setDots(intArrayOf(R.id.notif_s0, R.id.notif_s1, R.id.notif_s2), strike, 'S')
         setDots(intArrayOf(R.id.notif_o0, R.id.notif_o1, R.id.notif_o2), out, 'O')
 
-        val lotteProb = winProbSeries.lastOrNull()?.homeProb
-            ?: estimateLotteWinProb(game)
-        val awayProb = if (game.isHome) (1.0 - lotteProb) else lotteProb
-        val homeProb = 1.0 - awayProb
+        val lotteProb = WinProb.resolveDisplayFocusProb(
+            game,
+            winProbSeries.lastOrNull()?.homeProb,
+        ) ?: estimateLotteWinProb(game)
+        val (awayProb, homeProb) = WinProb.awayHomeFromFocus(game, lotteProb)
         if (showWinProb) {
-            val awayPct = (awayProb * 100).toInt().coerceIn(1, 99)
-            val homePct = (100 - awayPct).coerceIn(1, 99)
+            val (awayPct, homePct) = WinProb.displayPercents(awayProb, homeProb)
             rv.setTextViewText(R.id.notif_winprob_left, "${awayName} ${awayPct}%")
             rv.setTextViewText(R.id.notif_winprob_right, "${homePct}% ${homeName}")
             val bar = WidgetAssets.winProbBarBitmap(

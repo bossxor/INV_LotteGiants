@@ -26,6 +26,7 @@ import com.bossxor.lottegiants.domain.RelayText
 import com.bossxor.lottegiants.domain.RosterMove
 import com.bossxor.lottegiants.domain.StadiumWeather
 import com.bossxor.lottegiants.domain.TeamStanding
+import com.bossxor.lottegiants.domain.WinProb
 import com.bossxor.lottegiants.domain.WinProbPoint
 import com.bossxor.lottegiants.domain.cancelDisplayLabel
 import com.bossxor.lottegiants.domain.estimateLotteWinProb
@@ -260,7 +261,10 @@ class GiantsRepository private constructor(context: Context) {
         }?.let {
             listOf(WinProbPoint(seq = 0, label = "현재", homeProb = estimateLotteWinProb(it)))
         }.orEmpty()
-        val freshWin = rutaExtras.winProbSeries.ifEmpty { naverWinProb }.ifEmpty { estimated }
+        val freshWin = WinProb.sanitizeSeries(
+            lotteInfo,
+            WinProb.pickSeries(naverWinProb, rutaExtras.winProbSeries, estimated),
+        )
         val prevWin = prev?.winProbSeries.orEmpty()
         val winProbSeries = when {
             freshWin.size >= 2 -> freshWin.takeLast(48)
@@ -356,7 +360,15 @@ class GiantsRepository private constructor(context: Context) {
             weather = weather,
             rutaConnected = rutaExtras.connected || rutaConnected,
             winProbSeries = winProbSeries,
-            hotColdZone = hotColdCellsFor(lotteInfo),
+            hotColdZone = run {
+                val fresh = hotColdCellsFor(lotteInfo)
+                val prevHot = prev?.hotColdZone.orEmpty()
+                when {
+                    fresh.isNotEmpty() -> fresh
+                    prev?.lotteGame?.gameId == lotteInfo?.gameId && prevHot.isNotEmpty() -> prevHot
+                    else -> fresh
+                }
+            },
             pitchLocations = lotteInfo?.pitchLocations.orEmpty(),
             lotteSeasonRank = rank,
             lotteRemainingGames = rem,
@@ -514,20 +526,8 @@ class GiantsRepository private constructor(context: Context) {
 
     /** 네이버 relay metricOption → 롯데 승리확률 시계열 */
     private fun buildWinProbFromRelay(relay: TextRelayData, isHome: Boolean): List<WinProbPoint> {
-        fun norm(v: Double): Double = (if (v > 1.5) v / 100.0 else v).coerceIn(0.0, 1.0)
-        fun rateOf(m: MetricOptionDto?): Double? {
-            if (m == null) return null
-            val preferred = if (isHome) m.homeTeamWinRate else m.awayTeamWinRate
-            preferred?.let { return norm(it) }
-            // 한쪽만 오면 포커스 기준 보정
-            m.homeTeamWinRate?.let { h ->
-                return if (isHome) norm(h) else (1.0 - norm(h))
-            }
-            m.awayTeamWinRate?.let { a ->
-                return if (isHome) (1.0 - norm(a)) else norm(a)
-            }
-            return null
-        }
+        fun rateOf(m: MetricOptionDto?): Double? =
+            WinProb.focusWinProb(m?.homeTeamWinRate, m?.awayTeamWinRate, isHome)
         val fromPlates = relay.textRelays.mapIndexedNotNull { idx, tr ->
             val r = rateOf(tr.metricOption) ?: return@mapIndexedNotNull null
             WinProbPoint(seq = idx, label = "${tr.inn}회", homeProb = r)
