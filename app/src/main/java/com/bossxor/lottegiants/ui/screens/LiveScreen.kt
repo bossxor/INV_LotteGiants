@@ -107,6 +107,8 @@ private val DETAIL_TAB_ROW_HEIGHT = 44.dp
 fun LiveScreen(
     snapshot: LiveSnapshot?,
     error: String?,
+    refreshError: String? = null,
+    onDismissRefreshError: () -> Unit = {},
     loading: Boolean,
     secondsUntilRefresh: Int = 10,
     isRefreshing: Boolean = false,
@@ -250,9 +252,9 @@ fun LiveScreen(
                                     },
                                 )
                             }
-                            if (error != null) {
+                            if (refreshError != null) {
                                 Spacer(Modifier.height(8.dp))
-                                ErrorRetryLine(error, onRefresh)
+                                ErrorRetryLine(refreshError, onRefresh, onDismissRefreshError)
                             }
                             if (!viewingOther && snapshot?.lotteGame != null) {
                                 val liveChoices = snapshot.todayLotteGames
@@ -422,9 +424,9 @@ fun LiveScreen(
                             WeatherLine(it)
                             Spacer(Modifier.height(12.dp))
                         }
-                        if (error != null) {
+                        if (refreshError != null) {
                             Spacer(Modifier.height(8.dp))
-                            ErrorRetryLine(error, onRefresh)
+                            ErrorRetryLine(refreshError, onRefresh, onDismissRefreshError)
                         }
                     }
                 }
@@ -2491,11 +2493,10 @@ private fun KeyPlayerChip(
 }
 
 @Composable
-private fun ErrorRetryLine(message: String, onRetry: () -> Unit) {
+private fun ErrorRetryLine(message: String, onRetry: () -> Unit, onDismiss: () -> Unit) {
     Row(
         Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(
             message,
@@ -2511,6 +2512,15 @@ private fun ErrorRetryLine(message: String, onRetry: () -> Unit) {
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold,
+            fontSize = 12.sp,
+        )
+        Text(
+            "닫기",
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onDismiss)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 12.sp,
         )
     }

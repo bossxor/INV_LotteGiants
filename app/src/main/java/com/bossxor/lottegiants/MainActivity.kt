@@ -126,6 +126,7 @@ class MainActivity : ComponentActivity() {
                 val snapshot by vm.snapshot.collectAsState()
                 val standings by vm.standings.collectAsState()
                 val error by vm.error.collectAsState()
+                val refreshError by vm.refreshError.collectAsState()
                 val dayGames by vm.dayGames.collectAsState()
                 val dayGamesLoading by vm.dayGamesLoading.collectAsState()
                 val selectedDate by vm.selectedDate.collectAsState()
@@ -279,6 +280,8 @@ class MainActivity : ComponentActivity() {
                     snapshot = snapshot,
                     standings = standings,
                     error = error,
+                    refreshError = refreshError,
+                    onDismissRefreshError = vm::clearRefreshError,
                     loading = snapshot == null && error == null,
                     dayGames = dayGames,
                     dayGamesLoading = dayGamesLoading,
@@ -419,6 +422,8 @@ private fun AppScaffold(
     snapshot: com.bossxor.lottegiants.domain.LiveSnapshot?,
     standings: List<com.bossxor.lottegiants.domain.TeamStanding>,
     error: String?,
+    refreshError: String?,
+    onDismissRefreshError: () -> Unit,
     loading: Boolean,
     dayGames: List<com.bossxor.lottegiants.domain.MiniGame>,
     dayGamesLoading: Boolean,
@@ -668,6 +673,8 @@ private fun AppScaffold(
                     0 -> LiveScreen(
                         snapshot = snapshot,
                         error = error,
+                        refreshError = refreshError,
+                        onDismissRefreshError = onDismissRefreshError,
                         loading = loading,
                         secondsUntilRefresh = secondsUntilRefresh,
                         isRefreshing = isRefreshing,

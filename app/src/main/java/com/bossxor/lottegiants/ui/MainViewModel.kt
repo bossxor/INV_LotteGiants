@@ -55,6 +55,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    /** 라이브 탭 자동 새로고침 실패 안내 (히스토리·엔트리와 무관) */
+    private val _refreshError = MutableStateFlow<String?>(null)
+    val refreshError: StateFlow<String?> = _refreshError.asStateFlow()
+
     private val _dayGames = MutableStateFlow<List<MiniGame>>(emptyList())
     val dayGames: StateFlow<List<MiniGame>> = _dayGames.asStateFlow()
 
@@ -164,10 +168,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             runCatching { repo.fetchLeaders(false) }
                 .onSuccess { _batterLeaders.value = it }
-                .onFailure { if (_batterLeaders.value.isEmpty()) _error.value = it.message }
             runCatching { repo.fetchLeaders(true) }
                 .onSuccess { _pitcherLeaders.value = it }
-                .onFailure { if (_pitcherLeaders.value.isEmpty()) _error.value = it.message }
         }
         viewModelScope.launch {
             runCatching { repo.fetchRecentRosterMoves(7) }.onSuccess { _recentMoves.value = it }
@@ -374,11 +376,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { repo.store.removeFavorite(code) }
     }
 
+    fun clearRefreshError() {
+        _refreshError.value = null
+    }
+
     suspend fun refreshOnce(force: Boolean = false) {
         runCatching { repo.refreshSnapshot(force) }
             .onSuccess {
                 _snapshot.value = it
-                _error.value = null
+                _refreshError.value = null
                 WidgetUpdater.updateAll(getApplication())
                 WearBridge.syncSnapshot(getApplication(), it)
                 if (_selectedDate.value == kboToday()) {
@@ -389,10 +395,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             .onFailure { e ->
                 val last = _snapshot.value?.updatedAtMillis ?: 0L
-                _error.value = if (last > 0L) {
+                val stale = last == 0L ||
+                    System.currentTimeMillis() - last > REFRESH_ERROR_STALE_MS
+                if (!force && !stale) return@onFailure
+                _refreshError.value = if (last > 0L) {
                     val clock = Instant.ofEpochMilli(last).atZone(KBO_ZONE).toLocalTime()
                         .format(DateTimeFormatter.ofPattern("HH:mm"))
-                    "새로고침 실패 · 마지막 $clock"
+                    "실시간 점수 새로고침 실패 · 마지막 $clock"
                 } else {
                     e.message ?: "경기를 불러오지 못했습니다."
                 }
@@ -698,6 +707,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         const val POLL_LIVE_SEC = 10
+        private const val REFRESH_ERROR_STALE_MS = 10 * 60 * 1000L
 
         fun sortLotteFirst(games: List<MiniGame>): List<MiniGame> =
             games.sortedByDescending {
