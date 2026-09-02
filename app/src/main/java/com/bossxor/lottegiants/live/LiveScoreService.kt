@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 /**
- * 경기 중 5초(라이브)·20초(경기 전) 간격으로 폴링해 위젯·알림·이벤트를 갱신한다.
+ * 경기 중 5초(라이브)·8초(경기 전) 간격으로 폴링해 위젯·알림·이벤트를 갱신한다.
  */
 class LiveScoreService : Service() {
 
@@ -105,7 +105,12 @@ class LiveScoreService : Service() {
                 }
                 WidgetUpdater.updateAll(this@LiveScoreService)
                 WearBridge.syncSnapshot(this@LiveScoreService, snap)
-                detector.process(this@LiveScoreService, game)
+                val alertGame = if (game?.status == GameStatus.BEFORE) {
+                    runCatching { repo.refreshLineupAlert() }.getOrNull() ?: game
+                } else {
+                    game
+                }
+                detector.process(this@LiveScoreService, alertGame)
                 if (game?.status == GameStatus.ENDED) {
                     val st = runCatching { repo.fetchStandings() }.getOrDefault(emptyList())
                     detector.processRace(
@@ -114,15 +119,18 @@ class LiveScoreService : Service() {
                         com.bossxor.lottegiants.domain.raceRelevantGames(snap),
                     )
                 }
-                // 등말소는 매 폴링마다 — 다른 앱보다 빠르게
-                val moves = runCatching { repo.fetchRecentRosterMoves(2) }.getOrDefault(emptyList())
+                // 등말소 — KBO 공식 GetRoster 우선 (Keubo보다 빠름)
+                val moves = runCatching { repo.pollRosterMovesForAlert() }.getOrDefault(emptyList())
+                    .ifEmpty {
+                        runCatching { repo.fetchRecentRosterMoves(2) }.getOrDefault(emptyList())
+                    }
                 detector.processRosterMoves(this@LiveScoreService, moves)
 
                 when (game?.status) {
                     GameStatus.LIVE -> delay(5_000L)
                     GameStatus.BEFORE -> {
                         if (shouldShowLive(game, lead)) {
-                            delay(20_000L)
+                            delay(8_000L)
                         } else {
                             hideLiveAndStop(remove = true)
                             break

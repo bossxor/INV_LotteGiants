@@ -29,6 +29,7 @@ class GiantsApp : Application(), ImageLoaderFactory {
         super.onCreate()
         NotificationHelper.createChannels(this)
         GameSchedulerWorker.enqueue(this)
+        GameSchedulerWorker.scheduleRosterPoll(this)
         scope.launch {
             runCatching {
                 val repo = GiantsRepository.get(this@GiantsApp)
@@ -38,9 +39,14 @@ class GiantsApp : Application(), ImageLoaderFactory {
                 WearBridge.syncSnapshot(this@GiantsApp, snap)
                 val detector = EventDetector(repo.store)
                 detector.process(this@GiantsApp, snap.lotteGame)
-                // 워커가 도는 15분을 기다리지 않고 앱을 열자마자 새 공시를 알린다
+                // 워커·알람을 기다리지 않고 앱을 열자마자 새 공시를 알린다
                 runCatching {
-                    detector.processRosterMoves(this@GiantsApp, repo.fetchRecentRosterMoves(3))
+                    val kboMoves = repo.pollRosterMovesForAlert()
+                    if (kboMoves.isNotEmpty()) {
+                        detector.processRosterMoves(this@GiantsApp, kboMoves)
+                    } else {
+                        detector.processRosterMoves(this@GiantsApp, repo.fetchRecentRosterMoves(3))
+                    }
                 }
                 if (repo.store.isLiveScoreEnabled()) {
                     val lead = repo.store.liveLeadMinutes()

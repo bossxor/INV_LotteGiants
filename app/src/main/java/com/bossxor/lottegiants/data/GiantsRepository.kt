@@ -1155,6 +1155,51 @@ class GiantsRepository private constructor(context: Context) {
         return fetchAllRosterMoves(teamCode).filter { it.moveDate >= from }.sortedByDescending { it.moveDate }
     }
 
+    /**
+     * 엔트리 알림용 경량 조회 — KBO 공식 GetRoster(당일)만 본다. Keubo 전체 이력보다 빠르다.
+     */
+    suspend fun pollRosterMovesForAlert(teamCode: String = LOTTE_TEAM_CODE): List<RosterMove> {
+        val today = kboToday()
+        val dateStr = today.toString()
+        val changes = runCatching {
+            fetchDayEntryChanges(today, resolveCodes = false, teamCode = teamCode)
+        }.getOrNull() ?: return emptyList()
+        fun EntryPlayer.toMove(register: Boolean) = RosterMove(
+            playerCode = playerCode,
+            playerName = name,
+            moveType = if (register) "등록" else "말소",
+            moveDate = dateStr,
+            isRegister = register,
+        )
+        return changes.registered.map { it.toMove(true) } + changes.removed.map { it.toMove(false) }
+    }
+
+    /**
+     * 라인업 알림용 경량 조회 — 당일 KBO 일정 + (필요 시) 네이버 라인업 relay만 본다.
+     */
+    suspend fun refreshLineupAlert(): LotteGameInfo? {
+        val today = kboToday()
+        val kboLotte = pickKboLotte(fetchKboGamesFresh(today), store.preferredLiveGameId())
+            ?: return null
+        var lotteInfo = kboLotte.toLotteBase()
+        if (lotteInfo.status == GameStatus.CANCELED || lotteInfo.status == GameStatus.ENDED) {
+            return lotteInfo
+        }
+        val gameId = kboLotte.naverGameId()
+        if (gameId.isNotBlank() &&
+            (lotteInfo.lineupAnnounced || lotteInfo.lotteLineup.size < 9)
+        ) {
+            runCatching { fetchLineupRelay(gameId) }.getOrNull()?.let { relay ->
+                if (relayHasLineup(relay) || lotteInfo.lineupAnnounced) {
+                    lotteInfo = mergeRelay(lotteInfo, relay)
+                }
+            }
+        }
+        return lotteInfo.copy(
+            lineupAnnounced = lotteInfo.lineupAnnounced || lotteInfo.lotteLineup.size >= 9,
+        )
+    }
+
     suspend fun fetchLeaders(isPitcher: Boolean): List<LeaderPlayer> {
         val season = LocalDate.now().let { if (it.monthValue < 3) it.year - 1 else it.year }
         val type = if (isPitcher) "pitcher" else "batter"
@@ -1406,6 +1451,18 @@ class GiantsRepository private constructor(context: Context) {
 
     private fun GameDto.matchKey(): String =
         "${awayTeamCode.trim().uppercase()}_${homeTeamCode.trim().uppercase()}"
+
+    /** 알림 폴링용 — 당일 일정 캐시를 무시하고 최신을 받는다. */
+    private suspend fun fetchKboGamesFresh(date: LocalDate): List<KboOfficialGame> {
+        val key = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val games = runCatching {
+            kboOfficialApi.getGameList(date = KboOfficialApi.dateParam(date))
+                .game
+                .filter { it.gameId.isNotBlank() }
+        }.getOrDefault(emptyList())
+        if (games.isNotEmpty()) kboDateCache[key] = System.currentTimeMillis() to games
+        return games
+    }
 
     /** KBO 공식 일정 (1차 소스). 실패하면 빈 목록 → 호출부가 네이버로 폴백한다. */
     private suspend fun fetchKboGames(date: LocalDate): List<KboOfficialGame> {

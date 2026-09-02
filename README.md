@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `1.3.61` (`versionCode` **1069**) |
+| **버전** | `1.3.62` (`versionCode` **1070**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 

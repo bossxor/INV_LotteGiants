@@ -21,6 +21,7 @@ import com.bossxor.lottegiants.domain.shouldEmitAlert
 import com.bossxor.lottegiants.widget.WidgetUpdater
 import kotlinx.coroutines.runBlocking
 import java.time.LocalTime
+import java.time.ZonedDateTime
 import java.util.concurrent.TimeUnit
 
 class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
@@ -37,10 +38,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         NotificationHelper.createChannels(applicationContext)
         val detector = EventDetector(repo.store)
         runCatching { detector.process(applicationContext, game) }
-        runCatching {
-            val moves = repo.fetchRecentRosterMoves(3)
-            detector.processRosterMoves(applicationContext, moves)
-        }
+        runCatching { pollRosterAlerts(applicationContext, detector, repo) }
         runCatching {
             val st = repo.fetchStandings()
             detector.processRace(
@@ -96,11 +94,19 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
                 else -> {}
             }
         }
+        scheduleRosterPoll(applicationContext)
         return Result.success()
     }
 
     companion object {
         private const val WORK_NAME = "giants_scheduler"
+        /** 라인업 fast poll 간격 (경기 6시간 전~시작 후 30분) */
+        private const val FAST_POLL_INTERVAL_MS = 20_000L
+        /** 엔트리 등말소 전용 poll 간격 (08:00~23:00) */
+        private const val ROSTER_POLL_INTERVAL_MS = 30_000L
+        private const val LINEUP_POLL_WINDOW_MS = 6 * 60 * 60_000L
+        private const val ROSTER_POLL_START_HOUR = 8
+        private const val ROSTER_POLL_END_HOUR = 23
 
         fun enqueue(context: Context) {
             val req = PeriodicWorkRequestBuilder<GameSchedulerWorker>(15, TimeUnit.MINUTES)
@@ -134,16 +140,17 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             scheduleFastPoll(context, date, time, gameId)
         }
 
-        /** 경기 당일 3시간 전부터 3분마다 스냅샷·이벤트 검사 */
+        /** 경기 당일 6시간 전부터 20초마다 라인업·스냅샷 검사 */
         fun scheduleFastPoll(context: Context, date: String, time: String, gameId: String = "") {
             val start = parseGameMillis(date, time) ?: return
-            val windowStart = start - 3 * 60 * 60_000L
+            val windowStart = start - LINEUP_POLL_WINDOW_MS
+            val windowEnd = start + 30 * 60_000L
             val now = System.currentTimeMillis()
-            if (now > start + 5 * 60 * 60_000L) return
+            if (now > windowEnd) return
             val nextAt = when {
                 now < windowStart -> windowStart
-                else -> now + 3 * 60_000L
-            }.coerceAtMost(start + 30 * 60_000L)
+                else -> now + FAST_POLL_INTERVAL_MS
+            }
             if (nextAt <= now) return
             val am = context.getSystemService(AlarmManager::class.java)
             val intent = Intent(context, GameAlarmReceiver::class.java).setAction(ACTION_FAST_POLL)
@@ -156,6 +163,48 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
             setAlarmSafe(am, nextAt, pi)
+        }
+
+        /** 08:00~23:00 KST — KBO 공식 GetRoster로 엔트리 등말소를 45초마다 검사 */
+        fun scheduleRosterPoll(context: Context) {
+            val zone = KBO_ZONE
+            val now = ZonedDateTime.now(zone)
+            val today = now.toLocalDate()
+            val pollStart = today.atTime(ROSTER_POLL_START_HOUR, 0).atZone(zone)
+            val pollEnd = today.atTime(ROSTER_POLL_END_HOUR, 0).atZone(zone)
+            val nextAt = when {
+                now.isAfter(pollEnd) ->
+                    today.plusDays(1).atTime(ROSTER_POLL_START_HOUR, 0).atZone(zone)
+                        .toInstant().toEpochMilli()
+                now.isBefore(pollStart) -> pollStart.toInstant().toEpochMilli()
+                else -> System.currentTimeMillis() + ROSTER_POLL_INTERVAL_MS
+            }
+            val am = context.getSystemService(AlarmManager::class.java)
+            val intent = Intent(context, GameAlarmReceiver::class.java)
+                .setAction(ACTION_ROSTER_POLL)
+            val pi = PendingIntent.getBroadcast(
+                context, 0x3004,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            setAlarmSafe(am, nextAt, pi)
+        }
+
+        suspend fun pollLineupAlert(context: Context, detector: EventDetector, repo: GiantsRepository) {
+            runCatching {
+                detector.process(context, repo.refreshLineupAlert())
+            }
+        }
+
+        suspend fun pollRosterAlerts(context: Context, detector: EventDetector, repo: GiantsRepository) {
+            runCatching {
+                val kboMoves = repo.pollRosterMovesForAlert()
+                if (kboMoves.isNotEmpty()) {
+                    detector.processRosterMoves(context, kboMoves)
+                } else {
+                    detector.processRosterMoves(context, repo.fetchRecentRosterMoves(2))
+                }
+            }
         }
 
         fun schedulePregameReminder(
@@ -266,6 +315,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         const val ACTION_PREGAME = "com.bossxor.lottegiants.PREGAME"
         const val ACTION_HIDE_LIVE = "com.bossxor.lottegiants.HIDE_LIVE"
         const val ACTION_FAST_POLL = "com.bossxor.lottegiants.FAST_POLL"
+        const val ACTION_ROSTER_POLL = "com.bossxor.lottegiants.ROSTER_POLL"
     }
 }
 
@@ -289,6 +339,7 @@ class GameAlarmReceiver : BroadcastReceiver() {
                             }
                             LiveScoreService.start(context)
                             GameSchedulerWorker.enqueue(context)
+                            GameSchedulerWorker.scheduleRosterPoll(context)
                         }
                     } finally {
                         goAsync.finish()
@@ -356,15 +407,13 @@ class GameAlarmReceiver : BroadcastReceiver() {
                                 return@runBlocking
                             }
                             val repo = GiantsRepository.get(context)
-                            val snap = runCatching { repo.refreshSnapshot(force = true) }.getOrNull()
                             NotificationHelper.createChannels(context)
                             val detector = EventDetector(repo.store)
-                            runCatching { detector.process(context, snap?.lotteGame) }
-                            runCatching {
-                                detector.processRosterMoves(context, repo.fetchRecentRosterMoves(2))
-                            }
+                            GameSchedulerWorker.pollLineupAlert(context, detector, repo)
+                            GameSchedulerWorker.pollRosterAlerts(context, detector, repo)
                             WidgetUpdater.updateAll(context)
-                            val status = snap?.lotteGame?.status
+                            val game = repo.refreshLineupAlert()
+                            val status = game?.status
                             if (status == GameStatus.LIVE || status == GameStatus.BEFORE) {
                                 LiveScoreService.start(context)
                             }
@@ -373,6 +422,23 @@ class GameAlarmReceiver : BroadcastReceiver() {
                             ) {
                                 GameSchedulerWorker.scheduleFastPoll(context, date, time, gameId)
                             }
+                        }
+                    } finally {
+                        goAsync.finish()
+                    }
+                }.start()
+            }
+            GameSchedulerWorker.ACTION_ROSTER_POLL -> {
+                val goAsync = goAsync()
+                Thread {
+                    try {
+                        runBlocking {
+                            val repo = GiantsRepository.get(context)
+                            NotificationHelper.createChannels(context)
+                            val detector = EventDetector(repo.store)
+                            GameSchedulerWorker.pollRosterAlerts(context, detector, repo)
+                            GameSchedulerWorker.pollLineupAlert(context, detector, repo)
+                            GameSchedulerWorker.scheduleRosterPoll(context)
                         }
                     } finally {
                         goAsync.finish()
