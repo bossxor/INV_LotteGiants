@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Stadium roof -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M30,40 Q54,22 78,40 L74,40 Q54,28 34,40 Z" />
+    <!-- Light towers -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M28,40 h5 v10 h-5 z M75,40 h5 v10 h-5 z" />
+    <!-- Shield body -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M26,44 h56 v24 h-56 z M30,68 l24,14 24,-14 v-4 H30 z" />
+    <!-- SAJIK bar -->
+    <path
+        android:fillColor="#FF041E42"
+        android:pathData="M32,50 h44 v12 h-44 z" />
+    <!-- Home plate -->
+    <path
+        android:fillColor="#FF041E42"
+        android:pathData="M48,62 L54,58 60,62 58,68 50,68 Z" />
+</vector>
