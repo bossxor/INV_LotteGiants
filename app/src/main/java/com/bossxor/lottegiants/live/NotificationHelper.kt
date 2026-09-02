@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -14,7 +13,6 @@ import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.graphics.drawable.IconCompat
 import com.bossxor.lottegiants.MainActivity
 import com.bossxor.lottegiants.R
 import com.bossxor.lottegiants.data.NotificationType
@@ -37,7 +35,6 @@ import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.teamNameToCode
 import com.bossxor.lottegiants.widget.WidgetAssets
-import kotlinx.coroutines.runBlocking
 
 object NotificationHelper {
 
@@ -45,7 +42,7 @@ object NotificationHelper {
     /**
      * 스코어카드(커스텀 RemoteViews)용. 배경은 시스템 알림색을 그대로 쓰고, 작은 아이콘만 롯데 레드.
      */
-    const val CHANNEL_LIVE_CARD = "live_score_card_v3"
+    const val CHANNEL_LIVE_CARD = "live_score_card_v4"
     /**
      * Now Bar/Live Update용.
      * v2: One UI 9는 채널이 DEFAULT여도 되지만 HIGH가 칩 노출이 더 잘 된다.
@@ -76,7 +73,6 @@ object NotificationHelper {
     /** 종료·취소 알림은 2시간 뒤 스스로 사라진다 (서비스가 멈춘 뒤에도 남는 걸 막는다). */
     private const val FINISHED_NOTIFICATION_TIMEOUT_MS = 2 * 60 * 60 * 1000L
 
-    private const val REGULATION_INNINGS = 9
     private const val COLOR_LOTTE = 0xFFD00F31.toInt()
     private const val COLOR_OPPONENT = 0xFF9AA0A6.toInt()
     private const val COLOR_TRACK = 0xFF4A4F55.toInt()
@@ -90,7 +86,9 @@ object NotificationHelper {
         ch(CHANNEL_LIVE_CARD, "실시간 스코어카드", NotificationManager.IMPORTANCE_DEFAULT)
         ch(CHANNEL_LIVE_NOW, "Now Bar 실시간 점수", NotificationManager.IMPORTANCE_HIGH)
         runCatching { nm.deleteNotificationChannel("live_score_nowbar") }
+        runCatching { nm.deleteNotificationChannel("live_score_nowbar_v2") }
         runCatching { nm.deleteNotificationChannel("live_score_card_v2") }
+        runCatching { nm.deleteNotificationChannel("live_score_card_v3") }
         ch(CHANNEL_SCORE, "득점", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_CONCEDE, "실점", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_PITCHER, "투수 교체")
@@ -157,6 +155,34 @@ object NotificationHelper {
         context.getSystemService(NotificationManager::class.java).cancel(LIVE_NOTIFICATION_ID)
     }
 
+    /**
+     * pinned·lead 창 안이면 알림만 갱신한다. 경기 전 '다시 표시'는 FGS 없이 유지.
+     * LIVE일 때만 [LiveScoreService]를 켠다.
+     */
+    suspend fun refreshLiveNotificationIfNeeded(context: Context) {
+        val app = context.applicationContext
+        val repo = com.bossxor.lottegiants.data.GiantsRepository.get(app)
+        if (!repo.store.isLiveScoreEnabled()) return
+        createChannels(app)
+        val lead = repo.store.liveLeadMinutes()
+        val pinned = repo.store.isLiveNotificationPinned()
+        val snap = repo.store.loadSnapshot() ?: return
+        val game = liveNotificationGame(
+            snap,
+            allowUpcoming = true,
+            leadMinutes = lead,
+            ignoreLeadWindow = pinned,
+        ) ?: return
+        if (!pinned && !shouldPostLiveNotification(game, lead)) return
+        val mode = repo.store.liveDisplayMode()
+        val n = buildLiveNotification(app, game, mode, snap.winProbSeries)
+        app.getSystemService(NotificationManager::class.java)
+            .notify(LIVE_NOTIFICATION_ID, n)
+        if (game.status == GameStatus.LIVE) {
+            LiveScoreService.start(app, forceShow = pinned)
+        }
+    }
+
     fun buildLiveNotification(
         context: Context,
         game: LotteGameInfo?,
@@ -185,17 +211,6 @@ object NotificationHelper {
         } else {
             compactLine
         }
-        val countBmp = game?.takeIf { it.status == GameStatus.LIVE && !it.isSuspended }?.let {
-            WidgetAssets.ballCountBitmap(
-                context,
-                it.ball,
-                it.strike,
-                it.out,
-                it.onBase1,
-                it.onBase2,
-                it.onBase3,
-            )
-        }
 
         val (title, text) = when (mode) {
             LiveDisplayMode.STATUS_SCORE -> {
@@ -207,17 +222,14 @@ object NotificationHelper {
             LiveDisplayMode.LOCK_NOW -> scoreTitle to headerLine
         }
 
-        // `상세 알림`만 스코어카드. 오늘 경기가 없으면 다음 경기를 쓴다.
-        // 경기가 전혀 없으면 ProgressStyle(예전 점선 바)로 떨어지지 않게 한다.
-        val useCustom = mode == LiveDisplayMode.FULL && game != null
+        // 모든 표시 모드는 스코어카드. `상세 알림`만 펼칠 때 큰 카드.
+        val useScorecard = game != null
+        val useBigCard = mode == LiveDisplayMode.FULL
         // 경기가 끝나면 서비스가 멈춰도 알림은 남는다. 손으로 지울 수 있게 두고 스스로 만료시킨다.
         val finished = game != null &&
             (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED)
 
-        val builder = NotificationCompat.Builder(
-            context,
-            if (useCustom) CHANNEL_LIVE_CARD else CHANNEL_LIVE_NOW,
-        )
+        val builder = NotificationCompat.Builder(context, CHANNEL_LIVE_CARD)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
@@ -227,7 +239,7 @@ object NotificationHelper {
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setShowWhen(false)
-            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
@@ -241,33 +253,22 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        if (useCustom) {
-            // 배경색은 시스템 알림 칸을 그대로 쓴다. 네이비 박스를 두면 아이콘·펼치기 칸과 색이 갈라진다.
-            val card = buildLiveRemoteViews(context, game!!, winProbSeries)
-            val compact = buildLiveCompactViews(context, game)
+        if (useScorecard) {
+            val compact = buildLiveCompactViews(context, game!!)
+            val big = if (useBigCard) buildLiveRemoteViews(context, game, winProbSeries) else compact
             builder
                 .setColor(COLOR_LOTTE)
                 .setColorized(false)
                 .setCustomContentView(compact)
-                .setCustomBigContentView(card)
+                .setCustomBigContentView(big)
                 .setCustomHeadsUpContentView(compact)
                 .setDeleteIntent(hide)
-                .setSubText(null)
-                .setShortCriticalText(null)
-                .setRequestPromotedOngoing(false)
-        } else if (mode == LiveDisplayMode.FULL) {
-            builder
-                .setStyle(NotificationCompat.BigTextStyle().bigText(text.ifBlank { "예정 경기 없음" }))
-                .setRequestPromotedOngoing(false)
+                .setSubText(if (mode == LiveDisplayMode.LOCK_NOW) chipText else null)
+                .setShortCriticalText(if (mode == LiveDisplayMode.LOCK_NOW) chipText else null)
         } else {
             builder
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text.ifBlank { "예정 경기 없음" }))
                 .setDeleteIntent(hide)
-                .setSubText(chipText)
-                .setShortCriticalText(chipText)
-                .setColorized(false)
-                .setStyle(liveProgressStyle(context, game, countBmp))
-                .setRequestPromotedOngoing(!finished)
-            if (countBmp != null) builder.setLargeIcon(countBmp)
         }
 
         return builder.build()
@@ -284,53 +285,6 @@ object NotificationHelper {
             else -> "${game.lotteScore}:${game.opponentScore}"
         }
         return if (raw.length <= 7) raw else raw.take(7)
-    }
-
-    /**
-     * 이닝을 구간으로 나눈 진행 바. 각 이닝은 초·말 2칸이고 득점한 이닝은 점으로 찍는다.
-     * ProgressStyle은 Live Update로 승격 가능한 스타일이라 One UI Now Bar에도 그대로 실린다.
-     */
-    private fun liveProgressStyle(
-        context: Context,
-        game: LotteGameInfo?,
-        countBmp: Bitmap? = null,
-    ): NotificationCompat.ProgressStyle {
-        val innings = maxOf(REGULATION_INNINGS, game?.inning ?: REGULATION_INNINGS)
-        val total = innings * 2
-        val current = when (game?.status) {
-            GameStatus.LIVE ->
-                ((game.inning - 1).coerceAtLeast(0) * 2 + if (game.isTopInning) 1 else 2)
-                    .coerceIn(0, total)
-            GameStatus.ENDED -> total
-            else -> 0
-        }
-
-        fun scoringPoints(scores: List<String>, isBottomHalf: Boolean, color: Int) =
-            scores.mapIndexedNotNull { i, raw ->
-                if ((raw.trim().toIntOrNull() ?: 0) <= 0) return@mapIndexedNotNull null
-                val pos = i * 2 + if (isBottomHalf) 2 else 1
-                if (pos > total) null else NotificationCompat.ProgressStyle.Point(pos).setColor(color)
-            }
-
-        val style = NotificationCompat.ProgressStyle()
-            .setProgressSegments(
-                List(innings) { NotificationCompat.ProgressStyle.Segment(2).setColor(COLOR_TRACK) },
-            )
-            .setProgressPoints(
-                if (game == null) {
-                    emptyList()
-                } else {
-                    scoringPoints(game.lotteInningScores, game.isHome, COLOR_LOTTE) +
-                        scoringPoints(game.opponentInningScores, !game.isHome, COLOR_OPPONENT)
-                },
-            )
-            .setProgress(current)
-            .setStyledByProgress(false)
-            .setProgressTrackerIcon(IconCompat.createWithResource(context, R.drawable.ic_notification))
-        if (countBmp != null) {
-            style.setProgressStartIcon(IconCompat.createWithBitmap(countBmp))
-        }
-        return style
     }
 
     fun canPostNowBar(context: Context): Boolean {
@@ -554,15 +508,11 @@ object NotificationHelper {
         if (note.isNotBlank()) rv.setTextViewText(R.id.notif_c_note, note)
         rv.setImageViewBitmap(
             R.id.notif_c_away_logo,
-            runBlocking {
-                WidgetAssets.loadTeamLogoBitmap(context, side.awayCode, side.awayLogoUrl, side.awayName)
-            },
+            WidgetAssets.loadTeamLogoBitmapCachedOnly(context, side.awayCode, side.awayName),
         )
         rv.setImageViewBitmap(
             R.id.notif_c_home_logo,
-            runBlocking {
-                WidgetAssets.loadTeamLogoBitmap(context, side.homeCode, side.homeLogoUrl, side.homeName)
-            },
+            WidgetAssets.loadTeamLogoBitmapCachedOnly(context, side.homeCode, side.homeName),
         )
         return rv
     }
@@ -668,12 +618,8 @@ object NotificationHelper {
             rv.setImageViewBitmap(R.id.notif_winprob_bar, bar)
         }
 
-        val awayBmp = runBlocking {
-            WidgetAssets.loadTeamLogoBitmap(context, awayCode, awayLogoUrl, awayName)
-        }
-        val homeBmp = runBlocking {
-            WidgetAssets.loadTeamLogoBitmap(context, homeCode, homeLogoUrl, homeName)
-        }
+        val awayBmp = WidgetAssets.loadTeamLogoBitmapCachedOnly(context, awayCode, awayName)
+        val homeBmp = WidgetAssets.loadTeamLogoBitmapCachedOnly(context, homeCode, homeName)
         rv.setImageViewBitmap(R.id.notif_away_logo, awayBmp)
         rv.setImageViewBitmap(R.id.notif_home_logo, homeBmp)
         return rv

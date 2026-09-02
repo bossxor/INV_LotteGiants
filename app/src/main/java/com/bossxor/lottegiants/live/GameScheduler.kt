@@ -19,6 +19,7 @@ import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.isCanceledGame
 import com.bossxor.lottegiants.domain.shouldEmitAlert
+import com.bossxor.lottegiants.domain.shouldPostLiveNotification
 import com.bossxor.lottegiants.widget.WidgetUpdater
 import kotlinx.coroutines.runBlocking
 import java.time.LocalTime
@@ -196,6 +197,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         suspend fun pollLineupAlert(context: Context, detector: EventDetector, repo: GiantsRepository) {
             runCatching {
                 detector.process(context, repo.refreshLineupAlert())
+                NotificationHelper.refreshLiveNotificationIfNeeded(context)
             }
         }
 
@@ -386,6 +388,9 @@ class GameAlarmReceiver : BroadcastReceiver() {
                             }
                         }
                         GameSchedulerWorker.ACTION_HIDE_LIVE -> {
+                            runBlocking {
+                                GiantsRepository.get(context).store.setLiveNotificationPinned(false)
+                            }
                             LiveScoreService.stop(context)
                             NotificationHelper.cancelLive(context)
                         }
@@ -407,12 +412,16 @@ class GameAlarmReceiver : BroadcastReceiver() {
                                     val detector = EventDetector(repo.store)
                                     GameSchedulerWorker.pollLineupAlert(context, detector, repo)
                                     GameSchedulerWorker.pollRosterAlerts(context, detector, repo)
-                                    WidgetUpdater.updateAll(context)
-                                    val game = repo.refreshLineupAlert()
-                                    val status = game?.status
-                                    if (status == GameStatus.LIVE || status == GameStatus.BEFORE) {
-                                        LiveScoreService.start(context)
-                                    }
+                            WidgetUpdater.updateAll(context)
+                            NotificationHelper.refreshLiveNotificationIfNeeded(context)
+                            val game = repo.refreshLineupAlert()
+                            val status = game?.status
+                            val lead = repo.store.liveLeadMinutes()
+                            if (status == GameStatus.LIVE ||
+                                (status == GameStatus.BEFORE && shouldPostLiveNotification(game, lead))
+                            ) {
+                                LiveScoreService.start(context)
+                            }
                                     if (status == GameStatus.ENDED || status == GameStatus.CANCELED) {
                                         shouldReschedule = false
                                     }

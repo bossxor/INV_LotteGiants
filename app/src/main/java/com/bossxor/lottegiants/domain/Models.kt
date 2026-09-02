@@ -321,7 +321,7 @@ enum class LiveDisplayMode {
     FULL,
     /** 상태바·알림줄에 점수만 */
     STATUS_SCORE,
-    /** 이닝 진행 바 기반 Live Update — 잠금화면·Now Bar에 크게 표시 */
+    /** 스코어카드 + 상태바 점수 칩 (Now Bar) */
     LOCK_NOW,
 }
 

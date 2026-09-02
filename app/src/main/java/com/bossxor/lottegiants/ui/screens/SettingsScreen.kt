@@ -302,7 +302,13 @@ fun SettingsScreen(
                         onCheckedChange = { on ->
                             scope.launch {
                                 store.setLiveScoreEnabled(on)
-                                if (on) LiveScoreService.restart(context) else LiveScoreService.stop(context)
+                                if (on) {
+                                    NotificationHelper.refreshLiveNotificationIfNeeded(context)
+                                } else {
+                                    store.setLiveNotificationPinned(false)
+                                    LiveScoreService.stop(context)
+                                    NotificationHelper.cancelLive(context)
+                                }
                             }
                         },
                     )
@@ -314,19 +320,25 @@ fun SettingsScreen(
                     ModeChip("라이브 바", liveMode == LiveDisplayMode.LOCK_NOW) {
                         scope.launch {
                             store.setLiveDisplayMode(LiveDisplayMode.LOCK_NOW)
-                            if (store.isLiveScoreEnabled()) LiveScoreService.restart(context)
+                            if (store.isLiveScoreEnabled()) {
+                                NotificationHelper.refreshLiveNotificationIfNeeded(context)
+                            }
                         }
                     }
                     ModeChip("상세 알림", liveMode == LiveDisplayMode.FULL) {
                         scope.launch {
                             store.setLiveDisplayMode(LiveDisplayMode.FULL)
-                            if (store.isLiveScoreEnabled()) LiveScoreService.restart(context)
+                            if (store.isLiveScoreEnabled()) {
+                                NotificationHelper.refreshLiveNotificationIfNeeded(context)
+                            }
                         }
                     }
                     ModeChip("점수만", liveMode == LiveDisplayMode.STATUS_SCORE) {
                         scope.launch {
                             store.setLiveDisplayMode(LiveDisplayMode.STATUS_SCORE)
-                            if (store.isLiveScoreEnabled()) LiveScoreService.restart(context)
+                            if (store.isLiveScoreEnabled()) {
+                                NotificationHelper.refreshLiveNotificationIfNeeded(context)
+                            }
                         }
                     }
                 }
@@ -334,11 +346,11 @@ fun SettingsScreen(
                 Text(
                     when (liveMode) {
                         LiveDisplayMode.LOCK_NOW ->
-                            "이닝 진행 바 알림. Now Bar·잠금화면 칩에 점수가 뜹니다."
+                            "스코어카드 알림. 경기 중 Now Bar·잠금화면 칩에 점수가 뜹니다."
                         LiveDisplayMode.FULL ->
                             "팀 로고·점수 카드. 하단에 양 팀 승리 예측 게이지. 경기 전에는 시각·선발·구장, 중에는 루상·투수·타자, 끝나면 승·패. 카드는 Now Bar 칩으로 승격되지 않습니다."
                         LiveDisplayMode.STATUS_SCORE ->
-                            "점수·이닝만 한 줄. 칩에는 점수가 뜹니다."
+                            "스코어카드(간단). 경기 중 칩에는 점수가 뜹니다."
                     },
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -358,7 +370,9 @@ fun SettingsScreen(
                             ModeChip(liveLeadChipLabel(mins), liveLead == mins) {
                                 scope.launch {
                                     store.setLiveLeadMinutes(mins)
-                                    if (store.isLiveScoreEnabled()) LiveScoreService.restart(context)
+                                    if (store.isLiveScoreEnabled()) {
+                                NotificationHelper.refreshLiveNotificationIfNeeded(context)
+                            }
                                 }
                             }
                         }

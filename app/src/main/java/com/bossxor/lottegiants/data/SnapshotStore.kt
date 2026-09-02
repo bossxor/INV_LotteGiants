@@ -80,6 +80,14 @@ class SnapshotStore(private val context: Context) {
         context.dataStore.edit { it[KEY_LIVE_ENABLED] = enabled }
     }
 
+    /** 설정 '다시 표시'로 lead 창 밖에서도 알림을 고정할 때 */
+    suspend fun isLiveNotificationPinned(): Boolean =
+        context.dataStore.data.map { it[KEY_LIVE_PINNED] ?: false }.first()
+
+    suspend fun setLiveNotificationPinned(pinned: Boolean) {
+        context.dataStore.edit { it[KEY_LIVE_PINNED] = pinned }
+    }
+
     val liveDisplayModeFlow: Flow<LiveDisplayMode> = context.dataStore.data.map { prefs ->
         runCatching {
             LiveDisplayMode.valueOf(prefs[KEY_LIVE_MODE] ?: LiveDisplayMode.FULL.name)
@@ -374,6 +382,7 @@ class SnapshotStore(private val context: Context) {
         private val KEY_SNAPSHOT = stringPreferencesKey("live_snapshot")
         private val KEY_THEME = stringPreferencesKey("theme_mode")
         private val KEY_LIVE_ENABLED = booleanPreferencesKey("live_score_display_enabled")
+        private val KEY_LIVE_PINNED = booleanPreferencesKey("live_notification_pinned")
         private val KEY_LIVE_MODE = stringPreferencesKey("live_display_mode")
         private val KEY_LIVE_LEAD_MINUTES = intPreferencesKey("live_lead_minutes")
         private val KEY_SCORECARD_MIGRATED = booleanPreferencesKey("scorecard_notif_migrated_140")

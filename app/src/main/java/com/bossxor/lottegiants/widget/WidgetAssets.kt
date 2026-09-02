@@ -199,6 +199,21 @@ object WidgetAssets {
             ?: teamInitialBitmap(code, teamName)
     }
 
+    /** 알림 RemoteViews용 — 디스크 캐시만 읽고 네트워크는 타지 않는다 (FGS 메인 스레드 안전). */
+    fun loadTeamLogoBitmapCachedOnly(
+        context: Context,
+        teamCode: String,
+        teamName: String = "",
+    ): Bitmap {
+        val code = teamCode.trim().uppercase().ifBlank { teamNameToCode(teamName) }
+        val cacheKey = code.ifBlank { teamName.take(8).ifBlank { "UNK" } }
+        val file = File(context.cacheDir, "team_logos/$cacheKey.png")
+        if (file.exists() && file.length() > 8_000L) {
+            runCatching { BitmapFactory.decodeFile(file.absolutePath) }.getOrNull()?.let { return it }
+        }
+        return teamInitialBitmap(code, teamName)
+    }
+
     /** 좌(원정)·우(홈) 실시간 승률 바. 어두운 팀색은 알림 배경에 묻히지 않게 밝힌다. */
     fun winProbBarColor(teamCode: String): Int {
         val c = com.bossxor.lottegiants.domain.teamAccentColor(teamCode)

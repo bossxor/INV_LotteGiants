@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `1.3.63` (`versionCode` **1071**) |
+| **버전** | `1.3.65` (`versionCode` **1073**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 
@@ -113,15 +113,15 @@
 
 | 계층 | 역할 | 주기 |
 |------|------|------|
-| **AlertWatchService** | 포그라운드 감시 (삼성 배터리 최적화 대비) | **20초** (07~24시, 라인업/엔트리 알림 켜져 있을 때) |
+| **AlertWatchService** | 포그라운드 감시 (삼성 배터리 최적화 대비) | **20초** (07~24시) |
 | **AlarmManager** | fast poll(라인업) + roster poll(엔트리) | 20~30초 |
 | **WorkManager** | 전체 스냅샷·알람 재등록 | 15분 (보조) |
 
-- 엔트리: KBO 공식 `GetRoster`(당일) 우선 → 없으면 Keubo
-- 라인업: 당일 KBO `lineupCk` + 네이버 relay (전체 스냅샷 없이 경량 조회)
-- 부팅·앱 시작 시 `AlertBootstrap`이 즉시 1회 폴링 + 오늘 경기 fast poll 예약
-- 상태 표시줄에 **「엔트리·라인업 감시 중」** 최소 알림이 뜰 수 있음 (무음·접어두기 가능)
-- **배터리 사용량 최적화 제외**를 권장 (설정 → 위젯/배터리)
+### 실시간 스코어 알림 (1.3.64~)
+
+- **다시 표시**: 표시 시작 시간과 무관하게 알림을 고정한다. 경기 전에는 FGS 없이 알림만 둔다 (상세 알림이 바로 꺼지던 문제 수정).
+- **라이브 바**·**상세 알림**·**점수만** 모두 스코어카드 디자인 (옛 이닝 진행 바 제거)
+- **라이브 바**: 경기 중 Now Bar 칩 승격. **상세 알림**: 펼치면 승률 게이지 포함 큰 카드
 
 ### Wear OS
 
@@ -212,8 +212,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `1.3.63` |
-| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1071` |
+| `versionName` | 사용자에게 보이는 버전 | `1.3.65` |
+| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1073` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -238,8 +238,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 ```json
 {
-  "versionCode": 1071,
-  "versionName": "1.3.63",
+  "versionCode": 1072,
+  "versionName": "1.3.64",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }
