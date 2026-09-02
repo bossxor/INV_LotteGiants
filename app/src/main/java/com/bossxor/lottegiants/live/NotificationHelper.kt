@@ -72,8 +72,11 @@ object NotificationHelper {
 
     @Volatile private var lastLiveNotifyKey: String? = null
 
+    /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
+    private const val LIVE_NOTIFY_STYLE_REV = 2
+
     fun liveNotificationKey(game: LotteGameInfo?, mode: LiveDisplayMode): String =
-        listOf(
+        LIVE_NOTIFY_STYLE_REV.toString() + "|" + listOf(
             game?.gameId,
             game?.status?.name,
             game?.lotteScore,
