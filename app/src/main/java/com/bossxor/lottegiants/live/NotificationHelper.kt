@@ -119,6 +119,7 @@ object NotificationHelper {
         allowUpcoming: Boolean = true,
         leadMinutes: Int = LIVE_LEAD_MINUTES_DEFAULT,
         nowMillis: Long = System.currentTimeMillis(),
+        ignoreLeadWindow: Boolean = false,
     ): LotteGameInfo? {
         if (snap == null) return null
         val today = kboToday().toString()
@@ -126,11 +127,13 @@ object NotificationHelper {
         if (g != null && g.status == GameStatus.LIVE) return g
         if (g != null && (g.gameDate == today || g.gameDate.isBlank())) {
             if (g.status == GameStatus.ENDED || g.status == GameStatus.CANCELED) return g
-            if (shouldPostLiveNotification(g, leadMinutes, nowMillis)) return g
+            if (ignoreLeadWindow || shouldPostLiveNotification(g, leadMinutes, nowMillis)) return g
             return null
         }
         if (allowUpcoming) {
-            snap.nextLotteGame?.takeIf { shouldPostLiveNotification(it, leadMinutes, nowMillis) }?.let { return it }
+            snap.nextLotteGame
+                ?.takeIf { ignoreLeadWindow || shouldPostLiveNotification(it, leadMinutes, nowMillis) }
+                ?.let { return it }
         }
         snap.lastLotteGame?.takeIf { it.gameDate == today }?.let { return it }
         return null
@@ -352,7 +355,7 @@ object NotificationHelper {
     fun nowBarStatusLabel(status: NowBarStatus): String = when {
         !status.apiOk -> "이 기기는 라이브 알림(Now Bar)을 지원하지 않습니다."
         !status.canPost ->
-            "Now Bar가 꺼져 있습니다. One UI 9: 설정 → 알림 → 라이브 알림, 또는 설정 → 잠금화면 → Now bar에서 사직스코어를 켜 주세요."
+            "잠금화면 칩(Now Bar)이 꺼져 있을 수 있습니다. 아래 설정에서 라이브 알림을 켜 보세요."
         status.promoted -> "Now Bar에 표시 중입니다."
         status.livePosted && status.promotable ->
             "승격 가능한 알림입니다. 칩이 안 보이면 잠금화면 Now bar 목록에서 사직스코어를 켜 보세요."
@@ -361,7 +364,7 @@ object NotificationHelper {
         else -> "실시간 스코어를 켜면 잠금화면·상태바 칩에 점수가 올라갑니다."
     }
 
-    fun openNowBarSettings(context: Context) {
+    fun openNowBarSettings(context: Context): Boolean {
         val pkg = Uri.parse("package:${context.packageName}")
         val flags = Intent.FLAG_ACTIVITY_NEW_TASK
         val candidates = listOf(
@@ -377,8 +380,9 @@ object NotificationHelper {
                 context.startActivity(intent)
                 true
             }.getOrDefault(false)
-            if (ok) return
+            if (ok) return true
         }
+        return false
     }
 
     /** 알림 접힘 상태용 한 줄 */

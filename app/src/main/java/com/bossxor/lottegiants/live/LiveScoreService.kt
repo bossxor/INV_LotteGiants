@@ -9,7 +9,8 @@ import android.os.IBinder
 import androidx.core.app.ServiceCompat
 import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.domain.GameStatus
-import com.bossxor.lottegiants.domain.LiveDisplayMode
+import com.bossxor.lottegiants.domain.LiveSnapshot
+import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.shouldPostLiveNotification
 import com.bossxor.lottegiants.widget.WidgetUpdater
 import kotlinx.coroutines.CoroutineScope
@@ -29,11 +30,15 @@ class LiveScoreService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollJob: Job? = null
+    private var ignoreLeadWindow = false
     private val detector by lazy { EventDetector(GiantsRepository.get(this).store) }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.getBooleanExtra(EXTRA_FORCE_SHOW, false) == true) {
+            ignoreLeadWindow = true
+        }
         NotificationHelper.createChannels(this)
         val repo = GiantsRepository.get(this)
         val enabled = runBlocking { repo.store.isLiveScoreEnabled() }
@@ -44,7 +49,7 @@ class LiveScoreService : Service() {
         val snap = runBlocking { repo.store.loadSnapshot() }
         val mode = runBlocking { repo.store.liveDisplayMode() }
         val lead = runBlocking { repo.store.liveLeadMinutes() }
-        val game = NotificationHelper.liveNotificationGame(snap, allowUpcoming = true, leadMinutes = lead)
+        val game = liveGame(snap, lead)
         val notification = NotificationHelper.buildLiveNotification(
             this,
             game,
@@ -57,7 +62,7 @@ class LiveScoreService : Service() {
             notification,
             if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
         )
-        if (!shouldPostLiveNotification(game, lead)) {
+        if (!shouldShowLive(game, lead)) {
             hideLiveAndStop(remove = true)
             return START_NOT_STICKY
         }
@@ -81,9 +86,9 @@ class LiveScoreService : Service() {
                 val mode = repo.store.liveDisplayMode()
                 val lead = repo.store.liveLeadMinutes()
                 val snap = runCatching { repo.refreshSnapshot(force = false) }.getOrNull()
-                val game = NotificationHelper.liveNotificationGame(snap, allowUpcoming = true, leadMinutes = lead)
+                val game = liveGame(snap, lead)
                 val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
-                if (!shouldPostLiveNotification(game, lead)) {
+                if (!shouldShowLive(game, lead)) {
                     hideLiveAndStop(remove = true)
                     break
                 }
@@ -116,7 +121,7 @@ class LiveScoreService : Service() {
                 when (game?.status) {
                     GameStatus.LIVE -> delay(5_000L)
                     GameStatus.BEFORE -> {
-                        if (shouldPostLiveNotification(game, lead)) {
+                        if (shouldShowLive(game, lead)) {
                             delay(20_000L)
                         } else {
                             hideLiveAndStop(remove = true)
@@ -132,6 +137,17 @@ class LiveScoreService : Service() {
             }
         }
     }
+
+    private fun liveGame(snap: LiveSnapshot?, lead: Int) =
+        NotificationHelper.liveNotificationGame(
+            snap,
+            allowUpcoming = true,
+            leadMinutes = lead,
+            ignoreLeadWindow = ignoreLeadWindow,
+        )
+
+    private fun shouldShowLive(game: LotteGameInfo?, lead: Int): Boolean =
+        ignoreLeadWindow || shouldPostLiveNotification(game, lead)
 
     private fun detachFinished(notification: android.app.Notification) {
         val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
@@ -157,9 +173,11 @@ class LiveScoreService : Service() {
 
     companion object {
         private const val TAG = "LiveScoreService"
+        private const val EXTRA_FORCE_SHOW = "force_show"
 
-        fun start(context: Context) {
+        fun start(context: Context, forceShow: Boolean = false) {
             val i = Intent(context, LiveScoreService::class.java)
+            if (forceShow) i.putExtra(EXTRA_FORCE_SHOW, true)
             context.startForegroundService(i)
         }
 
@@ -172,32 +190,32 @@ class LiveScoreService : Service() {
             start(context)
         }
 
-        /** `다시 표시`: 스냅샷을 새로 받은 뒤 점수 카드를 바로 올린다. */
-        suspend fun reshow(context: Context) {
+        /** `다시 표시`: 스냅샷을 새로 받은 뒤 표시 시작 시간과 무관하게 알림을 올린다. */
+        suspend fun reshow(context: Context): Boolean {
             val app = context.applicationContext
             val repo = GiantsRepository.get(app)
             repo.store.setLiveScoreEnabled(true)
             NotificationHelper.createChannels(app)
             val snap = runCatching { repo.refreshSnapshot(force = true) }.getOrNull()
                 ?: repo.store.loadSnapshot()
-            val savedMode = repo.store.liveDisplayMode()
+            val mode = repo.store.liveDisplayMode()
             val lead = repo.store.liveLeadMinutes()
-            val game = NotificationHelper.liveNotificationGame(snap, allowUpcoming = true, leadMinutes = lead)
-            if (!shouldPostLiveNotification(game, lead)) {
-                NotificationHelper.cancelLive(app)
-                return
-            }
+            val game = NotificationHelper.liveNotificationGame(
+                snap,
+                allowUpcoming = true,
+                leadMinutes = lead,
+                ignoreLeadWindow = true,
+            ) ?: return false
             val n = NotificationHelper.buildLiveNotification(
                 app,
                 game,
-                LiveDisplayMode.FULL,
+                mode,
                 snap?.winProbSeries.orEmpty(),
             )
             val nm = app.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
             nm.notify(NotificationHelper.LIVE_NOTIFICATION_ID, n)
-            if (savedMode == LiveDisplayMode.FULL || game?.status == GameStatus.LIVE) {
-                start(app)
-            }
+            start(app, forceShow = true)
+            return true
         }
     }
 }

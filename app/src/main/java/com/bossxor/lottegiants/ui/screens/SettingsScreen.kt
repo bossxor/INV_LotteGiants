@@ -384,19 +384,35 @@ fun SettingsScreen(
                 if (Build.VERSION.SDK_INT >= 36) {
                     Spacer(Modifier.height(10.dp))
                     Button(
-                        onClick = { NotificationHelper.openNowBarSettings(context) },
+                        onClick = {
+                            val opened = NotificationHelper.openNowBarSettings(context)
+                            Toast.makeText(
+                                context,
+                                if (opened) {
+                                    "설정 → 알림 → 라이브 알림에서 사직스코어를 켜 주세요"
+                                } else {
+                                    "설정을 열지 못했습니다"
+                                },
+                                Toast.LENGTH_LONG,
+                            ).show()
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("Now Bar 허용 열기", fontWeight = FontWeight.Bold)
+                        Text("라이브 알림(Now Bar) 설정", fontWeight = FontWeight.Bold)
                     }
                 }
                 Spacer(Modifier.height(12.dp))
                 Button(
                     onClick = {
                         scope.launch {
-                            LiveScoreService.reshow(context)
+                            val ok = LiveScoreService.reshow(context)
+                            Toast.makeText(
+                                context,
+                                if (ok) "실시간 스코어 알림을 표시했습니다" else "표시할 경기가 없습니다",
+                                Toast.LENGTH_SHORT,
+                            ).show()
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
