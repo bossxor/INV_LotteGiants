@@ -1,18 +1,14 @@
 package com.bossxor.lottegiants
 
 import android.app.Application
-import android.app.NotificationManager
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.bossxor.lottegiants.data.GiantsRepository
-import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.IMAGE_USER_AGENT
 import com.bossxor.lottegiants.domain.imageRefererForHost
 import com.bossxor.lottegiants.domain.shouldPostLiveNotification
 import com.bossxor.lottegiants.live.AlertBootstrap
 import com.bossxor.lottegiants.live.EventDetector
-import com.bossxor.lottegiants.live.GameSchedulerWorker
-import com.bossxor.lottegiants.live.LiveScoreService
 import com.bossxor.lottegiants.live.NotificationHelper
 import com.bossxor.lottegiants.live.WearBridge
 import com.bossxor.lottegiants.widget.WidgetUpdater
@@ -56,17 +52,7 @@ class GiantsApp : Application(), ImageLoaderFactory {
                         leadMinutes = lead,
                     )
                     if (shouldPostLiveNotification(game, lead)) {
-                        val n = NotificationHelper.buildLiveNotification(
-                            this@GiantsApp,
-                            game,
-                            repo.store.liveDisplayMode(),
-                            snap.winProbSeries,
-                        )
-                        getSystemService(NotificationManager::class.java)
-                            .notify(NotificationHelper.LIVE_NOTIFICATION_ID, n)
-                        if (game?.status == GameStatus.LIVE || game?.status == GameStatus.BEFORE) {
-                            LiveScoreService.start(this@GiantsApp)
-                        }
+                        NotificationHelper.refreshLiveNotificationIfNeeded(this@GiantsApp)
                     }
                 }
             }

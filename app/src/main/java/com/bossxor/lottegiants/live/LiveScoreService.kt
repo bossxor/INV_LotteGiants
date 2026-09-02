@@ -24,13 +24,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 /**
- * 경기 중 5초(라이브)·8초(경기 전) 간격으로 폴링해 위젯·알림·이벤트를 갱신한다.
+ * 경기 **중** 5초 간격으로 폴링해 위젯·알림·이벤트를 갱신한다.
+ * 경기 전 알림은 FGS 없이 [NotificationHelper.refreshLiveNotificationIfNeeded]만 쓴다.
  */
 class LiveScoreService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollJob: Job? = null
     private var ignoreLeadWindow = false
+    private var foregroundStarted = false
     private val detector by lazy { EventDetector(GiantsRepository.get(this).store) }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -50,23 +52,40 @@ class LiveScoreService : Service() {
         val mode = runBlocking { repo.store.liveDisplayMode() }
         val lead = runBlocking { repo.store.liveLeadMinutes() }
         val game = liveGame(snap, lead)
+
+        // LIVE가 아니면 FGS를 쓰지 않는다. startForegroundService 타임아웃·깜빡임 방지.
+        if (game?.status != GameStatus.LIVE) {
+            if (shouldShowLive(game, lead)) {
+                runBlocking { NotificationHelper.refreshLiveNotificationIfNeeded(applicationContext) }
+            }
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (!shouldShowLive(game, lead)) {
             stopSelf()
             return START_NOT_STICKY
         }
+
         val notification = NotificationHelper.buildLiveNotification(
             this,
             game,
             mode,
             snap?.winProbSeries.orEmpty(),
         )
+        val notifyKey = NotificationHelper.liveNotificationKey(game, mode)
+        if (foregroundStarted && pollJob?.isActive == true) {
+            NotificationHelper.notifyLive(this, notification, notifyKey)
+            return START_STICKY
+        }
         ServiceCompat.startForeground(
             this,
             NotificationHelper.LIVE_NOTIFICATION_ID,
             notification,
             if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
         )
-        if (game?.status == GameStatus.ENDED || game?.status == GameStatus.CANCELED) {
+        foregroundStarted = true
+        NotificationHelper.notifyLive(this, notification, notifyKey, force = true)
+        if (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED) {
             detachFinished(notification)
             return START_NOT_STICKY
         }
@@ -87,36 +106,31 @@ class LiveScoreService : Service() {
                 val lead = repo.store.liveLeadMinutes()
                 val snap = runCatching { repo.refreshSnapshot(force = false) }.getOrNull()
                 val game = liveGame(snap, lead)
-                val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
                 val live = NotificationHelper.buildLiveNotification(
                     this@LiveScoreService,
                     game,
                     mode,
                     snap?.winProbSeries.orEmpty(),
                 )
-                if (!shouldShowLive(game, lead)) {
+                val notifyKey = NotificationHelper.liveNotificationKey(game, mode)
+                if (game?.status != GameStatus.LIVE || !shouldShowLive(game, lead)) {
                     val pinned = repo.store.isLiveNotificationPinned()
                     if (pinned) {
-                        nm.notify(NotificationHelper.LIVE_NOTIFICATION_ID, live)
-                        ServiceCompat.stopForeground(this@LiveScoreService, ServiceCompat.STOP_FOREGROUND_DETACH)
+                        NotificationHelper.notifyLive(this@LiveScoreService, live, notifyKey)
+                        ServiceCompat.stopForeground(
+                            this@LiveScoreService,
+                            ServiceCompat.STOP_FOREGROUND_DETACH,
+                        )
+                        foregroundStarted = false
                     }
                     stopSelf()
                     break
                 }
-                nm.notify(NotificationHelper.LIVE_NOTIFICATION_ID, live)
-                if (Build.VERSION.SDK_INT >= 36) {
-                    val ok = runCatching { live.hasPromotableCharacteristics() }.getOrDefault(false)
-                    if (!ok) android.util.Log.w(TAG, "live notification is not promotable")
-                }
+                NotificationHelper.notifyLive(this@LiveScoreService, live, notifyKey)
                 WidgetUpdater.updateAll(this@LiveScoreService)
                 WearBridge.syncSnapshot(this@LiveScoreService, snap)
-                val alertGame = if (game?.status == GameStatus.BEFORE) {
-                    runCatching { repo.refreshLineupAlert() }.getOrNull() ?: game
-                } else {
-                    game
-                }
-                detector.process(this@LiveScoreService, alertGame)
-                if (game?.status == GameStatus.ENDED) {
+                detector.process(this@LiveScoreService, game)
+                if (game.status == GameStatus.ENDED) {
                     val st = runCatching { repo.fetchStandings() }.getOrDefault(emptyList())
                     detector.processRace(
                         this@LiveScoreService,
@@ -130,27 +144,15 @@ class LiveScoreService : Service() {
                     }
                 detector.processRosterMoves(this@LiveScoreService, moves)
 
-                when (game?.status) {
+                when (game.status) {
                     GameStatus.LIVE -> delay(5_000L)
-                    GameStatus.BEFORE -> {
-                        if (shouldShowLive(game, lead)) {
-                            delay(8_000L)
-                        } else {
-                            val pinned = repo.store.isLiveNotificationPinned()
-                            if (pinned) {
-                                nm.notify(NotificationHelper.LIVE_NOTIFICATION_ID, live)
-                                ServiceCompat.stopForeground(
-                                    this@LiveScoreService,
-                                    ServiceCompat.STOP_FOREGROUND_DETACH,
-                                )
-                            }
-                            stopSelf()
-                            break
-                        }
-                    }
-                    GameStatus.ENDED, GameStatus.CANCELED, null -> {
+                    GameStatus.ENDED, GameStatus.CANCELED -> {
                         delay(3_000L)
                         detachFinished(live)
+                        break
+                    }
+                    else -> {
+                        stopSelf()
                         break
                     }
                 }
@@ -178,6 +180,7 @@ class LiveScoreService : Service() {
     private fun detachFinished(notification: android.app.Notification) {
         val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
+        foregroundStarted = false
         nm.notify(NotificationHelper.LIVE_NOTIFICATION_ID, notification)
         stopSelf()
     }
@@ -185,17 +188,33 @@ class LiveScoreService : Service() {
     override fun onDestroy() {
         pollJob?.cancel()
         scope.cancel()
+        foregroundStarted = false
         super.onDestroy()
     }
 
     companion object {
-        private const val TAG = "LiveScoreService"
         private const val EXTRA_FORCE_SHOW = "force_show"
 
+        /** LIVE일 때만 FGS를 켠다. 경기 전은 알림만 갱신한다. */
         fun start(context: Context, forceShow: Boolean = false) {
-            val i = Intent(context, LiveScoreService::class.java)
+            val app = context.applicationContext
+            val repo = GiantsRepository.get(app)
+            val snap = runBlocking { repo.store.loadSnapshot() }
+            val lead = runBlocking { repo.store.liveLeadMinutes() }
+            val pinned = runBlocking { repo.store.isLiveNotificationPinned() }
+            val game = NotificationHelper.liveNotificationGame(
+                snap,
+                allowUpcoming = true,
+                leadMinutes = lead,
+                ignoreLeadWindow = forceShow || pinned,
+            )
+            if (game?.status != GameStatus.LIVE) {
+                runBlocking { NotificationHelper.refreshLiveNotificationIfNeeded(app) }
+                return
+            }
+            val i = Intent(app, LiveScoreService::class.java)
             if (forceShow) i.putExtra(EXTRA_FORCE_SHOW, true)
-            context.startForegroundService(i)
+            app.startForegroundService(i)
         }
 
         fun stop(context: Context) {
@@ -215,7 +234,6 @@ class LiveScoreService : Service() {
             NotificationHelper.createChannels(app)
             val snap = runCatching { repo.refreshSnapshot(force = true) }.getOrNull()
                 ?: repo.store.loadSnapshot()
-            val mode = repo.store.liveDisplayMode()
             val lead = repo.store.liveLeadMinutes()
             val game = NotificationHelper.liveNotificationGame(
                 snap,

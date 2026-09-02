@@ -70,6 +70,34 @@ object NotificationHelper {
 
     const val LIVE_NOTIFICATION_ID = 1001
 
+    @Volatile private var lastLiveNotifyKey: String? = null
+
+    fun liveNotificationKey(game: LotteGameInfo?, mode: LiveDisplayMode): String =
+        listOf(
+            game?.gameId,
+            game?.status?.name,
+            game?.lotteScore,
+            game?.opponentScore,
+            game?.inningLabel,
+            game?.out,
+            game?.onBase1,
+            game?.onBase2,
+            game?.onBase3,
+            game?.isLotteBatting,
+            game?.currentBatterName,
+            game?.currentPitcherName,
+            game?.isSuspended,
+            mode.name,
+        ).joinToString("|")
+
+    /** 동일 내용이면 notify를 건너뛰어 Now Bar·알림 깜빡임을 줄인다. */
+    fun notifyLive(context: Context, notification: Notification, key: String, force: Boolean = false) {
+        if (!force && key == lastLiveNotifyKey) return
+        lastLiveNotifyKey = key
+        context.getSystemService(NotificationManager::class.java)
+            .notify(LIVE_NOTIFICATION_ID, notification)
+    }
+
     /** 종료·취소 알림은 2시간 뒤 스스로 사라진다 (서비스가 멈춘 뒤에도 남는 걸 막는다). */
     private const val FINISHED_NOTIFICATION_TIMEOUT_MS = 2 * 60 * 60 * 1000L
 
@@ -152,6 +180,7 @@ object NotificationHelper {
     }
 
     fun cancelLive(context: Context) {
+        lastLiveNotifyKey = null
         context.getSystemService(NotificationManager::class.java).cancel(LIVE_NOTIFICATION_ID)
     }
 
@@ -176,10 +205,9 @@ object NotificationHelper {
         if (!pinned && !shouldPostLiveNotification(game, lead)) return
         val mode = repo.store.liveDisplayMode()
         val n = buildLiveNotification(app, game, mode, snap.winProbSeries)
-        app.getSystemService(NotificationManager::class.java)
-            .notify(LIVE_NOTIFICATION_ID, n)
+        notifyLive(app, n, liveNotificationKey(game, mode))
         if (game.status == GameStatus.LIVE) {
-            LiveScoreService.start(app, forceShow = pinned)
+            LiveScoreService.start(app)
         }
     }
 

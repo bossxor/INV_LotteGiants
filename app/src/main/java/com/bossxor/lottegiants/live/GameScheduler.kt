@@ -71,7 +71,9 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
                 val start = parseGameMillis(date, mini.startTime) ?: return@any false
                 start - System.currentTimeMillis() in 0..(lead * 60_000L)
             }
-            if (withinLead) LiveScoreService.start(applicationContext)
+            if (withinLead && repo.store.isLiveScoreEnabled()) {
+                NotificationHelper.refreshLiveNotificationIfNeeded(applicationContext)
+            }
         } else if (game?.status == GameStatus.BEFORE && !game.isCanceledGame()) {
             scheduleExactStart(applicationContext, game.gameDate, game.startTime, game.gameId, lead)
             schedulePregameReminder(
@@ -79,8 +81,10 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
                 game.opponentName, game.stadium, game.lotteStartingPitcher, game.gameId,
             )
             val start = parseGameMillis(game.gameDate, game.startTime)
-            if (start != null && start - System.currentTimeMillis() in 0..(lead * 60_000L)) {
-                LiveScoreService.start(applicationContext)
+            if (start != null && start - System.currentTimeMillis() in 0..(lead * 60_000L) &&
+                repo.store.isLiveScoreEnabled()
+            ) {
+                NotificationHelper.refreshLiveNotificationIfNeeded(applicationContext)
             }
         } else if (!hasLive) {
             when {
@@ -416,10 +420,7 @@ class GameAlarmReceiver : BroadcastReceiver() {
                             NotificationHelper.refreshLiveNotificationIfNeeded(context)
                             val game = repo.refreshLineupAlert()
                             val status = game?.status
-                            val lead = repo.store.liveLeadMinutes()
-                            if (status == GameStatus.LIVE ||
-                                (status == GameStatus.BEFORE && shouldPostLiveNotification(game, lead))
-                            ) {
+                            if (status == GameStatus.LIVE) {
                                 LiveScoreService.start(context)
                             }
                                     if (status == GameStatus.ENDED || status == GameStatus.CANCELED) {
