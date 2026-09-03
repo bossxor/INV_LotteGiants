@@ -24,11 +24,6 @@ object KboTableParser {
         return parseStandingsRows(rows)
     }
 
-    fun parseStandings(raw: String): List<TeamStanding> {
-        val grid = parseGrid(raw) ?: return emptyList()
-        return parseStandingsRows(grid.rows)
-    }
-
     private fun parseStandingsRows(rows: List<List<String>>): List<TeamStanding> =
         rows.mapNotNull { cells ->
             if (cells.size < 6) return@mapNotNull null

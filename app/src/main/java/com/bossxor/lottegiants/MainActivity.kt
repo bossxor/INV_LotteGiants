@@ -108,7 +108,7 @@ class MainActivity : ComponentActivity() {
         if (!granted) {
             Toast.makeText(
                 this,
-                "알림을 허용해야 득점·Now Bar가 표시됩니다. 설정에서 켤 수 있습니다.",
+                "알림을 허용해야 득점·실시간 스코어가 표시됩니다. 설정에서 켤 수 있습니다.",
                 Toast.LENGTH_LONG,
             ).show()
         }
@@ -487,16 +487,10 @@ private fun AppScaffold(
     var showPlayerSheet by remember { mutableStateOf(false) }
     var lastBackAt by remember { mutableLongStateOf(0L) }
     var showOnboarding by remember { mutableStateOf(false) }
-    var showNowBarGuide by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         if (!store.isOnboardingDone()) {
             showOnboarding = true
-        } else if (Build.VERSION.SDK_INT >= 36 &&
-            !NotificationHelper.canPostNowBar(context) &&
-            !store.isNowBarGuideDone()
-        ) {
-            showNowBarGuide = true
         }
     }
     LaunchedEffect(initialTab) { tab = initialTab }
@@ -542,8 +536,6 @@ private fun AppScaffold(
                 Text(
                     "경기 중 점수를 빨리 보려면 아래를 켜 두세요.\n\n" +
                         "· 알림 허용\n" +
-                        "· One UI 9 Now Bar(라이브 알림)에서 사직스코어 허용\n" +
-                        "  설정 → 알림 → 라이브 알림, 또는 설정 → 잠금화면 → Now bar\n" +
                         "· 배터리 사용량 최적화 제외\n" +
                         "· 홈 화면 위젯\n\n" +
                         "설정에서 언제든 바꿀 수 있습니다.",
@@ -554,59 +546,10 @@ private fun AppScaffold(
                     onClick = {
                         scope.launch {
                             store.setOnboardingDone(true)
-                            store.setNowBarGuideDone(true)
                             showOnboarding = false
                         }
                     },
                 ) { Text("확인") }
-            },
-            dismissButton = {
-                if (Build.VERSION.SDK_INT >= 36) {
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                store.setOnboardingDone(true)
-                                store.setNowBarGuideDone(true)
-                                showOnboarding = false
-                                NotificationHelper.openNowBarSettings(context)
-                            }
-                        },
-                    ) { Text("Now Bar 켜기") }
-                }
-            },
-        )
-    }
-
-    if (showNowBarGuide) {
-        AlertDialog(
-            onDismissRequest = { },
-            title = { Text("Now Bar 안내", fontWeight = FontWeight.Bold) },
-            text = {
-                Text(
-                    "One UI 9 잠금화면·상태바 칩에 롯데 점수를 올리려면 라이브 알림(Now Bar)에서 사직스코어를 켜 주세요.\n\n" +
-                        "설정 → 알림 → 라이브 알림, 또는 설정 → 잠금화면 → Now bar",
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            store.setNowBarGuideDone(true)
-                            showNowBarGuide = false
-                            NotificationHelper.openNowBarSettings(context)
-                        }
-                    },
-                ) { Text("Now Bar 켜기") }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            store.setNowBarGuideDone(true)
-                            showNowBarGuide = false
-                        }
-                    },
-                ) { Text("나중에") }
             },
         )
     }

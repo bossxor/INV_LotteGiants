@@ -2,11 +2,11 @@
 
 **롯데 자이언츠 중심 KBO 실시간 스코어 앱**
 
-홈 위젯 · Now Bar(Live Update) · 이벤트 알림 · Wear OS 동반 앱을 지원합니다.
+홈 위젯 · 실시간 스코어 알림 · 이벤트 알림 · Wear OS 동반 앱을 지원합니다.
 
 | | |
 |---|---|
-| **버전** | `1.3.78` (`versionCode` **1086**) |
+| **버전** | `1.3.79` (`versionCode` **1087**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 
@@ -17,7 +17,7 @@
 ## 목차
 
 - [화면 구성](#화면-구성)
-- [알림 · Now Bar · Wear](#알림--now-bar--wear)
+- [알림 · Wear](#알림--wear)
 - [홈 위젯](#홈-위젯)
 - [데이터 출처](#데이터-출처)
 - [빌드 · 설치](#빌드--설치)
@@ -68,34 +68,27 @@
 ### 설정
 
 - 즐겨찾기 선수 (동명이인은 **팀·등번호**로 구분)
-- 알림 종류별 토글 · 표시 모드 · Now Bar 시작 시각(30분 단위)
+- 알림 종류별 토글 · 표시 모드 · 알림 표시 시작(30분 단위)
 - 테마(라이트/다크/시스템) · 자동 업데이트 (앱 시작과 동시에 확인)
 
 > 폴드 커버 · ICS 캘린더 구독 · TalkBack 전용 레이아웃은 범위에 넣지 않는다.
 
 ---
 
-## 알림 · Now Bar · Wear
+## 알림 · Wear
 
 ### 표시 모드 (3가지)
 
+세 모드 모두 알림 서랍 스코어카드다. Now Bar 칩 승격은 커스텀 카드를 지워서 쓰지 않는다.
+
 | 모드 | 설명 |
 |------|------|
-| **라이브 바** | Android Live Update(`ProgressStyle`) + One UI Ongoing Activity extras. 잠금화면·AOD·상태바 Now Bar 칩 |
-| **상세 알림** | 펼치면 승률 바·투수/타자 큰 카드. **Now Bar 승격 불가** (커스텀 RemoteViews 금지) |
-| **점수만** | 짧은 점수 텍스트 + Now Bar 칩 |
-
-### Now Bar
-
-네이버지도가 쓰는 **Ongoing Activity**는 삼성 One UI 7 파트너 API다. 공개 SDK가 없고 패키지 화이트리스트가 필요하다.
-
-S26(One UI 8+, Android 16)은 그 대신 [Android Live Updates](https://developer.android.com/develop/ui/views/notifications/live-update)가 Now Bar로 연결된다.
+| **라이브 바** | 상세와 같은 스코어카드 |
+| **상세 알림** | 펼치면 승률 바·투수/타자·루상 |
+| **점수만** | 로고와 점수만 |
 
 - 설정한 **경기 시작 N분 전**(30분~4시간, 30분 단위, 기본 2시간)부터 표시
 - 경기 중에는 항상 표시. 종료 후에는 밀어 지울 수 있음
-- 칩은 **라이브 바**·**점수만**. **상세 알림**은 스코어카드라 승격되지 않음
-- 시스템에서 **사직스코어 라이브 알림(Now Bar)** 허용 필요
-- 칩이 없으면 One UI **개발자 옵션 → 모든 앱의 라이브 알림**을 켜 본다
 
 ### 알림 종류 · 딥링크
 
@@ -125,10 +118,9 @@ S26(One UI 8+, Android 16)은 그 대신 [Android Live Updates](https://develope
 ### 실시간 스코어 알림 (1.3.64~)
 
 - **다시 표시**: 표시 시작 시간과 무관하게 알림을 고정. 경기 전에는 FGS 없이 알림만 둔다.
-- **라이브 바**(1.3.73): Now Bar용 `ProgressStyle` Live Update. 커스텀 스코어카드는 상세 알림만.
-- **펼친 알림** (1.3.71, 상세 알림): 로고–점수–다이아몬드–점수–로고 / 투수·BSO·타자 / 승률 바
+- **펼친 알림**: 로고–점수–다이아몬드–점수–로고 / 투수·BSO·타자 / 승률 바
 - **상태표시줄 아이콘**: 야구공 실루엣. 런처는 SAJIK 배지
-- 경기 전 FGS를 반복 켜지 않아 Now Bar가 깜빡이지 않게 함 (1.3.68)
+- 경기 전 FGS를 반복 켜지 않아 알림이 깜빡이지 않게 함
 
 ### Wear OS
 
@@ -220,8 +212,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `1.3.78` |
-| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1086` |
+| `versionName` | 사용자에게 보이는 버전 | `1.3.79` |
+| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1087` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -249,8 +241,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 ```json
 {
-  "versionCode": 1086,
-  "versionName": "1.3.78",
+  "versionCode": 1087,
+  "versionName": "1.3.79",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }

@@ -347,13 +347,13 @@ data class TeamHistorySection(
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
-/** 실시간 스코어 알림/Now Bar 표시 모드 */
+/** 실시간 스코어 알림 표시 모드 */
 enum class LiveDisplayMode {
-    /** 커스텀 스코어카드. Live Update(Now Bar) 승격 불가 */
+    /** 펼치면 루상·선발·승률까지 보이는 스코어카드 */
     FULL,
-    /** 짧은 텍스트 + Now Bar 칩 */
+    /** 로고와 점수만 */
     STATUS_SCORE,
-    /** ProgressStyle Live Update. One UI Now Bar(잠금화면·AOD·상태바 칩) */
+    /** 상세와 같은 스코어카드 (예전 라이브 바 자리) */
     LOCK_NOW,
 }
 

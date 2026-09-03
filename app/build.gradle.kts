@@ -15,8 +15,8 @@ android {
         applicationId = "com.bossxor.lottegiants"
         minSdk = 31
         targetSdk = 36
-        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1086
-        versionName = (project.findProperty("versionName") as String?) ?: "1.3.78"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1087
+        versionName = (project.findProperty("versionName") as String?) ?: "1.3.79"
 
         // private GitHub 저장소 업데이트용 (local.properties 또는 env GITHUB_TOKEN)
         val localProps = Properties().apply {
@@ -75,9 +75,6 @@ android {
         compose = true
         buildConfig = true
     }
-    lint {
-        disable += "InvalidFragmentVersionForActivityResult"
-    }
 }
 
 dependencies {
@@ -89,7 +86,6 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.glance.appwidget)
@@ -102,9 +98,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.coil.compose)
-    implementation("com.google.android.gms:play-services-wearable:19.0.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
-    implementation("androidx.fragment:fragment-ktx:1.8.6")
+    implementation(libs.play.services.wearable)
+    implementation(libs.kotlinx.coroutines.play.services)
     wearApp(project(":wear"))
     testImplementation("junit:junit:4.13.2")
 }

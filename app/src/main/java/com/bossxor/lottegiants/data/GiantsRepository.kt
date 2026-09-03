@@ -905,21 +905,6 @@ class GiantsRepository private constructor(context: Context) {
         }
     }
 
-    suspend fun saveWeather(weather: StadiumWeather?) {
-        val prev = store.loadSnapshot() ?: return
-        store.saveSnapshot(prev.copy(weather = weather))
-    }
-
-    suspend fun setHighlight(text: String, durationMs: Long = 45_000L) {
-        val prev = store.loadSnapshot() ?: LiveSnapshot()
-        store.saveSnapshot(
-            prev.copy(
-                highlightText = text,
-                highlightUntilMillis = System.currentTimeMillis() + durationMs,
-            ),
-        )
-    }
-
     suspend fun fetchGamesForDate(date: LocalDate): List<MiniGame> {
         fetchKboGames(date).takeIf { it.isNotEmpty() }?.let { kbo ->
             return kboToMiniGames(date, kbo)

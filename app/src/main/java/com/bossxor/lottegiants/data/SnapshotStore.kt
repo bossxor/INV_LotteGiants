@@ -64,8 +64,6 @@ class SnapshotStore(private val context: Context) {
         it[KEY_THEME] ?: ThemeMode.SYSTEM.name
     }
 
-    suspend fun themeMode(): String = themeModeFlow.first()
-
     suspend fun setThemeMode(mode: String) {
         context.dataStore.edit { it[KEY_THEME] = mode }
     }
@@ -127,16 +125,6 @@ class SnapshotStore(private val context: Context) {
 
     suspend fun setOnboardingDone(done: Boolean = true) {
         context.dataStore.edit { it[KEY_ONBOARDING] = done }
-    }
-
-    val nowBarGuideDoneFlow: Flow<Boolean> = context.dataStore.data.map {
-        it[KEY_NOWBAR_GUIDE] ?: false
-    }
-
-    suspend fun isNowBarGuideDone(): Boolean = nowBarGuideDoneFlow.first()
-
-    suspend fun setNowBarGuideDone(done: Boolean = true) {
-        context.dataStore.edit { it[KEY_NOWBAR_GUIDE] = done }
     }
 
     suspend fun setHighlight(text: String, durationMs: Long = 45_000L) {
@@ -206,8 +194,6 @@ class SnapshotStore(private val context: Context) {
             prefs[KEY_FAVORITES] = cur.joinToString(",") { it.code }
         }
     }
-
-    suspend fun isFavorite(code: String): Boolean = code in favoriteCodes()
 
     private fun favoritePlayersFromPrefs(
         prefs: androidx.datastore.preferences.core.Preferences,
@@ -372,8 +358,6 @@ class SnapshotStore(private val context: Context) {
         it[KEY_WEAR_LAST_SYNC] ?: 0L
     }
 
-    suspend fun wearLastSyncMillis(): Long = wearLastSyncFlow.first()
-
     suspend fun setWearLastSync(millis: Long) {
         context.dataStore.edit { it[KEY_WEAR_LAST_SYNC] = millis }
     }
@@ -394,7 +378,6 @@ class SnapshotStore(private val context: Context) {
         private val KEY_LIVE_LEAD_MINUTES = intPreferencesKey("live_lead_minutes")
         private val KEY_SCORECARD_MIGRATED = booleanPreferencesKey("scorecard_notif_migrated_140")
         private val KEY_ONBOARDING = booleanPreferencesKey("onboarding_done")
-        private val KEY_NOWBAR_GUIDE = booleanPreferencesKey("nowbar_guide_133")
         private val KEY_FAVORITES = stringPreferencesKey("favorite_player_codes")
         private val KEY_FAVORITE_PLAYERS = stringPreferencesKey("favorite_players")
         private val KEY_BANNER_DAY = stringPreferencesKey("perm_banner_dismissed_day")

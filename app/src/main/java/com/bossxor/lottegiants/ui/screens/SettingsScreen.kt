@@ -293,7 +293,7 @@ fun SettingsScreen(
         Spacer(Modifier.height(24.dp))
         Text("실시간 스코어 표시", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text(
-            "알림 서랍의 라이브 바·상세·점수만은 모두 스코어카드입니다. Android 라이브 알림(Now Bar 칩)은 커스텀 카드를 지워서, 카드 디자인을 쓰려면 칩과 같이 못 씁니다.",
+            "라이브 바·상세·점수만은 모두 알림 서랍 스코어카드입니다. 상세는 루상·선발·승률, 점수만은 로고와 점수입니다.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 12.sp,
         )
@@ -306,7 +306,7 @@ fun SettingsScreen(
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("실시간 스코어", fontWeight = FontWeight.SemiBold)
-                        Text("끄면 알림·Now Bar를 숨깁니다", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("끄면 실시간 스코어 알림을 숨깁니다", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Switch(
                         checked = liveEnabled,
@@ -357,7 +357,7 @@ fun SettingsScreen(
                 Text(
                     when (liveMode) {
                         LiveDisplayMode.LOCK_NOW ->
-                            "상세와 같은 스코어카드. 원정/홈·구장·루상·선발. Now Bar 칩은 이 카드와 같이 못 씁니다."
+                            "상세와 같은 스코어카드. 원정/홈·구장·루상·선발."
                         LiveDisplayMode.FULL ->
                             "팀 로고·점수 카드. 하단에 양 팀 승리 예측 게이지. 경기 전에는 시각·선발·구장, 중에는 루상·투수·타자, 끝나면 승·패."
                         LiveDisplayMode.STATUS_SCORE ->
@@ -368,7 +368,7 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(14.dp))
                 val liveLead by store.liveLeadMinutesFlow.collectAsState(initial = 120)
-                Text("Now Bar 표시 시작", fontWeight = FontWeight.SemiBold)
+                Text("알림 표시 시작", fontWeight = FontWeight.SemiBold)
                 Text(
                     "경기 시작 ${liveLeadLabel(liveLead)}부터 · 30분~4시간",
                     fontSize = 11.sp,
@@ -398,35 +398,6 @@ fun SettingsScreen(
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-                Spacer(Modifier.height(8.dp))
-                val nowBar = NotificationHelper.nowBarStatus(context)
-                Text(
-                    NotificationHelper.nowBarStatusLabel(nowBar),
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (Build.VERSION.SDK_INT >= 36) {
-                    Spacer(Modifier.height(10.dp))
-                    Button(
-                        onClick = {
-                            val opened = NotificationHelper.openNowBarSettings(context)
-                            Toast.makeText(
-                                context,
-                                if (opened) {
-                                    "설정 → 알림 → 라이브 알림에서 사직스코어를 켜 주세요"
-                                } else {
-                                    "설정을 열지 못했습니다"
-                                },
-                                Toast.LENGTH_LONG,
-                            ).show()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("라이브 알림(Now Bar) 설정", fontWeight = FontWeight.Bold)
-                    }
                 }
                 Spacer(Modifier.height(12.dp))
                 Button(
