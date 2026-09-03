@@ -570,7 +570,7 @@ fun SettingsScreen(
                     fontSize = 15.sp,
                 )
                 Text(
-                    "앱을 열면 최신 빌드를 자동으로 받아 설치 화면까지 진행합니다.",
+                    "앱을 켜는 즉시 최신 빌드를 확인하고, 있으면 바로 받습니다.",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

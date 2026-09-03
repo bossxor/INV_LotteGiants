@@ -156,7 +156,7 @@ class MainActivity : ComponentActivity() {
                 val overlayTeamCard by vm.overlayTeamCard.collectAsState()
                 val scope = rememberCoroutineScope()
                 var updateStatus by remember { mutableStateOf<String?>(null) }
-                var autoUpdateRan by remember { mutableStateOf(false) }
+                var lastAutoUpdateAt by remember { mutableLongStateOf(0L) }
                 var pendingNeedsResume by remember { mutableStateOf(false) }
 
                 fun handleInstallResult(result: InstallResult) {
@@ -194,11 +194,11 @@ class MainActivity : ComponentActivity() {
                                 if (snapshot?.lotteGame?.status == GameStatus.LIVE) {
                                     LiveScoreService.start(this@MainActivity)
                                 }
-                                if (!autoUpdateRan) {
-                                    autoUpdateRan = true
+                                val now = System.currentTimeMillis()
+                                if (now - lastAutoUpdateAt >= 45_000L) {
+                                    lastAutoUpdateAt = now
                                     scope.launch {
                                         val store = GiantsRepository.get(this@MainActivity).store
-                                        updateStatus = "업데이트 확인 중…"
                                         val result = withContext(Dispatchers.IO) {
                                             UpdateChecker.runAutoUpdate(
                                                 this@MainActivity,
@@ -211,7 +211,9 @@ class MainActivity : ComponentActivity() {
                                             }
                                         }
                                         if (result == null) {
-                                            updateStatus = null
+                                            if (updateStatus?.startsWith("업데이트 다운로드") != true) {
+                                                updateStatus = null
+                                            }
                                             return@launch
                                         }
                                         handleInstallResult(result)

@@ -4,6 +4,7 @@ import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import com.bossxor.lottegiants.data.GiantsRepository
+import com.bossxor.lottegiants.data.UpdateChecker
 import com.bossxor.lottegiants.domain.IMAGE_USER_AGENT
 import com.bossxor.lottegiants.domain.imageRefererForHost
 import com.bossxor.lottegiants.domain.shouldPostLiveNotification
@@ -26,6 +27,7 @@ class GiantsApp : Application(), ImageLoaderFactory {
         super.onCreate()
         NotificationHelper.createChannels(this)
         AlertBootstrap.runAsync(this)
+        UpdateChecker.prefetch(this)
         scope.launch {
             runCatching {
                 val repo = GiantsRepository.get(this@GiantsApp)
