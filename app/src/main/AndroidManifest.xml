@@ -22,6 +22,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.LotteGiants">
 
+        <!-- 네이버지도와 같은 One UI Ongoing Activity extras. 실제 칩 노출은 삼성 화이트리스트 또는 One UI 8 Live Update. -->
+        <meta-data
+            android:name="com.samsung.android.support.ongoing_activity"
+            android:value="true" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

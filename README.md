@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `1.3.72` (`versionCode` **1080**) |
+| **버전** | `1.3.73` (`versionCode` **1081**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 
@@ -81,16 +81,21 @@
 
 | 모드 | 설명 |
 |------|------|
-| **라이브 바** | 스코어카드 + 경기 중 Now Bar 칩 |
-| **상세 알림** | 펼치면 승률 바·투수/타자 큰 카드 |
-| **점수만** | 접힌 스코어카드. 칩은 점수 |
+| **라이브 바** | Android Live Update(`ProgressStyle`) + One UI Ongoing Activity extras. 잠금화면·AOD·상태바 Now Bar 칩 |
+| **상세 알림** | 펼치면 승률 바·투수/타자 큰 카드. **Now Bar 승격 불가** (커스텀 RemoteViews 금지) |
+| **점수만** | 짧은 점수 텍스트 + Now Bar 칩 |
 
 ### Now Bar
 
+네이버지도가 쓰는 **Ongoing Activity**는 삼성 One UI 7 파트너 API다. 공개 SDK가 없고 패키지 화이트리스트가 필요하다.
+
+S26(One UI 8+, Android 16)은 그 대신 [Android Live Updates](https://developer.android.com/develop/ui/views/notifications/live-update)가 Now Bar로 연결된다.
+
 - 설정한 **경기 시작 N분 전**(30분~4시간, 30분 단위, 기본 2시간)부터 표시
 - 경기 중에는 항상 표시. 종료 후에는 밀어 지울 수 있음
-- 칩은 **라이브 바**·**점수만**이고 **경기 중**일 때만 승격
+- 칩은 **라이브 바**·**점수만**. **상세 알림**은 스코어카드라 승격되지 않음
 - 시스템에서 **사직스코어 라이브 알림(Now Bar)** 허용 필요
+- 칩이 없으면 One UI **개발자 옵션 → 모든 앱의 라이브 알림**을 켜 본다
 
 ### 알림 종류 · 딥링크
 
@@ -120,8 +125,8 @@
 ### 실시간 스코어 알림 (1.3.64~)
 
 - **다시 표시**: 표시 시작 시간과 무관하게 알림을 고정. 경기 전에는 FGS 없이 알림만 둔다.
-- 세 모드 모두 스코어카드. 옛 ProgressStyle(이닝 진행 바)는 쓰지 않는다.
-- **펼친 알림** (1.3.71): 로고–점수–다이아몬드–점수–로고 / 투수·BSO·타자 / 승률 바
+- **라이브 바**(1.3.73): Now Bar용 `ProgressStyle` Live Update. 커스텀 스코어카드는 상세 알림만.
+- **펼친 알림** (1.3.71, 상세 알림): 로고–점수–다이아몬드–점수–로고 / 투수·BSO·타자 / 승률 바
 - **상태표시줄 아이콘**: 야구공 실루엣. 런처는 SAJIK 배지
 - 경기 전 FGS를 반복 켜지 않아 Now Bar가 깜빡이지 않게 함 (1.3.68)
 
@@ -214,8 +219,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `1.3.72` |
-| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1080` |
+| `versionName` | 사용자에게 보이는 버전 | `1.3.73` |
+| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1081` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -243,8 +248,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 ```json
 {
-  "versionCode": 1080,
-  "versionName": "1.3.72",
+  "versionCode": 1081,
+  "versionName": "1.3.73",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }

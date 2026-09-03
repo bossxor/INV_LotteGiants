@@ -282,7 +282,7 @@ fun SettingsScreen(
         Spacer(Modifier.height(24.dp))
         Text("실시간 스코어 표시", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text(
-            "알림 표시 형태입니다. One UI 9 Now Bar(라이브 알림)를 켜 두면 잠금화면·상태바 칩에 점수가 뜹니다.",
+            "네이버지도 Ongoing Activity는 삼성 파트너(화이트리스트) 기능입니다. 사직스코어는 같은 칩 extras를 넣고, One UI 8+에서는 Android 라이브 알림으로 Now Bar에 올립니다. 「라이브 바」를 고르세요. 스코어카드(상세 알림)와 칩은 동시에 못 씁니다.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 12.sp,
         )
@@ -346,11 +346,11 @@ fun SettingsScreen(
                 Text(
                     when (liveMode) {
                         LiveDisplayMode.LOCK_NOW ->
-                            "스코어카드 알림. 경기 중 Now Bar·잠금화면 칩에 점수가 뜹니다."
+                            "이닝 진행 바(Live Update). 잠금화면·AOD·상태바 Now Bar 칩에 점수가 뜹니다. 커스텀 스코어카드는 못 씁니다."
                         LiveDisplayMode.FULL ->
-                            "팀 로고·점수 카드. 하단에 양 팀 승리 예측 게이지. 경기 전에는 시각·선발·구장, 중에는 루상·투수·타자, 끝나면 승·패. 카드는 Now Bar 칩으로 승격되지 않습니다."
+                            "팀 로고·점수 카드. 하단에 양 팀 승리 예측 게이지. 경기 전에는 시각·선발·구장, 중에는 루상·투수·타자, 끝나면 승·패. 카드는 Now Bar로 승격되지 않습니다."
                         LiveDisplayMode.STATUS_SCORE ->
-                            "스코어카드(간단). 경기 중 칩에는 점수가 뜹니다."
+                            "짧은 점수 텍스트. Now Bar 칩에는 점수가 뜹니다."
                     },
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

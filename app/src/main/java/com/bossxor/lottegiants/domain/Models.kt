@@ -317,11 +317,11 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
 /** 실시간 스코어 알림/Now Bar 표시 모드 */
 enum class LiveDisplayMode {
-    /** 커스텀 뷰 상세 카드 (선수 사진·루상). Live Update 승격 불가 */
+    /** 커스텀 스코어카드. Live Update(Now Bar) 승격 불가 */
     FULL,
-    /** 상태바·알림줄에 점수만 */
+    /** 짧은 텍스트 + Now Bar 칩 */
     STATUS_SCORE,
-    /** 스코어카드 + 상태바 점수 칩 (Now Bar) */
+    /** ProgressStyle Live Update. One UI Now Bar(잠금화면·AOD·상태바 칩) */
     LOCK_NOW,
 }
 

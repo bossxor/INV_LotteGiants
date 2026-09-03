@@ -6,13 +6,16 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
 import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import com.bossxor.lottegiants.MainActivity
 import com.bossxor.lottegiants.R
 import com.bossxor.lottegiants.data.NotificationType
@@ -73,7 +76,8 @@ object NotificationHelper {
     @Volatile private var lastLiveNotifyKey: String? = null
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 3
+    private const val LIVE_NOTIFY_STYLE_REV = 4
+    private const val REGULATION_INNINGS = 9
 
     fun liveNotificationKey(game: LotteGameInfo?, mode: LiveDisplayMode): String =
         LIVE_NOTIFY_STYLE_REV.toString() + "|" + listOf(
@@ -117,7 +121,6 @@ object NotificationHelper {
         ch(CHANNEL_LIVE_CARD, "실시간 스코어카드", NotificationManager.IMPORTANCE_DEFAULT)
         ch(CHANNEL_LIVE_NOW, "Now Bar 실시간 점수", NotificationManager.IMPORTANCE_HIGH)
         runCatching { nm.deleteNotificationChannel("live_score_nowbar") }
-        runCatching { nm.deleteNotificationChannel("live_score_nowbar_v2") }
         runCatching { nm.deleteNotificationChannel("live_score_card_v2") }
         runCatching { nm.deleteNotificationChannel("live_score_card_v3") }
         ch(CHANNEL_SCORE, "득점", NotificationManager.IMPORTANCE_HIGH)
@@ -253,14 +256,24 @@ object NotificationHelper {
             LiveDisplayMode.LOCK_NOW -> scoreTitle to headerLine
         }
 
-        // 모든 표시 모드는 스코어카드. `상세 알림`만 펼칠 때 큰 카드.
-        val useScorecard = game != null
-        val useBigCard = mode == LiveDisplayMode.FULL
         // 경기가 끝나면 서비스가 멈춰도 알림은 남는다. 손으로 지울 수 있게 두고 스스로 만료시킨다.
         val finished = game != null &&
             (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED)
+        // Now Bar = Android Live Update. 커스텀 RemoteViews가 있으면 시스템이 승격을 거부한다.
+        val useNowBar = !finished &&
+            (mode == LiveDisplayMode.LOCK_NOW || mode == LiveDisplayMode.STATUS_SCORE)
+        val useScorecard = !useNowBar && game != null
+        val useBigCard = mode == LiveDisplayMode.FULL
+        val channel = if (useNowBar) CHANNEL_LIVE_NOW else CHANNEL_LIVE_CARD
+        val category = if (useNowBar && mode == LiveDisplayMode.LOCK_NOW &&
+            game?.status == GameStatus.LIVE
+        ) {
+            NotificationCompat.CATEGORY_PROGRESS
+        } else {
+            NotificationCompat.CATEGORY_STATUS
+        }
 
-        val builder = NotificationCompat.Builder(context, CHANNEL_LIVE_CARD)
+        val builder = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(text)
@@ -270,11 +283,12 @@ object NotificationHelper {
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setShowWhen(false)
-            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setCategory(category)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setColor(COLOR_LOTTE)
+            .setColorized(false)
         if (finished) builder.setTimeoutAfter(FINISHED_NOTIFICATION_TIMEOUT_MS)
 
         val hide = PendingIntent.getBroadcast(
@@ -284,43 +298,46 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        // 잠금화면은 커스텀 뷰(로고 비트맵)가 빠질 수 있어 공개용 텍스트 알림을 따로 둔다.
-        val publicNotification = NotificationCompat.Builder(context, CHANNEL_LIVE_CARD)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setSilent(true)
-            .setShowWhen(false)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .build()
-        builder.setPublicVersion(publicNotification)
-
-        val showChip = mode == LiveDisplayMode.LOCK_NOW || mode == LiveDisplayMode.STATUS_SCORE
-        val promoteNowBar = showChip &&
-            mode == LiveDisplayMode.LOCK_NOW &&
-            game != null &&
-            game.status == GameStatus.LIVE &&
-            !finished &&
-            canPostNowBar(context)
-
-        if (useScorecard) {
-            val compact = buildLiveCompactViews(context, game!!)
-            val big = if (useBigCard) buildLiveRemoteViews(context, game, winProbSeries) else compact
-            builder
-                .setColor(COLOR_LOTTE)
-                .setColorized(false)
-                .setCustomContentView(compact)
-                .setCustomBigContentView(big)
-                .setCustomHeadsUpContentView(compact)
-                .setDeleteIntent(hide)
-            if (showChip && chipText.isNotBlank()) {
+        if (useNowBar) {
+            if (chipText.isNotBlank()) {
                 builder
                     .setSubText(chipText)
                     .setShortCriticalText(chipText)
             }
-            if (promoteNowBar) {
-                builder.setRequestPromotedOngoing(true)
+            builder.setRequestPromotedOngoing(true)
+            applySamsungOngoingExtras(builder, context, game, chipText, title, text)
+            if (mode == LiveDisplayMode.LOCK_NOW &&
+                game != null &&
+                game.status == GameStatus.LIVE &&
+                !game.isSuspended
+            ) {
+                builder.setStyle(liveProgressStyle(context, game))
+            } else {
+                builder.setStyle(
+                    NotificationCompat.BigTextStyle()
+                        .setBigContentTitle(title)
+                        .bigText(text.ifBlank { summary }),
+                )
             }
+            builder.setDeleteIntent(hide)
+        } else if (useScorecard) {
+            // 잠금화면은 커스텀 뷰(로고 비트맵)가 빠질 수 있어 공개용 텍스트 알림을 따로 둔다.
+            val publicNotification = NotificationCompat.Builder(context, CHANNEL_LIVE_CARD)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setSilent(true)
+                .setShowWhen(false)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .build()
+            builder.setPublicVersion(publicNotification)
+            val compact = buildLiveCompactViews(context, game!!)
+            val big = if (useBigCard) buildLiveRemoteViews(context, game, winProbSeries) else compact
+            builder
+                .setCustomContentView(compact)
+                .setCustomBigContentView(big)
+                .setCustomHeadsUpContentView(compact)
+                .setDeleteIntent(hide)
         } else {
             builder
                 .setStyle(NotificationCompat.BigTextStyle().bigText(text.ifBlank { "예정 경기 없음" }))
@@ -328,7 +345,7 @@ object NotificationHelper {
         }
 
         val notification = builder.build()
-        if (showChip && chipText.isNotBlank()) {
+        if (useNowBar && chipText.isNotBlank()) {
             notification.extras.putString("android.shortCriticalText", chipText)
         }
         return notification
@@ -386,10 +403,10 @@ object NotificationHelper {
             "잠금화면 칩(Now Bar)이 꺼져 있을 수 있습니다. 아래 설정에서 라이브 알림을 켜 보세요."
         status.promoted -> "Now Bar에 표시 중입니다."
         status.livePosted && status.promotable ->
-            "승격 가능한 알림입니다. 칩이 안 보이면 잠금화면 Now bar 목록에서 사직스코어를 켜 보세요."
+            "승격 가능한 알림입니다. 칩이 없으면 잠금화면 Now bar에서 사직스코어를 켜고, 그래도 없으면 개발자 옵션의 「모든 앱의 라이브 알림」을 켜 보세요."
         status.livePosted && !status.promotable ->
-            "지금 알림은 승격 조건에 안 맞습니다. 아래 다시 표시를 눌러 주세요."
-        else -> "실시간 스코어를 켜면 잠금화면·상태바 칩에 점수가 올라갑니다."
+            "지금 알림은 Now Bar 승격 조건에 안 맞습니다. 표시 모드를 「라이브 바」로 바꾼 뒤 다시 표시를 누르세요."
+        else -> "실시간 스코어를 켜고 「라이브 바」를 고르면 잠금화면·상태바 칩에 점수가 올라갑니다."
     }
 
     fun openNowBarSettings(context: Context): Boolean {
@@ -411,6 +428,82 @@ object NotificationHelper {
             if (ok) return true
         }
         return false
+    }
+
+    /**
+     * 네이버지도가 One UI 7에서 쓰는 Ongoing Activity extras.
+     * 삼성 공개 SDK는 없고 파트너(화이트리스트) 앱만 실제로 칩에 오른다.
+     * One UI 8+ S26은 아래 extras와 별개로 Android Live Update(`setRequestPromotedOngoing`)가 Now Bar 경로다.
+     */
+    private fun applySamsungOngoingExtras(
+        builder: NotificationCompat.Builder,
+        context: Context,
+        game: LotteGameInfo?,
+        chipText: String,
+        primary: String,
+        secondary: String,
+    ) {
+        val chip = chipText.ifBlank { primary.take(7) }
+        val extras = Bundle().apply {
+            putInt("android.ongoingActivityNoti.style", 1)
+            putString("android.ongoingActivityNoti.primaryInfo", primary)
+            putString("android.ongoingActivityNoti.secondaryInfo", secondary)
+            putParcelable(
+                "android.ongoingActivityNoti.secondaryInfoIcon",
+                Icon.createWithResource(context, R.drawable.ic_notification),
+            )
+            putInt("android.ongoingActivityNoti.chipBgColor", COLOR_LOTTE)
+            putParcelable(
+                "android.ongoingActivityNoti.chipIcon",
+                Icon.createWithResource(context, R.drawable.ic_notification),
+            )
+            putString("android.ongoingActivityNoti.chipExpandedText", chip)
+            putString("android.ongoingActivityNoti.nowbarPrimaryInfo", chip)
+            putString("android.ongoingActivityNoti.nowbarSecondaryInfo", secondary)
+            if (game != null && game.status == GameStatus.LIVE && !game.isSuspended) {
+                val innings = maxOf(REGULATION_INNINGS, game.inning)
+                val total = innings * 2
+                val current = ((game.inning - 1).coerceAtLeast(0) * 2 + if (game.isTopInning) 1 else 2)
+                    .coerceIn(0, total)
+                putInt("android.ongoingActivityNoti.progress", current)
+                putInt("android.ongoingActivityNoti.progressMax", total)
+                putInt("android.ongoingActivityNoti.progressSegments.progressColor", COLOR_LOTTE)
+            }
+        }
+        builder.addExtras(extras)
+    }
+
+    /**
+     * 이닝을 구간으로 나눈 진행 바. 한 이닝은 초·말 2칸이고 득점한 이닝은 점으로 찍는다.
+     * ProgressStyle은 Live Update로 승격 가능한 스타일이다. One UI Now Bar도 그대로 그린다.
+     */
+    private fun liveProgressStyle(
+        context: Context,
+        game: LotteGameInfo,
+    ): NotificationCompat.ProgressStyle {
+        val innings = maxOf(REGULATION_INNINGS, game.inning)
+        val total = innings * 2
+        val current = ((game.inning - 1).coerceAtLeast(0) * 2 + if (game.isTopInning) 1 else 2)
+            .coerceIn(0, total)
+
+        fun scoringPoints(scores: List<String>, isBottomHalf: Boolean, color: Int) =
+            scores.mapIndexedNotNull { i, raw ->
+                if ((raw.trim().toIntOrNull() ?: 0) <= 0) return@mapIndexedNotNull null
+                val pos = i * 2 + if (isBottomHalf) 2 else 1
+                if (pos > total) null else NotificationCompat.ProgressStyle.Point(pos).setColor(color)
+            }
+
+        return NotificationCompat.ProgressStyle()
+            .setProgressSegments(
+                List(innings) { NotificationCompat.ProgressStyle.Segment(2).setColor(COLOR_TRACK) },
+            )
+            .setProgressPoints(
+                scoringPoints(game.lotteInningScores, game.isHome, COLOR_LOTTE) +
+                    scoringPoints(game.opponentInningScores, !game.isHome, COLOR_OPPONENT),
+            )
+            .setProgress(current)
+            .setStyledByProgress(false)
+            .setProgressTrackerIcon(IconCompat.createWithResource(context, R.drawable.ic_notification))
     }
 
     /** 알림 접힘 상태용 한 줄 */
