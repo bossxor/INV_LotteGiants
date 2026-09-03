@@ -149,7 +149,7 @@ private fun WidgetRoot(
     val compact = size.width < 180.dp
     val bgAlpha = (opacityPct.coerceIn(20, 100) / 100f)
     val bgColor = Color(0xFF18243A).copy(alpha = bgAlpha)
-    Box(
+    Column(
         modifier = GlanceModifier
             .fillMaxSize()
             .let { m ->
@@ -159,12 +159,31 @@ private fun WidgetRoot(
                     m.background(ColorProvider(bgColor, bgColor))
                 }
             }
-            .cornerRadius(22.dp),
+            .cornerRadius(22.dp)
+            .padding(if (compact) 8.dp else 10.dp),
     ) {
+        Row(
+            modifier = GlanceModifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.End,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Box(
+                modifier = GlanceModifier
+                    .padding(2.dp)
+                    .clickable(actionRunCallback<WidgetRefreshAction>()),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    provider = ImageProvider(R.drawable.ic_widget_refresh),
+                    contentDescription = "새로고침",
+                    modifier = GlanceModifier.size(26.dp),
+                )
+            }
+        }
         Column(
             modifier = GlanceModifier
-                .fillMaxSize()
-                .padding(if (compact) 10.dp else 12.dp)
+                .defaultWeight()
+                .fillMaxWidth()
                 .clickable(actionStartActivity(openIntent)),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalAlignment = Alignment.CenterVertically,
@@ -197,24 +216,6 @@ private fun WidgetRoot(
                 else -> Text(
                     "경기 없음",
                     style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 13.sp),
-                )
-            }
-        }
-        Column(
-            modifier = GlanceModifier.fillMaxSize().padding(4.dp),
-            horizontalAlignment = Alignment.End,
-            verticalAlignment = Alignment.Top,
-        ) {
-            Box(
-                modifier = GlanceModifier
-                    .padding(4.dp)
-                    .clickable(actionRunCallback<WidgetRefreshAction>()),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(
-                    provider = ImageProvider(R.drawable.ic_widget_refresh),
-                    contentDescription = "새로고침",
-                    modifier = GlanceModifier.size(26.dp),
                 )
             }
         }
@@ -722,7 +723,9 @@ class WidgetRefreshAction : ActionCallback {
         glanceId: GlanceId,
         parameters: ActionParameters,
     ) {
-        val snap = runCatching { GiantsRepository.get(context).refreshSnapshot() }.getOrNull()
+        val snap = runCatching {
+            GiantsRepository.get(context).refreshSnapshot(force = true)
+        }.getOrNull()
         WidgetUpdater.updateAll(context)
         WearBridge.syncSnapshot(context, snap)
         if (snap?.lotteGame?.status == GameStatus.LIVE) {

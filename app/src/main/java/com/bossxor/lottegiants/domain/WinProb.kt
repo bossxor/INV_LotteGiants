@@ -86,7 +86,23 @@ object WinProb {
         if (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED) {
             return estimateLotteWinProb(game)
         }
-        return focusProb.coerceIn(0.03, 0.97)
+        val est = estimateLotteWinProb(game)
+        val inn = game.inning.coerceIn(1, 12)
+        // 초반은 API가 1:99처럼 극단값을 줄 때가 있어 점수 추정에서 너무 벗어나지 않게 한다.
+        val maxDev = when {
+            inn <= 3 -> 0.18
+            inn <= 6 -> 0.28
+            inn <= 8 -> 0.38
+            else -> 0.45
+        }
+        val raw = if (kotlin.math.abs(focusProb - est) > maxDev * 1.6) {
+            est * 0.65 + focusProb * 0.35
+        } else {
+            focusProb
+        }
+        val lo = (est - maxDev).coerceAtLeast(0.08)
+        val hi = (est + maxDev).coerceAtMost(0.92)
+        return raw.coerceIn(lo, hi)
     }
 
     fun resolveDisplayFocusProb(game: LotteGameInfo, seriesProb: Double?): Double? {

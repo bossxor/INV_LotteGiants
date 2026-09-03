@@ -22,10 +22,7 @@ import com.bossxor.lottegiants.domain.TeamStanding
 import com.bossxor.lottegiants.domain.ThemeMode
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.kboToday
-import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.playerPhotoUrl
-import java.time.Instant
-import java.time.format.DateTimeFormatter
 import com.bossxor.lottegiants.domain.teamKeuboSlug
 import com.bossxor.lottegiants.live.WearBridge
 import com.bossxor.lottegiants.widget.WidgetUpdater
@@ -394,17 +391,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 refreshViewingGame(it)
             }
             .onFailure { e ->
-                val last = _snapshot.value?.updatedAtMillis ?: 0L
-                val stale = last == 0L ||
-                    System.currentTimeMillis() - last > REFRESH_ERROR_STALE_MS
-                if (!force && !stale) return@onFailure
-                _refreshError.value = if (last > 0L) {
-                    val clock = Instant.ofEpochMilli(last).atZone(KBO_ZONE).toLocalTime()
-                        .format(DateTimeFormatter.ofPattern("HH:mm"))
-                    "실시간 점수 새로고침 실패 · 마지막 $clock"
-                } else {
-                    e.message ?: "경기를 불러오지 못했습니다."
+                // 자동 폴링·캐시가 있으면 배너를 띄우지 않는다. 닫아도 10초마다 다시 뜨던 원인.
+                if (!force || _snapshot.value != null) {
+                    if (!force) return@onFailure
+                    _refreshError.value = null
+                    return@onFailure
                 }
+                _refreshError.value = e.message ?: "경기를 불러오지 못했습니다."
             }
     }
 
@@ -707,7 +700,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         const val POLL_LIVE_SEC = 10
-        private const val REFRESH_ERROR_STALE_MS = 10 * 60 * 1000L
 
         fun sortLotteFirst(games: List<MiniGame>): List<MiniGame> =
             games.sortedByDescending {

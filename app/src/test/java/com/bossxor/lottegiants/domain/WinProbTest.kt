@@ -1,7 +1,7 @@
 package com.bossxor.lottegiants.domain
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WinProbTest {
@@ -60,6 +60,26 @@ class WinProbTest {
     @Test
     fun singleSidedOneMeansOnePercent() {
         assertEquals(0.01, WinProb.focusWinProb(1.0, null, lotteIsHome = true)!!, 0.001)
+    }
+
+    @Test
+    fun clampRejectsExtremeApiInEarlyInning() {
+        val game = LotteGameInfo(
+            gameId = "g2",
+            gameDate = "2026-09-02",
+            startTime = "18:30",
+            stadium = "사직",
+            isHome = true,
+            opponentCode = "SS",
+            opponentName = "삼성",
+            lotteScore = 3,
+            opponentScore = 1,
+            status = GameStatus.LIVE,
+            inning = 3,
+            isTopInning = true,
+        )
+        val clamped = WinProb.clampForDisplay(game, 0.01)
+        assertTrue(clamped in 0.55..0.90)
     }
 
     @Test

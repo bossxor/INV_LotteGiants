@@ -73,7 +73,7 @@ object NotificationHelper {
     @Volatile private var lastLiveNotifyKey: String? = null
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 2
+    private const val LIVE_NOTIFY_STYLE_REV = 3
 
     fun liveNotificationKey(game: LotteGameInfo?, mode: LiveDisplayMode): String =
         LIVE_NOTIFY_STYLE_REV.toString() + "|" + listOf(
@@ -554,10 +554,7 @@ object NotificationHelper {
         // 끝난 경기는 점수·종료만으로 충분하다. 좁은 한 줄에 승패까지 넣으면 잘린다.
         // 경기 전은 구장(또는 선발)을 오른쪽에 둔다.
         val note = when {
-            live -> buildString {
-                append("${game.out}아웃")
-                if (game.currentBatterName.isNotBlank()) append(" · ${game.currentBatterName}")
-            }
+            live -> ""
             before -> game.stadium.ifBlank {
                 val starter = game.lotteStartingPitcher.ifBlank { game.opponentStartingPitcher }
                 if (starter.isNotBlank()) "선발 $starter" else ""
@@ -599,7 +596,8 @@ object NotificationHelper {
         rv.setInt(R.id.notif_inning, "setBackgroundResource", inningPillBackground(game))
         // 루상·BSO는 진행 중일 때만 뜻이 있다. 끝난 경기에 빈 다이아몬드를 두면 주자가 있는 것처럼 읽힌다.
         val showBases = game.status == GameStatus.LIVE && !game.isSuspended
-        rv.setViewVisibility(R.id.notif_bso_row, if (showBases) View.VISIBLE else View.GONE)
+        rv.setViewVisibility(R.id.notif_bases, if (showBases) View.VISIBLE else View.GONE)
+        rv.setViewVisibility(R.id.notif_bso, if (showBases) View.VISIBLE else View.GONE)
         if (showBases) {
             rv.setImageViewResource(
                 R.id.notif_bases,

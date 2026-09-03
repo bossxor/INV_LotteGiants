@@ -1,20 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  접힌 알림은 높이가 64dp 정도로 잘린다. 큰 카드를 그대로 넣으면 중간이 썰려 보여서
-  한 줄로만 쓰는 전용 레이아웃을 둔다.
--->
+<!-- 접힌 알림: 로고-점수-이닝-점수-로고. 다이아몬드는 이닝 위에 두면 64dp에서 잘리므로 이닝만. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:paddingHorizontal="2dp"
-    android:paddingVertical="8dp">
+    android:paddingHorizontal="4dp"
+    android:paddingVertical="6dp">
 
     <ImageView
         android:id="@+id/notif_c_away_logo"
-        android:layout_width="30dp"
-        android:layout_height="30dp"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
         android:contentDescription="@null"
         android:scaleType="fitCenter" />
 
@@ -24,22 +21,37 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="6dp"
         android:gravity="center"
-        android:minWidth="26dp"
+        android:minWidth="22dp"
         android:textAppearance="@style/NotifScore"
-        android:textSize="21sp"
+        android:textSize="20sp"
         android:textStyle="bold" />
 
-    <TextView
-        android:id="@+id/notif_c_inning"
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="6dp"
-        android:background="@drawable/notif_inning_pill"
-        android:paddingHorizontal="8dp"
-        android:paddingVertical="2dp"
-        android:textColor="#FFFFFFFF"
-        android:textSize="11sp"
-        android:textStyle="bold" />
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <ImageView
+            android:id="@+id/notif_c_bases"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:contentDescription="@null"
+            android:scaleType="fitCenter" />
+
+        <TextView
+            android:id="@+id/notif_c_inning"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:background="@drawable/notif_inning_pill"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="1dp"
+            android:textColor="#FFFFFFFF"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/notif_c_home_score"
@@ -47,15 +59,15 @@
         android:layout_height="wrap_content"
         android:layout_marginEnd="6dp"
         android:gravity="center"
-        android:minWidth="26dp"
+        android:minWidth="22dp"
         android:textAppearance="@style/NotifScore"
-        android:textSize="21sp"
+        android:textSize="20sp"
         android:textStyle="bold" />
 
     <ImageView
         android:id="@+id/notif_c_home_logo"
-        android:layout_width="30dp"
-        android:layout_height="30dp"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
         android:contentDescription="@null"
         android:scaleType="fitCenter" />
 
@@ -69,13 +81,5 @@
         android:gravity="end"
         android:maxLines="1"
         android:textAppearance="@style/NotifMeta"
-        android:textSize="12sp" />
-
-    <ImageView
-        android:id="@+id/notif_c_bases"
-        android:layout_width="24dp"
-        android:layout_height="24dp"
-        android:layout_marginStart="6dp"
-        android:contentDescription="@null"
-        android:scaleType="fitCenter" />
+        android:textSize="11sp" />
 </LinearLayout>
