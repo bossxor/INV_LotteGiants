@@ -67,6 +67,7 @@ import com.bossxor.lottegiants.domain.LineupSlot
 import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.toZone
+import com.bossxor.lottegiants.domain.belongsToKboToday
 import com.bossxor.lottegiants.domain.focusName
 import com.bossxor.lottegiants.domain.isFocusLotte
 import com.bossxor.lottegiants.domain.MiniGame
@@ -94,6 +95,7 @@ import com.bossxor.lottegiants.ui.components.SectionHeader
 import com.bossxor.lottegiants.ui.components.PlayerAvatar
 import com.bossxor.lottegiants.ui.components.TeamLogo
 import com.bossxor.lottegiants.ui.heroGradient
+import com.bossxor.lottegiants.ui.heroLeadScoreColor
 import com.bossxor.lottegiants.ui.heroOnColor
 import com.bossxor.lottegiants.ui.isAppDark
 
@@ -152,13 +154,19 @@ fun LiveScreen(
         ) != android.content.pm.PackageManager.PERMISSION_GRANTED
     val needBattery = !isIgnoringBatteryOptimizations(context)
 
-    val game = viewingGame ?: snapshot?.lotteGame ?: snapshot?.nextLotteGame
+    val lotteNow = snapshot?.lotteGame?.takeIf { it.belongsToKboToday() }
+    val game = viewingGame ?: lotteNow ?: snapshot?.nextLotteGame
     val viewingOther = viewingGame != null
     val viewingOtherTeam = viewingOther && game?.isFocusLotte() == false
     val focusTeam = game?.focusTeamCode?.ifBlank { LOTTE_TEAM_CODE } ?: LOTTE_TEAM_CODE
-    val showHero = viewingOther || snapshot?.lotteGame != null || snapshot?.nextLotteGame != null
+    val showHero = viewingOther || lotteNow != null || snapshot?.nextLotteGame != null
     val showSpinner = (loading && snapshot == null && viewingGame == null) ||
         (viewingLoading && viewingGame == null)
+
+    LaunchedEffect(snapshot?.lotteGame?.gameId, snapshot?.lotteGame?.gameDate, snapshot?.lotteGame?.status) {
+        val stale = snapshot?.lotteGame?.takeUnless { it.belongsToKboToday() }
+        if (stale != null && viewingGame == null) onRefresh()
+    }
 
     LaunchedEffect(initialDetailTab, focusNonce, showSpinner, game?.gameId) {
         if (focusNonce == 0 && initialDetailTab.isNullOrBlank()) return@LaunchedEffect
@@ -256,7 +264,7 @@ fun LiveScreen(
                                 Spacer(Modifier.height(8.dp))
                                 ErrorRetryLine(refreshError, onRefresh, onDismissRefreshError)
                             }
-                            if (!viewingOther && snapshot?.lotteGame != null) {
+                            if (!viewingOther && lotteNow != null) {
                                 val liveChoices = snapshot.todayLotteGames
                                 if (liveChoices.size >= 2) {
                                     Spacer(Modifier.height(8.dp))
@@ -443,7 +451,7 @@ private fun ScoreTicker(
 ) {
     val games = buildList {
         if (!excludeLotte) {
-            snapshot?.lotteGame?.let { g ->
+            snapshot?.lotteGame?.takeIf { it.belongsToKboToday() }?.let { g ->
                 add(
                     MiniGame(
                         gameId = g.gameId,
@@ -2029,12 +2037,25 @@ private fun HeroTeam(
     starter: String = "",
     onHero: Color,
     modifier: Modifier = Modifier,
+    score: Int? = null,
+    highlight: Boolean = false,
+    leadColor: Color = onHero,
 ) {
     Column(
         modifier.padding(horizontal = 4.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         TeamLogo(logoUrl, size = 52)
+        if (score != null) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "$score",
+                fontSize = 44.sp,
+                fontWeight = FontWeight.Black,
+                color = if (highlight) leadColor else onHero,
+                lineHeight = 46.sp,
+            )
+        }
         Spacer(Modifier.height(8.dp))
         Text(
             name,
@@ -2085,6 +2106,7 @@ private fun HeroCard(
     val showScore = g.status == GameStatus.LIVE || g.status == GameStatus.ENDED
     val dark = isAppDark()
     val onHero = heroOnColor()
+    val leadColor = heroLeadScoreColor()
     val muted = onHero.copy(alpha = if (dark) 0.45f else 0.42f)
     val soft = onHero.copy(alpha = if (dark) 0.7f else 0.62f)
     val awayName = if (g.isHome) g.opponentName else g.focusName()
@@ -2172,20 +2194,21 @@ private fun HeroCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            HeroTeam(awayName, awayLogo, awayStarter, onHero, Modifier.weight(1f))
+            HeroTeam(
+                awayName,
+                awayLogo,
+                awayStarter,
+                onHero,
+                Modifier.weight(1f),
+                score = if (showScore) awayScore else null,
+                highlight = showScore && awayScore > homeScore,
+                leadColor = leadColor,
+            )
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(horizontal = 2.dp),
             ) {
-                if (showScore) {
-                    Text(
-                        "$awayScore : $homeScore",
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Black,
-                        color = onHero,
-                        lineHeight = 36.sp,
-                    )
-                } else {
+                if (!showScore) {
                     Text("VS", fontWeight = FontWeight.Black, fontSize = 20.sp, color = soft)
                     if (g.status == GameStatus.BEFORE) {
                         val cd = remember(g.gameDate, g.startTime) {
@@ -2196,8 +2219,8 @@ private fun HeroCard(
                             Text(cd, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LotteGold, maxLines = 1)
                         }
                     }
+                    Spacer(Modifier.height(8.dp))
                 }
-                Spacer(Modifier.height(8.dp))
                 val pill = when {
                     g.isSuspended -> if (g.inning > 0) {
                         "${g.inning}회${if (g.isTopInning) "초" else "말"}"
@@ -2214,7 +2237,16 @@ private fun HeroCard(
                     InningPill(pill, live = g.status == GameStatus.LIVE && !g.isSuspended, onHero = onHero)
                 }
             }
-            HeroTeam(homeName, homeLogo, homeStarter, onHero, Modifier.weight(1f))
+            HeroTeam(
+                homeName,
+                homeLogo,
+                homeStarter,
+                onHero,
+                Modifier.weight(1f),
+                score = if (showScore) homeScore else null,
+                highlight = showScore && homeScore > awayScore,
+                leadColor = leadColor,
+            )
         }
         if (g.status == GameStatus.LIVE && !g.isSuspended) {
             Spacer(Modifier.height(12.dp))

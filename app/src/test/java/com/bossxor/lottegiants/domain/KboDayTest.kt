@@ -54,6 +54,13 @@ class KboDayTest {
     }
 
     @Test
+    fun compactGameDateStillMatchesToday() {
+        val ended = game("20260902", GameStatus.ENDED)
+        assertTrue(ended.belongsToKboToday("2026-09-02"))
+        assertFalse(ended.belongsToKboToday("2026-09-03"))
+    }
+
+    @Test
     fun liveOvernightStillCountsAsCurrent() {
         val live = game("2026-09-02", GameStatus.LIVE)
         assertTrue(live.belongsToKboToday("2026-09-03"))

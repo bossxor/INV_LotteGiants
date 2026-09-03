@@ -107,6 +107,8 @@ fun SettingsScreen(
         Spacer(Modifier.height(20.dp))
         Text("화면 테마", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
+        var pickedTheme by remember { mutableStateOf(themeMode) }
+        LaunchedEffect(themeMode) { pickedTheme = themeMode }
         SectionCard {
             Column {
                 Text(
@@ -120,25 +122,34 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     ThemeOption(
-                        selected = themeMode == ThemeMode.LIGHT,
+                        selected = pickedTheme == ThemeMode.LIGHT,
                         icon = Icons.Default.LightMode,
                         label = "라이트",
                         modifier = Modifier.weight(1f),
-                        onClick = { onThemeModeChange(ThemeMode.LIGHT) },
+                        onClick = {
+                            pickedTheme = ThemeMode.LIGHT
+                            onThemeModeChange(ThemeMode.LIGHT)
+                        },
                     )
                     ThemeOption(
-                        selected = themeMode == ThemeMode.DARK,
+                        selected = pickedTheme == ThemeMode.DARK,
                         icon = Icons.Default.DarkMode,
                         label = "다크",
                         modifier = Modifier.weight(1f),
-                        onClick = { onThemeModeChange(ThemeMode.DARK) },
+                        onClick = {
+                            pickedTheme = ThemeMode.DARK
+                            onThemeModeChange(ThemeMode.DARK)
+                        },
                     )
                     ThemeOption(
-                        selected = themeMode == ThemeMode.SYSTEM,
+                        selected = pickedTheme == ThemeMode.SYSTEM,
                         icon = Icons.Default.BrightnessAuto,
                         label = "시스템",
                         modifier = Modifier.weight(1f),
-                        onClick = { onThemeModeChange(ThemeMode.SYSTEM) },
+                        onClick = {
+                            pickedTheme = ThemeMode.SYSTEM
+                            onThemeModeChange(ThemeMode.SYSTEM)
+                        },
                     )
                 }
             }
@@ -693,10 +704,10 @@ private fun ThemeOption(
     onClick: () -> Unit,
 ) {
     val bg = when {
-        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+        selected -> LotteRed.copy(alpha = 0.14f)
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
-    val border = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+    val border = if (selected) LotteRed else Color.Transparent
     Column(
         modifier
             .clip(RoundedCornerShape(14.dp))
@@ -709,7 +720,7 @@ private fun ThemeOption(
         Icon(
             icon,
             contentDescription = label,
-            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = if (selected) LotteRed else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(22.dp),
         )
         Spacer(Modifier.height(6.dp))
@@ -717,7 +728,7 @@ private fun ThemeOption(
             label,
             fontSize = 13.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            color = if (selected) LotteRed else MaterialTheme.colorScheme.onSurface,
         )
     }
 }

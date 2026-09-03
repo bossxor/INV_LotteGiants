@@ -8,13 +8,19 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import com.bossxor.lottegiants.domain.ThemeMode
 
 val LotteNavy = Color(0xFF041E42)
@@ -117,14 +123,13 @@ fun isAppDark(): Boolean = MaterialTheme.colorScheme.background.luminance() < 0.
 @Composable
 fun heroGradient(): Brush {
     val dark = isAppDark()
-    val bg = MaterialTheme.colorScheme.background
     return if (dark) {
         Brush.verticalGradient(
             listOf(Color(0xFF2A0814), Color(0xFF0C0C0C)),
         )
     } else {
         Brush.verticalGradient(
-            listOf(bg, bg),
+            listOf(Color(0xFFF6E4E8), Color(0xFFF4F3EF)),
         )
     }
 }
@@ -147,10 +152,28 @@ fun LotteGiantsTheme(
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = view.context.findActivity()?.window ?: return@SideEffect
+            val insets = WindowCompat.getInsetsController(window, view)
+            insets.isAppearanceLightStatusBars = !dark
+            insets.isAppearanceLightNavigationBars = !dark
+        }
+    }
     MaterialTheme(
         colorScheme = if (dark) DarkColors else LightColors,
         typography = AppTypography,
         shapes = AppShapes,
         content = content,
     )
+}
+
+private fun Context.findActivity(): Activity? {
+    var ctx: Context = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }

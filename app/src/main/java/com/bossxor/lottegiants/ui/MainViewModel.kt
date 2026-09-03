@@ -20,6 +20,7 @@ import com.bossxor.lottegiants.domain.RosterMove
 import com.bossxor.lottegiants.domain.StadiumWeather
 import com.bossxor.lottegiants.domain.TeamStanding
 import com.bossxor.lottegiants.domain.ThemeMode
+import com.bossxor.lottegiants.domain.belongsToKboToday
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.playerPhotoUrl
@@ -392,7 +393,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 loadGamesForDate(today)
             }
         }
-        runCatching { repo.refreshSnapshot(force) }
+        val staleGame = _snapshot.value?.lotteGame?.let { !it.belongsToKboToday() } == true
+        runCatching { repo.refreshSnapshot(force || staleGame) }
             .onSuccess {
                 _snapshot.value = it
                 _refreshError.value = null

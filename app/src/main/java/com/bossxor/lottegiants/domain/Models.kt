@@ -116,8 +116,17 @@ fun snapshotStaleForKboDay(
  */
 fun LotteGameInfo.belongsToKboToday(today: String = kboToday().toString()): Boolean {
     if (status == GameStatus.LIVE) return true
-    if (gameDate.isBlank()) return true
-    return gameDate == today
+    val date = normalizeKboIsoDate(gameDate)
+    if (date.isBlank()) return false
+    return date == normalizeKboIsoDate(today)
+}
+
+fun normalizeKboIsoDate(raw: String): String {
+    val d = raw.trim()
+    if (d.length == 8 && d.all { it.isDigit() }) {
+        return "${d.substring(0, 4)}-${d.substring(4, 6)}-${d.substring(6, 8)}"
+    }
+    return d.take(10)
 }
 
 /** KBO `G_TM`은 `"6:30"`처럼 한 자리 시가 온다. */

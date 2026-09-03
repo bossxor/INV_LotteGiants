@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `1.3.74` (`versionCode` **1082**) |
+| **버전** | `1.3.75` (`versionCode` **1083**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 
@@ -220,8 +220,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `1.3.74` |
-| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1082` |
+| `versionName` | 사용자에게 보이는 버전 | `1.3.75` |
+| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1083` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -249,8 +249,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 ```json
 {
-  "versionCode": 1082,
-  "versionName": "1.3.74",
+  "versionCode": 1083,
+  "versionName": "1.3.75",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }

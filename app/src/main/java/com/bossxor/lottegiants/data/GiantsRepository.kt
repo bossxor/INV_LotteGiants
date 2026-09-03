@@ -227,7 +227,12 @@ class GiantsRepository private constructor(context: Context) {
         }
 
         val nextKbo = kboRange
-            .filter { it.involvesLotte() && it.status() == GameStatus.BEFORE && it.isoDate() > todayStr }
+            .filter {
+                it.involvesLotte() &&
+                    it.status() == GameStatus.BEFORE &&
+                    it.isoDate() >= todayStr &&
+                    it.naverGameId() != lotteInfo?.gameId
+            }
             .minWithOrNull(compareBy({ it.isoDate() }, { it.startTime }))
         val nextLotte = nextKbo?.let { kbo ->
             var info = enrichFromKboDetail(kbo.toLotteBase(), kbo)
@@ -1494,9 +1499,14 @@ class GiantsRepository private constructor(context: Context) {
     /** 일정 API가 전날 경기를 섞어 주면 어제 결과가 '오늘'로 남는다. */
     private fun List<KboOfficialGame>.forKboDate(date: LocalDate): List<KboOfficialGame> {
         val key = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val compact = date.format(DateTimeFormatter.BASIC_ISO_DATE)
         return filter { g ->
             val iso = g.isoDate()
-            iso.isBlank() || iso == key
+            when {
+                iso == key -> true
+                iso.isBlank() -> g.gameId.contains(compact) || g.naverGameId().startsWith(compact)
+                else -> false
+            }
         }
     }
 
