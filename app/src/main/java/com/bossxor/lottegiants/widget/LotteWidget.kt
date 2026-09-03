@@ -56,8 +56,11 @@ import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.teamNameToCode
 import com.bossxor.lottegiants.domain.parseKboStartMillis
+import com.bossxor.lottegiants.domain.belongsToKboToday
 import com.bossxor.lottegiants.domain.gameCountdownLabel
+import com.bossxor.lottegiants.domain.snapshotStaleForKboDay
 import com.bossxor.lottegiants.domain.widgetFooterLine
+import com.bossxor.lottegiants.live.GameSchedulerWorker
 import com.bossxor.lottegiants.live.WearBridge
 
 private val Red = Color(0xFFC8102E)
@@ -78,11 +81,18 @@ class LotteWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val repo = GiantsRepository.get(context)
-        val snap = repo.store.loadSnapshot()
-            ?: runCatching { repo.refreshSnapshot(force = false) }.getOrNull()
+        val current = repo.store.loadSnapshot()
+        val stale = current == null ||
+            snapshotStaleForKboDay(current.updatedAtMillis) ||
+            (current.lotteGame != null && !current.lotteGame.belongsToKboToday())
+        val snap = if (stale) {
+            runCatching { repo.refreshSnapshot(force = true) }.getOrNull() ?: current
+        } else {
+            current
+        }
         val opacityPct = repo.store.widgetOpacity()
         val showOppLogo = repo.store.widgetShowOppLogo()
-        val game = snap?.lotteGame ?: snap?.nextLotteGame
+        val game = snap?.lotteGame?.takeIf { it.belongsToKboToday() } ?: snap?.nextLotteGame
         val lotteLogo = WidgetAssets.logoProvider(context, LOTTE_TEAM_CODE, LOTTE_LOGO_URL)
         val oppLogo = if (showOppLogo && game != null) {
             val oppCode = game.opponentCode.ifBlank { teamNameToCode(game.opponentName) }
@@ -117,7 +127,7 @@ class LotteWidget : GlanceAppWidget() {
         }
         val openIntent = Intent(context, MainActivity::class.java)
             .putExtra(MainActivity.EXTRA_OPEN_TAB, "live")
-            .putExtra(MainActivity.EXTRA_GAME_ID, snap?.lotteGame?.gameId.orEmpty())
+            .putExtra(MainActivity.EXTRA_GAME_ID, (snap?.lotteGame?.takeIf { it.belongsToKboToday() } ?: snap?.nextLotteGame)?.gameId.orEmpty())
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         provideContent {
             GlanceTheme {
@@ -188,7 +198,7 @@ private fun WidgetRoot(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val game = snap?.lotteGame
+            val game = snap?.lotteGame?.takeIf { it.belongsToKboToday() }
             val highlightActive = !snap?.highlightText.isNullOrBlank() &&
                 (snap?.highlightUntilMillis ?: 0L) > System.currentTimeMillis()
             when {
@@ -728,6 +738,7 @@ class WidgetRefreshAction : ActionCallback {
         }.getOrNull()
         WidgetUpdater.updateAll(context)
         WearBridge.syncSnapshot(context, snap)
+        GameSchedulerWorker.scheduleKboDayRollover(context)
         if (snap?.lotteGame?.status == GameStatus.LIVE) {
             com.bossxor.lottegiants.live.LiveScoreService.start(context)
         }
@@ -736,4 +747,29 @@ class WidgetRefreshAction : ActionCallback {
 
 class LotteWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = LotteWidget()
+
+    override fun onEnabled(context: Context) {
+        super.onEnabled(context)
+        GameSchedulerWorker.enqueue(context)
+        GameSchedulerWorker.scheduleKboDayRollover(context)
+        refreshWidgetData(context)
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            GameSchedulerWorker.enqueue(context)
+            GameSchedulerWorker.scheduleKboDayRollover(context)
+            refreshWidgetData(context)
+        }
+    }
+
+    private fun refreshWidgetData(context: Context) {
+        Thread {
+            kotlinx.coroutines.runBlocking {
+                runCatching { GiantsRepository.get(context).refreshSnapshot(force = true) }
+                WidgetUpdater.updateAll(context)
+            }
+        }.start()
+    }
 }

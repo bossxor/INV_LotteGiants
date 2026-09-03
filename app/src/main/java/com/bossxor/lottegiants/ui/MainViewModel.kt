@@ -64,6 +64,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _selectedDate = MutableStateFlow(kboToday())
     val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
+    /** 결과 탭에서 날짜를 고르면 false. 오전 5시 경계에 '오늘'을 따라간다. */
+    private var followKboToday = true
 
     private val _monthGames = MutableStateFlow<List<MiniGame>>(emptyList())
     val monthGames: StateFlow<List<MiniGame>> = _monthGames.asStateFlow()
@@ -378,6 +380,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     suspend fun refreshOnce(force: Boolean = false) {
+        if (followKboToday) {
+            val today = kboToday()
+            if (_selectedDate.value != today) {
+                _selectedDate.value = today
+                val ym = YearMonth.from(today)
+                if (ym != _calendarMonth.value) {
+                    _calendarMonth.value = ym
+                    loadMonthGames(ym)
+                }
+                loadGamesForDate(today)
+            }
+        }
         runCatching { repo.refreshSnapshot(force) }
             .onSuccess {
                 _snapshot.value = it
@@ -458,6 +472,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectDate(date: LocalDate) {
+        followKboToday = date == kboToday()
         _selectedDate.value = date
         val ym = YearMonth.from(date)
         if (ym != _calendarMonth.value) loadMonthGames(ym)

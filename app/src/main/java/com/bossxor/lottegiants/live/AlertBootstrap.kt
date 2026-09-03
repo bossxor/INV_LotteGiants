@@ -24,6 +24,7 @@ object AlertBootstrap {
         GameSchedulerWorker.scheduleRosterPoll(app)
         scheduleTodayFastPolls(app, repo)
         GameSchedulerWorker.enqueue(app)
+        GameSchedulerWorker.scheduleKboDayRollover(app)
         enqueueImmediate(app)
         AlertWatchService.startIfNeeded(app)
     }

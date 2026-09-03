@@ -63,6 +63,7 @@
             android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -80,6 +81,7 @@
                 <action android:name="com.bossxor.lottegiants.HIDE_LIVE" />
                 <action android:name="com.bossxor.lottegiants.FAST_POLL" />
                 <action android:name="com.bossxor.lottegiants.ROSTER_POLL" />
+                <action android:name="com.bossxor.lottegiants.KBO_DAY_ROLLOVER" />
             </intent-filter>
         </receiver>
 

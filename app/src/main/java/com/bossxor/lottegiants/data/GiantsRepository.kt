@@ -50,7 +50,9 @@ import com.bossxor.lottegiants.domain.isCanceledGame
 import com.bossxor.lottegiants.domain.matchesTeam
 import com.bossxor.lottegiants.domain.doubleHeaderNoFromGameId
 import com.bossxor.lottegiants.domain.KBO_ZONE
+import com.bossxor.lottegiants.domain.belongsToKboToday
 import com.bossxor.lottegiants.domain.kboToday
+import com.bossxor.lottegiants.domain.snapshotStaleForKboDay
 import com.bossxor.lottegiants.domain.normalizedIfCanceled
 import com.bossxor.lottegiants.domain.weatherSummaryKo
 import com.bossxor.lottegiants.domain.toCell
@@ -98,11 +100,11 @@ class GiantsRepository private constructor(context: Context) {
      */
     suspend fun refreshSnapshot(force: Boolean = false): LiveSnapshot {
         if (!force) {
-            freshMemorySnapshot()?.let { return it }
+            freshMemorySnapshot()?.takeUnless { snapshotStaleForKboDay(it.updatedAtMillis) }?.let { return it }
         }
         return refreshMutex.withLock {
             if (!force) {
-                freshMemorySnapshot()?.let { return@withLock it }
+                freshMemorySnapshot()?.takeUnless { snapshotStaleForKboDay(it.updatedAtMillis) }?.let { return@withLock it }
             }
             fetchFreshSnapshot().also {
                 memorySnapshot = it
@@ -184,6 +186,9 @@ class GiantsRepository private constructor(context: Context) {
                     today,
                 )[lotteTodayNaver.matchKey()],
             )
+        if (lotteInfo != null && !lotteInfo.belongsToKboToday(todayStr)) {
+            lotteInfo = null
+        }
         val relayGameId = kboLotte?.naverGameId() ?: lotteTodayNaver?.gameId
         var relayData: TextRelayData? = null
         if (relayGameId != null && lotteInfo != null) {
@@ -1459,6 +1464,7 @@ class GiantsRepository private constructor(context: Context) {
             kboOfficialApi.getGameList(date = KboOfficialApi.dateParam(date))
                 .game
                 .filter { it.gameId.isNotBlank() }
+                .forKboDate(date)
         }.getOrDefault(emptyList())
         if (games.isNotEmpty()) kboDateCache[key] = System.currentTimeMillis() to games
         return games
@@ -1479,9 +1485,19 @@ class GiantsRepository private constructor(context: Context) {
             kboOfficialApi.getGameList(date = KboOfficialApi.dateParam(date))
                 .game
                 .filter { it.gameId.isNotBlank() }
+                .forKboDate(date)
         }.getOrDefault(emptyList())
         if (games.isNotEmpty()) kboDateCache[key] = now to games
         return games
+    }
+
+    /** 일정 API가 전날 경기를 섞어 주면 어제 결과가 '오늘'로 남는다. */
+    private fun List<KboOfficialGame>.forKboDate(date: LocalDate): List<KboOfficialGame> {
+        val key = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+        return filter { g ->
+            val iso = g.isoDate()
+            iso.isBlank() || iso == key
+        }
     }
 
     /** 날짜 범위 KBO 일정 (캐시·병렬 조회) */

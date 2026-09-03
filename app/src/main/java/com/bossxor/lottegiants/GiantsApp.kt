@@ -10,6 +10,7 @@ import com.bossxor.lottegiants.domain.imageRefererForHost
 import com.bossxor.lottegiants.domain.shouldPostLiveNotification
 import com.bossxor.lottegiants.live.AlertBootstrap
 import com.bossxor.lottegiants.live.EventDetector
+import com.bossxor.lottegiants.live.GameSchedulerWorker
 import com.bossxor.lottegiants.live.NotificationHelper
 import com.bossxor.lottegiants.live.WearBridge
 import com.bossxor.lottegiants.widget.WidgetUpdater
@@ -34,6 +35,8 @@ class GiantsApp : Application(), ImageLoaderFactory {
                 repo.store.migrateToScorecardModeIfNeeded()
                 val snap = repo.refreshSnapshot(force = true)
                 WidgetUpdater.updateAll(this@GiantsApp)
+                GameSchedulerWorker.enqueue(this@GiantsApp)
+                GameSchedulerWorker.scheduleKboDayRollover(this@GiantsApp)
                 WearBridge.syncSnapshot(this@GiantsApp, snap)
                 val detector = EventDetector(repo.store)
                 detector.process(this@GiantsApp, snap.lotteGame)

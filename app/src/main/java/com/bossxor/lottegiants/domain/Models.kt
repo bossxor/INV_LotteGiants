@@ -97,6 +97,29 @@ fun kboToday(now: java.time.ZonedDateTime = kboNow()): java.time.LocalDate {
     return if (now.toLocalTime() < KBO_DAY_ROLLOVER) date.minusDays(1) else date
 }
 
+/** 현재 KBO 경기일이 시작된 시각(그날 오전 5시). */
+fun kboDayStart(now: java.time.ZonedDateTime = kboNow()): java.time.ZonedDateTime =
+    kboToday(now).atTime(KBO_DAY_ROLLOVER).atZone(KBO_ZONE)
+
+/** 오전 5시 이전에 받은 스냅샷이면 위젯·라이브가 어제 결과에 묶인다. */
+fun snapshotStaleForKboDay(
+    updatedAtMillis: Long,
+    now: java.time.ZonedDateTime = kboNow(),
+): Boolean {
+    if (updatedAtMillis <= 0L) return true
+    return updatedAtMillis < kboDayStart(now).toInstant().toEpochMilli()
+}
+
+/**
+ * LIVE는 자정을 넘긴 연장도 유지한다.
+ * 종료·취소·예정은 오전 5시 기준 '오늘' 날짜만 현재 경기다.
+ */
+fun LotteGameInfo.belongsToKboToday(today: String = kboToday().toString()): Boolean {
+    if (status == GameStatus.LIVE) return true
+    if (gameDate.isBlank()) return true
+    return gameDate == today
+}
+
 /** KBO `G_TM`은 `"6:30"`처럼 한 자리 시가 온다. */
 fun parseKboStartMillis(date: String, time: String): Long? = runCatching {
     val datePart = date.trim().let { d ->

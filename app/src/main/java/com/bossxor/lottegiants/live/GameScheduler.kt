@@ -15,6 +15,7 @@ import androidx.work.WorkerParameters
 import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.data.NotificationType
 import com.bossxor.lottegiants.domain.GameStatus
+import com.bossxor.lottegiants.domain.KBO_DAY_ROLLOVER
 import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.isCanceledGame
@@ -101,6 +102,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             }
         }
         scheduleRosterPoll(applicationContext)
+        scheduleKboDayRollover(applicationContext)
         AlertWatchService.startIfNeeded(applicationContext)
         return Result.success()
     }
@@ -123,6 +125,21 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
                 ExistingPeriodicWorkPolicy.UPDATE,
                 req
             )
+            scheduleKboDayRollover(context)
+        }
+
+        /** 서울 오전 5시에 위젯·스냅샷을 다음 경기일로 넘긴다. */
+        fun scheduleKboDayRollover(context: Context) {
+            val now = ZonedDateTime.now(KBO_ZONE)
+            var next = now.toLocalDate().atTime(KBO_DAY_ROLLOVER).atZone(KBO_ZONE)
+            if (!now.isBefore(next)) next = next.plusDays(1)
+            val am = context.getSystemService(AlarmManager::class.java)
+            val intent = Intent(context, GameAlarmReceiver::class.java).setAction(ACTION_KBO_DAY_ROLLOVER)
+            val pi = PendingIntent.getBroadcast(
+                context, 0x3050, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            setAlarmSafe(am, next.toInstant().toEpochMilli(), pi)
         }
 
         fun scheduleExactStart(
@@ -325,6 +342,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         const val ACTION_HIDE_LIVE = "com.bossxor.lottegiants.HIDE_LIVE"
         const val ACTION_FAST_POLL = "com.bossxor.lottegiants.FAST_POLL"
         const val ACTION_ROSTER_POLL = "com.bossxor.lottegiants.ROSTER_POLL"
+        const val ACTION_KBO_DAY_ROLLOVER = "com.bossxor.lottegiants.KBO_DAY_ROLLOVER"
     }
 }
 
@@ -335,6 +353,17 @@ class GameAlarmReceiver : BroadcastReceiver() {
             try {
                 withWakeLock(context) {
                     when (intent?.action) {
+                        GameSchedulerWorker.ACTION_KBO_DAY_ROLLOVER -> {
+                            runBlocking {
+                                val repo = GiantsRepository.get(context)
+                                val snap = runCatching { repo.refreshSnapshot(force = true) }.getOrNull()
+                                WidgetUpdater.updateAll(context)
+                                WearBridge.syncSnapshot(context, snap)
+                                NotificationHelper.refreshLiveNotificationIfNeeded(context)
+                                GameSchedulerWorker.scheduleKboDayRollover(context)
+                                AlertBootstrap.scheduleTodayFastPolls(context, repo)
+                            }
+                        }
                         GameSchedulerWorker.ACTION_START_LIVE,
                         Intent.ACTION_BOOT_COMPLETED -> {
                             runBlocking {
