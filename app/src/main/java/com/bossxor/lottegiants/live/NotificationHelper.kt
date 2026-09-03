@@ -80,7 +80,7 @@ object NotificationHelper {
     @Volatile private var lastLiveNotifyKeyLoaded = false
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 5
+    private const val LIVE_NOTIFY_STYLE_REV = 6
     private const val REGULATION_INNINGS = 9
 
     fun liveNotificationKey(game: LotteGameInfo?, mode: LiveDisplayMode): String =
@@ -109,9 +109,12 @@ object NotificationHelper {
             lastLiveNotifyKeyLoaded = true
         }
         if (!force && key == lastLiveNotifyKey) return
+        val nm = context.getSystemService(NotificationManager::class.java)
+        if (lastLiveNotifyKey != null && lastLiveNotifyKey != key) {
+            nm.cancel(LIVE_NOTIFICATION_ID)
+        }
         lastLiveNotifyKey = key
-        context.getSystemService(NotificationManager::class.java)
-            .notify(LIVE_NOTIFICATION_ID, notification)
+        nm.notify(LIVE_NOTIFICATION_ID, notification)
         CoroutineScope(Dispatchers.IO).launch {
             store.setLastLiveNotifyKey(key)
         }
@@ -253,7 +256,6 @@ object NotificationHelper {
         }
         val summary = gameSummary(game)
         val compactLine = gameCompactLine(game)
-        val chipText = nowBarChipText(game)
         val headerLine = if (game != null && game.status == GameStatus.LIVE && !game.isSuspended) {
             buildString {
                 append(game.inningLabel)
@@ -278,17 +280,8 @@ object NotificationHelper {
             (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED)
         val scoreOnly = mode == LiveDisplayMode.STATUS_SCORE
         val useScorecard = game != null
-        // 라이브 바는 스코어카드로 그리고, 칩용 extras만 남긴다. 커스텀 뷰 + ProgressStyle은 깜빡인다.
-        val useNowBar = !finished && mode == LiveDisplayMode.LOCK_NOW
-        val useBigCard = !scoreOnly
-        val channel = if (useNowBar) CHANNEL_LIVE_NOW else CHANNEL_LIVE_CARD
-        val category = if (useNowBar && mode == LiveDisplayMode.LOCK_NOW &&
-            game?.status == GameStatus.LIVE
-        ) {
-            NotificationCompat.CATEGORY_PROGRESS
-        } else {
-            NotificationCompat.CATEGORY_STATUS
-        }
+        val channel = CHANNEL_LIVE_CARD
+        val category = NotificationCompat.CATEGORY_STATUS
 
         val builder = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_notification)
@@ -335,6 +328,7 @@ object NotificationHelper {
                 else -> buildLiveRemoteViews(context, game, winProbSeries)
             }
             builder
+                .setStyle(NotificationCompat.DecoratedCustomViewStyle())
                 .setCustomContentView(compact)
                 .setCustomBigContentView(big)
                 .setCustomHeadsUpContentView(compact)
@@ -344,21 +338,8 @@ object NotificationHelper {
                 .setStyle(NotificationCompat.BigTextStyle().bigText(text.ifBlank { "예정 경기 없음" }))
                 .setDeleteIntent(hide)
         }
-        if (useNowBar) {
-            if (chipText.isNotBlank()) {
-                builder
-                    .setSubText(chipText)
-                    .setShortCriticalText(chipText)
-            }
-            builder.setRequestPromotedOngoing(true)
-            applySamsungOngoingExtras(builder, context, game, chipText, title, text)
-        }
 
-        val notification = builder.build()
-        if (useNowBar && chipText.isNotBlank()) {
-            notification.extras.putString("android.shortCriticalText", chipText)
-        }
-        return notification
+        return builder.build()
     }
 
     /** Now Bar 칩은 대략 7자면 잘린다. 점수는 `3:2`, 전이면 `18:30`. */
