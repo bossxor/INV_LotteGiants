@@ -21,10 +21,19 @@
             android:gravity="center_horizontal"
             android:orientation="vertical">
 
+            <TextView
+                android:id="@+id/notif_away_place"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="원정"
+                android:textAppearance="@style/NotifMeta"
+                android:textSize="10sp" />
+
             <ImageView
                 android:id="@+id/notif_away_logo"
                 android:layout_width="36dp"
                 android:layout_height="36dp"
+                android:layout_marginTop="2dp"
                 android:contentDescription="@null"
                 android:scaleType="fitCenter" />
 
@@ -55,14 +64,14 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:gravity="center_horizontal"
-            android:minWidth="52dp"
+            android:minWidth="64dp"
             android:orientation="vertical"
             android:paddingHorizontal="6dp">
 
             <ImageView
                 android:id="@+id/notif_bases"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
                 android:contentDescription="@null"
                 android:scaleType="fitCenter" />
 
@@ -79,6 +88,16 @@
                 android:textColor="#FFFFFFFF"
                 android:textSize="11sp"
                 android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/notif_venue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textAppearance="@style/NotifMeta"
+                android:textSize="10sp" />
         </LinearLayout>
 
         <TextView
@@ -98,10 +117,19 @@
             android:gravity="center_horizontal"
             android:orientation="vertical">
 
+            <TextView
+                android:id="@+id/notif_home_place"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="홈"
+                android:textAppearance="@style/NotifMeta"
+                android:textSize="10sp" />
+
             <ImageView
                 android:id="@+id/notif_home_logo"
                 android:layout_width="36dp"
                 android:layout_height="36dp"
+                android:layout_marginTop="2dp"
                 android:contentDescription="@null"
                 android:scaleType="fitCenter" />
 

@@ -35,8 +35,8 @@
 
         <ImageView
             android:id="@+id/notif_c_bases"
-            android:layout_width="18dp"
-            android:layout_height="18dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:contentDescription="@null"
             android:scaleType="fitCenter" />
 

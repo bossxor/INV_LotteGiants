@@ -38,6 +38,9 @@ import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.teamNameToCode
 import com.bossxor.lottegiants.widget.WidgetAssets
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 object NotificationHelper {
 
@@ -74,9 +77,10 @@ object NotificationHelper {
     const val LIVE_NOTIFICATION_ID = 1001
 
     @Volatile private var lastLiveNotifyKey: String? = null
+    @Volatile private var lastLiveNotifyKeyLoaded = false
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 4
+    private const val LIVE_NOTIFY_STYLE_REV = 5
     private const val REGULATION_INNINGS = 9
 
     fun liveNotificationKey(game: LotteGameInfo?, mode: LiveDisplayMode): String =
@@ -99,10 +103,18 @@ object NotificationHelper {
 
     /** 동일 내용이면 notify를 건너뛰어 Now Bar·알림 깜빡임을 줄인다. */
     fun notifyLive(context: Context, notification: Notification, key: String, force: Boolean = false) {
+        val store = com.bossxor.lottegiants.data.GiantsRepository.get(context.applicationContext).store
+        if (!lastLiveNotifyKeyLoaded) {
+            lastLiveNotifyKey = kotlinx.coroutines.runBlocking { store.lastLiveNotifyKey() }.ifBlank { null }
+            lastLiveNotifyKeyLoaded = true
+        }
         if (!force && key == lastLiveNotifyKey) return
         lastLiveNotifyKey = key
         context.getSystemService(NotificationManager::class.java)
             .notify(LIVE_NOTIFICATION_ID, notification)
+        CoroutineScope(Dispatchers.IO).launch {
+            store.setLastLiveNotifyKey(key)
+        }
     }
 
     /** 종료·취소 알림은 2시간 뒤 스스로 사라진다 (서비스가 멈춘 뒤에도 남는 걸 막는다). */
@@ -187,6 +199,11 @@ object NotificationHelper {
 
     fun cancelLive(context: Context) {
         lastLiveNotifyKey = null
+        lastLiveNotifyKeyLoaded = true
+        CoroutineScope(Dispatchers.IO).launch {
+            com.bossxor.lottegiants.data.GiantsRepository.get(context.applicationContext)
+                .store.setLastLiveNotifyKey("")
+        }
         context.getSystemService(NotificationManager::class.java).cancel(LIVE_NOTIFICATION_ID)
     }
 
@@ -259,11 +276,11 @@ object NotificationHelper {
         // 경기가 끝나면 서비스가 멈춰도 알림은 남는다. 손으로 지울 수 있게 두고 스스로 만료시킨다.
         val finished = game != null &&
             (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED)
-        // Now Bar = Android Live Update. 커스텀 RemoteViews가 있으면 시스템이 승격을 거부한다.
-        val useNowBar = !finished &&
-            (mode == LiveDisplayMode.LOCK_NOW || mode == LiveDisplayMode.STATUS_SCORE)
-        val useScorecard = !useNowBar && game != null
-        val useBigCard = mode == LiveDisplayMode.FULL
+        val scoreOnly = mode == LiveDisplayMode.STATUS_SCORE
+        val useScorecard = game != null
+        // 라이브 바는 스코어카드로 그리고, 칩용 extras만 남긴다. 커스텀 뷰 + ProgressStyle은 깜빡인다.
+        val useNowBar = !finished && mode == LiveDisplayMode.LOCK_NOW
+        val useBigCard = !scoreOnly
         val channel = if (useNowBar) CHANNEL_LIVE_NOW else CHANNEL_LIVE_CARD
         val category = if (useNowBar && mode == LiveDisplayMode.LOCK_NOW &&
             game?.status == GameStatus.LIVE
@@ -298,31 +315,8 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        if (useNowBar) {
-            if (chipText.isNotBlank()) {
-                builder
-                    .setSubText(chipText)
-                    .setShortCriticalText(chipText)
-            }
-            builder.setRequestPromotedOngoing(true)
-            applySamsungOngoingExtras(builder, context, game, chipText, title, text)
-            if (mode == LiveDisplayMode.LOCK_NOW &&
-                game != null &&
-                game.status == GameStatus.LIVE &&
-                !game.isSuspended
-            ) {
-                builder.setStyle(liveProgressStyle(context, game))
-            } else {
-                builder.setStyle(
-                    NotificationCompat.BigTextStyle()
-                        .setBigContentTitle(title)
-                        .bigText(text.ifBlank { summary }),
-                )
-            }
-            builder.setDeleteIntent(hide)
-        } else if (useScorecard) {
-            // 잠금화면은 커스텀 뷰(로고 비트맵)가 빠질 수 있어 공개용 텍스트 알림을 따로 둔다.
-            val publicNotification = NotificationCompat.Builder(context, CHANNEL_LIVE_CARD)
+        if (useScorecard) {
+            val publicNotification = NotificationCompat.Builder(context, channel)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setContentTitle(title)
                 .setContentText(text)
@@ -331,8 +325,15 @@ object NotificationHelper {
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .build()
             builder.setPublicVersion(publicNotification)
-            val compact = buildLiveCompactViews(context, game!!)
-            val big = if (useBigCard) buildLiveRemoteViews(context, game, winProbSeries) else compact
+            val compact = if (scoreOnly) {
+                buildScoreOnlyViews(context, game!!)
+            } else {
+                buildLiveCompactViews(context, game!!)
+            }
+            val big = when {
+                scoreOnly -> compact
+                else -> buildLiveRemoteViews(context, game, winProbSeries)
+            }
             builder
                 .setCustomContentView(compact)
                 .setCustomBigContentView(big)
@@ -342,6 +343,15 @@ object NotificationHelper {
             builder
                 .setStyle(NotificationCompat.BigTextStyle().bigText(text.ifBlank { "예정 경기 없음" }))
                 .setDeleteIntent(hide)
+        }
+        if (useNowBar) {
+            if (chipText.isNotBlank()) {
+                builder
+                    .setSubText(chipText)
+                    .setShortCriticalText(chipText)
+            }
+            builder.setRequestPromotedOngoing(true)
+            applySamsungOngoingExtras(builder, context, game, chipText, title, text)
         }
 
         val notification = builder.build()
@@ -648,9 +658,9 @@ object NotificationHelper {
         // 경기 전은 구장(또는 선발)을 오른쪽에 둔다.
         val note = when {
             live -> ""
-            before -> game.stadium.ifBlank {
-                val starter = game.lotteStartingPitcher.ifBlank { game.opponentStartingPitcher }
-                if (starter.isNotBlank()) "선발 $starter" else ""
+            before -> buildString {
+                append(if (game.isHome) "홈" else "원정")
+                if (game.stadium.isNotBlank()) append(" · ${game.stadium}")
             }
             else -> ""
         }
@@ -662,6 +672,22 @@ object NotificationHelper {
         )
         rv.setImageViewBitmap(
             R.id.notif_c_home_logo,
+            WidgetAssets.loadTeamLogoBitmapCachedOnly(context, side.homeCode, side.homeName),
+        )
+        return rv
+    }
+
+    private fun buildScoreOnlyViews(context: Context, game: LotteGameInfo): RemoteViews {
+        val rv = RemoteViews(context.packageName, R.layout.notification_live_score)
+        val side = cardSides(game)
+        rv.setTextViewText(R.id.notif_s_away_score, "${side.awayScore}")
+        rv.setTextViewText(R.id.notif_s_home_score, "${side.homeScore}")
+        rv.setImageViewBitmap(
+            R.id.notif_s_away_logo,
+            WidgetAssets.loadTeamLogoBitmapCachedOnly(context, side.awayCode, side.awayName),
+        )
+        rv.setImageViewBitmap(
+            R.id.notif_s_home_logo,
             WidgetAssets.loadTeamLogoBitmapCachedOnly(context, side.homeCode, side.homeName),
         )
         return rv
@@ -681,11 +707,19 @@ object NotificationHelper {
         val awayLogoUrl = side.awayLogoUrl
         val homeLogoUrl = side.homeLogoUrl
 
+        rv.setTextViewText(R.id.notif_away_place, "원정")
+        rv.setTextViewText(R.id.notif_home_place, "홈")
         rv.setTextViewText(R.id.notif_away_name, awayName)
         rv.setTextViewText(R.id.notif_home_name, homeName)
         rv.setTextViewText(R.id.notif_away_score, "${side.awayScore}")
         rv.setTextViewText(R.id.notif_home_score, "${side.homeScore}")
         rv.setTextViewText(R.id.notif_inning, statusPillText(game))
+        if (game.stadium.isNotBlank()) {
+            rv.setViewVisibility(R.id.notif_venue, View.VISIBLE)
+            rv.setTextViewText(R.id.notif_venue, game.stadium)
+        } else {
+            rv.setViewVisibility(R.id.notif_venue, View.GONE)
+        }
         rv.setInt(R.id.notif_inning, "setBackgroundResource", inningPillBackground(game))
         // 루상·BSO는 진행 중일 때만 뜻이 있다. 끝난 경기에 빈 다이아몬드를 두면 주자가 있는 것처럼 읽힌다.
         val showBases = game.status == GameStatus.LIVE && !game.isSuspended

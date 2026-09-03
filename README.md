@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `1.3.76` (`versionCode` **1084**) |
+| **버전** | `1.3.77` (`versionCode` **1085**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 
@@ -141,7 +141,7 @@ S26(One UI 8+, Android 16)은 그 대신 [Android Live Updates](https://develope
 - 각 팀 로고 **위에 순위**, 선발은 `로드리게스 vs 보스` 한 줄
 - 하단은 `잔여 n`만 (텍스트 잘림 방지)
 - 경기 전 카운트다운
-- 새로고침은 오른쪽 위 오버레이 버튼. 본문을 밀지 않고, 삼성 런처에서는 위젯 리시버 브로드캐스트로 강제 fetch (1.3.76)
+- 새로고침은 오른쪽 위 오버레이 버튼. 누르면 금색으로 바뀌고 강제 fetch (1.3.77). 컴팩트 위젯은 순위·로고를 가운데 크게.
 - **경기일 경계는 서울 오전 5시**. 그 시각이 지나면 어제 종료 결과를 버리고 오늘·다음 경기를 보여 준다 (1.3.74). 앱 내부 업데이트 뒤에도 위젯을 다시 그린다.
 
 ---
@@ -220,8 +220,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `1.3.76` |
-| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1084` |
+| `versionName` | 사용자에게 보이는 버전 | `1.3.77` |
+| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1085` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -249,8 +249,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 ```json
 {
-  "versionCode": 1084,
-  "versionName": "1.3.76",
+  "versionCode": 1085,
+  "versionName": "1.3.77",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }

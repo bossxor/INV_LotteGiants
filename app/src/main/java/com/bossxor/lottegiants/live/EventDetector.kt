@@ -28,6 +28,8 @@ import com.bossxor.lottegiants.domain.scoringBody
 import com.bossxor.lottegiants.domain.shouldEmitAlert
 import com.bossxor.lottegiants.domain.TeamStanding
 import com.bossxor.lottegiants.domain.parseRacePulse
+import com.bossxor.lottegiants.domain.planRosterNotifications
+import com.bossxor.lottegiants.domain.rosterNotifyKey
 import com.bossxor.lottegiants.domain.raceChangeAlert
 import com.bossxor.lottegiants.domain.racePulse
 import java.time.LocalTime
@@ -467,22 +469,13 @@ class EventDetector(private val store: SnapshotStore) {
      */
     suspend fun processRosterMoves(context: Context, moves: List<RosterMove>) {
         if (moves.isEmpty()) return
-        val stored = store.notifiedRosterKeys().toMutableSet()
-        if (stored.isEmpty()) {
-            // 설치 직후엔 과거 공시가 한꺼번에 뜨지 않게 기준선만 저장한다.
-            store.setNotifiedRosterKeys(pruneRosterKeys(moves.map(::rosterKeyOf).toSet()))
-            return
-        }
-
-        val cutoff = kboToday().minusDays(1).toString()
-        val fresh = mutableListOf<RosterMove>()
-        var changed = false
-        for (m in moves) {
-            if (!stored.add(rosterKeyOf(m))) continue
-            changed = true
-            if (m.moveDate >= cutoff) fresh.add(m)
-        }
-        if (changed) store.setNotifiedRosterKeys(pruneRosterKeys(stored))
+        val plan = planRosterNotifications(
+            moves,
+            store.notifiedRosterKeys(),
+            kboToday().toString(),
+        )
+        if (plan.changed) store.setNotifiedRosterKeys(pruneRosterKeys(plan.stored))
+        val fresh = plan.fresh
         if (fresh.isEmpty()) return
 
         val favorites = store.favoritePlayers()
@@ -498,7 +491,7 @@ class EventDetector(private val store: SnapshotStore) {
             val label = moveLabel(m)
             maybeNotify(
                 context, NotificationType.FAVORITE_ROSTER,
-                ID_FAVORITE_ROSTER_BASE + (rosterKeyOf(m).hashCode() and 0xFFFF),
+                ID_FAVORITE_ROSTER_BASE + (rosterNotifyKey(m).hashCode() and 0xFFFF),
                 "즐겨찾기 $label",
                 "${fav.name.ifBlank { m.playerName }} $label · ${m.moveDate}",
             )
@@ -510,7 +503,7 @@ class EventDetector(private val store: SnapshotStore) {
             val label = moveLabel(m)
             maybeNotify(
                 context, NotificationType.ROSTER,
-                ID_ROSTER_BASE + (rosterKeyOf(m).hashCode() and 0xFFFF),
+                ID_ROSTER_BASE + (rosterNotifyKey(m).hashCode() and 0xFFFF),
                 "엔트리 $label", "${m.playerName} $label · ${m.moveDate}",
             )
             return
@@ -532,9 +525,6 @@ class EventDetector(private val store: SnapshotStore) {
             "엔트리 등말소 ${others.size}건", body,
         )
     }
-
-    private fun rosterKeyOf(m: RosterMove) =
-        "${m.moveDate}:${m.playerCode}:${m.moveType}:${m.playerName}"
 
     private fun moveLabel(m: RosterMove) = if (m.isRegister) "등록" else "말소"
 

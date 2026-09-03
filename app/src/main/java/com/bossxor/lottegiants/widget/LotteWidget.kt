@@ -8,6 +8,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
@@ -17,12 +19,18 @@ import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionSendBroadcast
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
+import androidx.glance.appwidget.state.getAppWidgetState
+import androidx.glance.appwidget.state.updateAppWidgetState
+import androidx.glance.currentState
+import androidx.glance.state.GlanceStateDefinition
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.background
 import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
@@ -68,8 +76,11 @@ private val Pink = Color(0xFFFF6B7A)
 private val Gold = Color(0xFFC9A227)
 private val Muted = Color(0xFFAAB4CB)
 private val Green = Color(0xFF2EA35C)
+private val widgetRefreshingKey = booleanPreferencesKey("widget_refreshing")
 
 class LotteWidget : GlanceAppWidget() {
+
+    override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
 
     override val sizeMode: SizeMode = SizeMode.Responsive(
         setOf(
@@ -81,11 +92,14 @@ class LotteWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val repo = GiantsRepository.get(context)
+        val refreshingNow = runCatching {
+            getAppWidgetState(context, PreferencesGlanceStateDefinition, id)[widgetRefreshingKey] == true
+        }.getOrDefault(false)
         val current = repo.store.loadSnapshot()
         val stale = current == null ||
             snapshotStaleForKboDay(current.updatedAtMillis) ||
             (current.lotteGame != null && !current.lotteGame.belongsToKboToday())
-        val snap = if (stale) {
+        val snap = if (stale && !refreshingNow) {
             runCatching { repo.refreshSnapshot(force = true) }.getOrNull() ?: current
         } else {
             current
@@ -130,6 +144,7 @@ class LotteWidget : GlanceAppWidget() {
             .putExtra(MainActivity.EXTRA_GAME_ID, (snap?.lotteGame?.takeIf { it.belongsToKboToday() } ?: snap?.nextLotteGame)?.gameId.orEmpty())
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         provideContent {
+            val refreshing = currentState<Preferences>()[widgetRefreshingKey] == true
             GlanceTheme {
                 WidgetRoot(
                     snap,
@@ -139,6 +154,7 @@ class LotteWidget : GlanceAppWidget() {
                     batterPhoto,
                     openIntent,
                     opacityPct,
+                    refreshing,
                 )
             }
         }
@@ -154,6 +170,7 @@ private fun WidgetRoot(
     batterPhoto: ImageProvider,
     openIntent: Intent,
     opacityPct: Int = 100,
+    refreshing: Boolean = false,
 ) {
     val size = LocalSize.current
     val compact = size.width < 180.dp
@@ -221,7 +238,10 @@ private fun WidgetRoot(
                     .size(36.dp)
                     .cornerRadius(10.dp)
                     .background(
-                        ColorProvider(Color(0x66000000), Color(0x66000000)),
+                        ColorProvider(
+                            if (refreshing) Gold else Color(0x66000000),
+                            if (refreshing) Gold else Color(0x66000000),
+                        ),
                     )
                     .clickable(
                         actionSendBroadcast(
@@ -252,13 +272,14 @@ private fun CompactLive(
     val homeLogo = if (g.isHome) lotteLogo else oppLogo
     val awayScore = if (g.isHome) g.opponentScore else g.lotteScore
     val homeScore = if (g.isHome) g.lotteScore else g.opponentScore
-    CompactFrame(lotteLogo) {
+    CompactFrame {
         CompactScoreboard(
             awayLogo, homeLogo, awayScore, homeScore,
             awayRank = awayRank(g, snap),
             homeRank = homeRank(g, snap),
+            logoSize = 40,
         )
-        Spacer(GlanceModifier.defaultWeight())
+        Spacer(GlanceModifier.height(8.dp))
         StatusPill(if (g.isSuspended) g.suspendLabel else "LIVE  ${g.inningLabel}")
         val footer = widgetFooterLine(snap?.lotteRemainingGames ?: 0)
         if (footer.isNotBlank()) {
@@ -278,13 +299,14 @@ private fun CompactScore(
     val homeLogo = if (g.isHome) lotteLogo else oppLogo
     val awayScore = if (g.isHome) g.opponentScore else g.lotteScore
     val homeScore = if (g.isHome) g.lotteScore else g.opponentScore
-    CompactFrame(lotteLogo) {
+    CompactFrame {
         CompactScoreboard(
             awayLogo, homeLogo, awayScore, homeScore,
             awayRank = if (g.isHome) g.opponentRank else g.lotteRank,
             homeRank = if (g.isHome) g.lotteRank else g.opponentRank,
+            logoSize = 40,
         )
-        Spacer(GlanceModifier.defaultWeight())
+        Spacer(GlanceModifier.height(8.dp))
         StatusPill(label)
     }
 }
@@ -300,13 +322,13 @@ private fun CompactBefore(
     val muted = ColorProvider(Muted, Muted)
     val awayLogo = if (g.isHome) oppLogo else lotteLogo
     val homeLogo = if (g.isHome) lotteLogo else oppLogo
-    CompactFrame(lotteLogo) {
+    CompactFrame {
         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            LogoWithRank(awayLogo, awayRank(g, snap), modifier = GlanceModifier.defaultWeight())
-            Text("VS", style = TextStyle(color = muted, fontSize = 12.sp, fontWeight = FontWeight.Bold))
-            LogoWithRank(homeLogo, homeRank(g, snap), modifier = GlanceModifier.defaultWeight())
+            LogoWithRank(awayLogo, awayRank(g, snap), size = 48, rankSize = 11, modifier = GlanceModifier.defaultWeight())
+            Text("VS", style = TextStyle(color = muted, fontSize = 13.sp, fontWeight = FontWeight.Bold))
+            LogoWithRank(homeLogo, homeRank(g, snap), size = 48, rankSize = 11, modifier = GlanceModifier.defaultWeight())
         }
-        Spacer(GlanceModifier.defaultWeight())
+        Spacer(GlanceModifier.height(8.dp))
         val cd = gameCountdownLabel(g.gameDate, g.startTime)
         StatusPill(cd.ifBlank { g.startTime.ifBlank { "예정" } })
         Spacer(GlanceModifier.height(4.dp))
@@ -324,24 +346,13 @@ private fun CompactBefore(
 
 @Composable
 private fun CompactFrame(
-    lotteLogo: ImageProvider,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val pink = ColorProvider(Pink, Pink)
     Column(
         modifier = GlanceModifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = GlanceModifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Image(lotteLogo, contentDescription = null, modifier = GlanceModifier.size(14.dp))
-            Spacer(GlanceModifier.width(4.dp))
-            Text("롯데", style = TextStyle(color = pink, fontSize = 10.sp, fontWeight = FontWeight.Bold))
-        }
-        Spacer(GlanceModifier.height(6.dp))
         content()
     }
 }
@@ -351,6 +362,7 @@ private fun LogoWithRank(
     logo: ImageProvider,
     rank: Int,
     size: Int = 32,
+    rankSize: Int = 9,
     modifier: GlanceModifier = GlanceModifier,
 ) {
     val gold = ColorProvider(Gold, Gold)
@@ -361,7 +373,7 @@ private fun LogoWithRank(
         if (rank > 0) {
             Text(
                 "${rank}위",
-                style = TextStyle(color = gold, fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                style = TextStyle(color = gold, fontSize = rankSize.sp, fontWeight = FontWeight.Bold),
                 maxLines = 1,
             )
             Spacer(GlanceModifier.height(2.dp))
@@ -378,6 +390,7 @@ private fun CompactScoreboard(
     homeScore: Int,
     awayRank: Int = 0,
     homeRank: Int = 0,
+    logoSize: Int = 32,
 ) {
     val white = ColorProvider(Color.White, Color.White)
     val muted = ColorProvider(Muted, Muted)
@@ -386,7 +399,7 @@ private fun CompactScoreboard(
             modifier = GlanceModifier.defaultWeight(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            LogoWithRank(awayLogo, awayRank, modifier = GlanceModifier)
+            LogoWithRank(awayLogo, awayRank, size = logoSize, rankSize = 11, modifier = GlanceModifier)
             Spacer(GlanceModifier.height(4.dp))
             Text("$awayScore", style = TextStyle(color = white, fontSize = 24.sp, fontWeight = FontWeight.Bold))
         }
@@ -395,7 +408,7 @@ private fun CompactScoreboard(
             modifier = GlanceModifier.defaultWeight(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            LogoWithRank(homeLogo, homeRank, modifier = GlanceModifier)
+            LogoWithRank(homeLogo, homeRank, size = logoSize, rankSize = 11, modifier = GlanceModifier)
             Spacer(GlanceModifier.height(4.dp))
             Text("$homeScore", style = TextStyle(color = white, fontSize = 24.sp, fontWeight = FontWeight.Bold))
         }
@@ -762,15 +775,16 @@ class LotteWidgetReceiver : GlanceAppWidgetReceiver() {
     private fun refreshWidgetData(context: Context) {
         Thread {
             kotlinx.coroutines.runBlocking {
+                setWidgetRefreshing(context, true)
                 val snap = runCatching {
                     GiantsRepository.get(context).refreshSnapshot(force = true)
                 }.getOrNull()
-                WidgetUpdater.updateAll(context)
                 WearBridge.syncSnapshot(context, snap)
                 GameSchedulerWorker.scheduleKboDayRollover(context)
                 if (snap?.lotteGame?.status == GameStatus.LIVE) {
                     com.bossxor.lottegiants.live.LiveScoreService.start(context)
                 }
+                setWidgetRefreshing(context, false)
             }
         }.start()
     }
@@ -778,4 +792,14 @@ class LotteWidgetReceiver : GlanceAppWidgetReceiver() {
     companion object {
         const val ACTION_REFRESH = "com.bossxor.lottegiants.WIDGET_REFRESH"
     }
+}
+
+private suspend fun setWidgetRefreshing(context: Context, refreshing: Boolean) {
+    val ids = GlanceAppWidgetManager(context).getGlanceIds(LotteWidget::class.java)
+    ids.forEach { id ->
+        updateAppWidgetState(context, PreferencesGlanceStateDefinition, id) { prefs ->
+            prefs.toMutablePreferences().apply { this[widgetRefreshingKey] = refreshing }
+        }
+    }
+    WidgetUpdater.updateAll(context)
 }

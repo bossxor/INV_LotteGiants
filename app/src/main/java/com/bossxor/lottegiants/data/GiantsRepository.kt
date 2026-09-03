@@ -1161,7 +1161,7 @@ class GiantsRepository private constructor(context: Context) {
         keuboApi.getRosterMoves(teamKeuboId(teamCode)).moves.map { it.toDomain() }
 
     suspend fun fetchRecentRosterMoves(days: Int = 7, teamCode: String = LOTTE_TEAM_CODE): List<RosterMove> {
-        val from = LocalDate.now().minusDays((days - 1).toLong()).toString()
+        val from = kboToday().minusDays((days - 1).toLong()).toString()
         return fetchAllRosterMoves(teamCode).filter { it.moveDate >= from }.sortedByDescending { it.moveDate }
     }
 
