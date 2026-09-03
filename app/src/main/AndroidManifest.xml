@@ -64,6 +64,7 @@
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="com.bossxor.lottegiants.WIDGET_REFRESH" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

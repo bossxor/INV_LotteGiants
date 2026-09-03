@@ -1,5 +1,6 @@
 package com.bossxor.lottegiants.widget
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
@@ -12,14 +13,13 @@ import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.LocalContext
 import androidx.glance.LocalSize
-import androidx.glance.action.ActionParameters
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
-import androidx.glance.appwidget.action.ActionCallback
-import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.action.actionSendBroadcast
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
@@ -159,7 +159,8 @@ private fun WidgetRoot(
     val compact = size.width < 180.dp
     val bgAlpha = (opacityPct.coerceIn(20, 100) / 100f)
     val bgColor = Color(0xFF18243A).copy(alpha = bgAlpha)
-    Column(
+    val appContext = LocalContext.current
+    Box(
         modifier = GlanceModifier
             .fillMaxSize()
             .let { m ->
@@ -169,34 +170,16 @@ private fun WidgetRoot(
                     m.background(ColorProvider(bgColor, bgColor))
                 }
             }
-            .cornerRadius(22.dp)
-            .padding(if (compact) 8.dp else 10.dp),
+            .cornerRadius(22.dp),
+        contentAlignment = Alignment.TopEnd,
     ) {
-        Row(
-            modifier = GlanceModifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.End,
-            verticalAlignment = Alignment.Top,
-        ) {
-            Box(
-                modifier = GlanceModifier
-                    .padding(2.dp)
-                    .clickable(actionRunCallback<WidgetRefreshAction>()),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(
-                    provider = ImageProvider(R.drawable.ic_widget_refresh),
-                    contentDescription = "새로고침",
-                    modifier = GlanceModifier.size(26.dp),
-                )
-            }
-        }
         Column(
             modifier = GlanceModifier
-                .defaultWeight()
-                .fillMaxWidth()
+                .fillMaxSize()
+                .padding(if (compact) 8.dp else 10.dp)
                 .clickable(actionStartActivity(openIntent)),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Top,
         ) {
             val game = snap?.lotteGame?.takeIf { it.belongsToKboToday() }
             val highlightActive = !snap?.highlightText.isNullOrBlank() &&
@@ -226,6 +209,32 @@ private fun WidgetRoot(
                 else -> Text(
                     "경기 없음",
                     style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 13.sp),
+                )
+            }
+        }
+        Box(
+            modifier = GlanceModifier.padding(6.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = GlanceModifier
+                    .size(36.dp)
+                    .cornerRadius(10.dp)
+                    .background(
+                        ColorProvider(Color(0x66000000), Color(0x66000000)),
+                    )
+                    .clickable(
+                        actionSendBroadcast(
+                            LotteWidgetReceiver.ACTION_REFRESH,
+                            ComponentName(appContext, LotteWidgetReceiver::class.java),
+                        ),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    provider = ImageProvider(R.drawable.ic_widget_refresh),
+                    contentDescription = "새로고침",
+                    modifier = GlanceModifier.size(18.dp),
                 )
             }
         }
@@ -332,7 +341,7 @@ private fun CompactFrame(
             Spacer(GlanceModifier.width(4.dp))
             Text("롯데", style = TextStyle(color = pink, fontSize = 10.sp, fontWeight = FontWeight.Bold))
         }
-        Spacer(GlanceModifier.defaultWeight())
+        Spacer(GlanceModifier.height(6.dp))
         content()
     }
 }
@@ -727,24 +736,6 @@ private fun isWithinMinutes(g: LotteGameInfo, minutes: Long): Boolean {
     return until in 0..(minutes * 60_000L)
 }
 
-class WidgetRefreshAction : ActionCallback {
-    override suspend fun onAction(
-        context: Context,
-        glanceId: GlanceId,
-        parameters: ActionParameters,
-    ) {
-        val snap = runCatching {
-            GiantsRepository.get(context).refreshSnapshot(force = true)
-        }.getOrNull()
-        WidgetUpdater.updateAll(context)
-        WearBridge.syncSnapshot(context, snap)
-        GameSchedulerWorker.scheduleKboDayRollover(context)
-        if (snap?.lotteGame?.status == GameStatus.LIVE) {
-            com.bossxor.lottegiants.live.LiveScoreService.start(context)
-        }
-    }
-}
-
 class LotteWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = LotteWidget()
 
@@ -756,6 +747,10 @@ class LotteWidgetReceiver : GlanceAppWidgetReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == ACTION_REFRESH) {
+            refreshWidgetData(context)
+            return
+        }
         super.onReceive(context, intent)
         if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             GameSchedulerWorker.enqueue(context)
@@ -767,9 +762,20 @@ class LotteWidgetReceiver : GlanceAppWidgetReceiver() {
     private fun refreshWidgetData(context: Context) {
         Thread {
             kotlinx.coroutines.runBlocking {
-                runCatching { GiantsRepository.get(context).refreshSnapshot(force = true) }
+                val snap = runCatching {
+                    GiantsRepository.get(context).refreshSnapshot(force = true)
+                }.getOrNull()
                 WidgetUpdater.updateAll(context)
+                WearBridge.syncSnapshot(context, snap)
+                GameSchedulerWorker.scheduleKboDayRollover(context)
+                if (snap?.lotteGame?.status == GameStatus.LIVE) {
+                    com.bossxor.lottegiants.live.LiveScoreService.start(context)
+                }
             }
         }.start()
+    }
+
+    companion object {
+        const val ACTION_REFRESH = "com.bossxor.lottegiants.WIDGET_REFRESH"
     }
 }
