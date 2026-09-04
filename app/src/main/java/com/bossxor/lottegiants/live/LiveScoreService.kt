@@ -128,7 +128,6 @@ class LiveScoreService : Service() {
                 }
                 NotificationHelper.notifyLive(this@LiveScoreService, live, notifyKey)
                 WidgetUpdater.updateAll(this@LiveScoreService)
-                WearBridge.syncSnapshot(this@LiveScoreService, snap)
                 detector.process(this@LiveScoreService, game)
                 if (game.status == GameStatus.ENDED) {
                     val st = runCatching { repo.fetchStandings() }.getOrDefault(emptyList())

@@ -15,8 +15,8 @@ android {
         applicationId = "com.bossxor.lottegiants"
         minSdk = 31
         targetSdk = 36
-        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1087
-        versionName = (project.findProperty("versionName") as String?) ?: "1.3.79"
+        versionCode = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1088
+        versionName = (project.findProperty("versionName") as String?) ?: "1.3.80"
 
         // private GitHub 저장소 업데이트용 (local.properties 또는 env GITHUB_TOKEN)
         val localProps = Properties().apply {
@@ -98,8 +98,5 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.coil.compose)
-    implementation(libs.play.services.wearable)
-    implementation(libs.kotlinx.coroutines.play.services)
-    wearApp(project(":wear"))
     testImplementation("junit:junit:4.13.2")
 }

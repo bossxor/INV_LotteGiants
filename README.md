@@ -2,11 +2,11 @@
 
 **롯데 자이언츠 중심 KBO 실시간 스코어 앱**
 
-홈 위젯 · 실시간 스코어 알림 · 이벤트 알림 · Wear OS 동반 앱을 지원합니다.
+홈 위젯 · 실시간 스코어 알림 · 이벤트 알림을 지원합니다.
 
 | | |
 |---|---|
-| **버전** | `1.3.79` (`versionCode` **1087**) |
+| **버전** | `1.3.80` (`versionCode` **1088**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 
@@ -17,7 +17,7 @@
 ## 목차
 
 - [화면 구성](#화면-구성)
-- [알림 · Wear](#알림--wear)
+- [알림](#알림)
 - [홈 위젯](#홈-위젯)
 - [데이터 출처](#데이터-출처)
 - [빌드 · 설치](#빌드--설치)
@@ -75,7 +75,7 @@
 
 ---
 
-## 알림 · Wear
+## 알림
 
 ### 표시 모드 (3가지)
 
@@ -121,10 +121,6 @@
 - **펼친 알림**: 로고–점수–다이아몬드–점수–로고 / 투수·BSO·타자 / 승률 바
 - **상태표시줄 아이콘**: 야구공 실루엣. 런처는 SAJIK 배지
 - 경기 전 FGS를 반복 켜지 않아 알림이 깜빡이지 않게 함
-
-### Wear OS
-
-갤럭시 워치4(44mm, Wear OS 3) 포함 — 워치 앱 · 타일 · 시계 컴플리케이션에 같은 롯데 점수. 폰 APK 설치 시 워치 APK가 함께 포함된다.
 
 ---
 
@@ -212,8 +208,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `1.3.79` |
-| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1087` |
+| `versionName` | 사용자에게 보이는 버전 | `1.3.80` |
+| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1088` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -241,8 +237,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 ```json
 {
-  "versionCode": 1087,
-  "versionName": "1.3.79",
+  "versionCode": 1088,
+  "versionName": "1.3.80",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }
@@ -262,7 +258,7 @@ app/src/main/java/com/bossxor/lottegiants/
   live/          LiveScoreService, AlertWatchService, NotificationHelper, EventDetector …
   widget/        LotteWidget, WidgetAssets
 app/src/test/    중계 분류, 역전/득점, 매직 사유, 승률 파싱 단위 테스트
-wear/            Wear OS 타일·컴플리케이션 (폰 앱과 동기화)
+wear/            Wear OS 모듈 (폰 APK에는 넣지 않음. 갤럭시 웨어러블 자동설치가 안 됨)
 scripts/         env.ps1, build.ps1, publish-latest, CI 서명 설정
 .github/workflows/publish-latest.yml
 ```

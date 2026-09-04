@@ -69,7 +69,6 @@ import com.bossxor.lottegiants.domain.gameCountdownLabel
 import com.bossxor.lottegiants.domain.snapshotStaleForKboDay
 import com.bossxor.lottegiants.domain.widgetFooterLine
 import com.bossxor.lottegiants.live.GameSchedulerWorker
-import com.bossxor.lottegiants.live.WearBridge
 
 private val Red = Color(0xFFC8102E)
 private val Pink = Color(0xFFFF6B7A)
@@ -779,7 +778,6 @@ class LotteWidgetReceiver : GlanceAppWidgetReceiver() {
                 val snap = runCatching {
                     GiantsRepository.get(context).refreshSnapshot(force = true)
                 }.getOrNull()
-                WearBridge.syncSnapshot(context, snap)
                 GameSchedulerWorker.scheduleKboDayRollover(context)
                 if (snap?.lotteGame?.status == GameStatus.LIVE) {
                     com.bossxor.lottegiants.live.LiveScoreService.start(context)

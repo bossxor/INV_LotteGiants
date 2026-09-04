@@ -43,9 +43,12 @@ import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.lotteRaceSummary
 import com.bossxor.lottegiants.domain.remainingOpponentsFrom
 import com.bossxor.lottegiants.domain.shareRaceText
+import com.bossxor.lottegiants.domain.formatStandingStreak
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
+import com.bossxor.lottegiants.ui.LoseRed
+import com.bossxor.lottegiants.ui.WinGreen
 import com.bossxor.lottegiants.ui.ScoreShare
 import com.bossxor.lottegiants.ui.components.ScreenTitle
 import androidx.compose.ui.platform.LocalContext
@@ -225,42 +228,49 @@ fun StandingsScreen(
                         Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp)) {
                             Text(
                                 "순위",
-                                Modifier.weight(0.10f),
+                                Modifier.weight(StandingCol.rank),
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
                                 "팀",
-                                Modifier.weight(0.27f),
+                                Modifier.weight(StandingCol.team),
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
                                 "경기",
-                                Modifier.weight(0.11f),
+                                Modifier.weight(StandingCol.games),
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
                                 "승-무-패",
-                                Modifier.weight(0.20f),
+                                Modifier.weight(StandingCol.record),
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                "연속",
+                                Modifier.weight(StandingCol.streak),
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
                                 "승률",
-                                Modifier.weight(0.14f),
+                                Modifier.weight(StandingCol.wra),
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
                                 "게임차",
-                                Modifier.weight(0.18f),
+                                Modifier.weight(StandingCol.gb),
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold,
@@ -461,6 +471,16 @@ private fun CompactSparkCard(
     }
 }
 
+private object StandingCol {
+    const val rank = 0.09f
+    const val team = 0.22f
+    const val games = 0.10f
+    const val record = 0.17f
+    const val streak = 0.11f
+    const val wra = 0.14f
+    const val gb = 0.17f
+}
+
 private fun gamesBehindVsBase(team: TeamStanding, base: TeamStanding?): Double? {
     if (base == null) return null
     if (team.teamId == base.teamId) return 0.0
@@ -511,12 +531,12 @@ private fun StandingRow(
             }
             Text(
                 "${t.ranking}",
-                Modifier.weight(0.10f),
+                Modifier.weight(StandingCol.rank),
                 color = textColor,
                 fontWeight = FontWeight.Black,
                 fontSize = 14.sp,
             )
-            Row(Modifier.weight(0.27f), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(StandingCol.team), verticalAlignment = Alignment.CenterVertically) {
                 TeamLogo(teamLogoUrl(t.teamId), size = if (compact) 22 else 26)
                 Spacer(Modifier.width(6.dp))
                 Text(
@@ -529,28 +549,40 @@ private fun StandingRow(
             }
             Text(
                 "${t.gameCount}",
-                Modifier.weight(0.11f),
+                Modifier.weight(StandingCol.games),
                 color = textColor,
                 fontWeight = weight,
                 fontSize = 12.sp,
             )
             Text(
                 "${t.win}-${t.draw}-${t.lose}",
-                Modifier.weight(0.20f),
+                Modifier.weight(StandingCol.record),
                 color = textColor,
+                fontWeight = weight,
+                fontSize = 12.sp,
+            )
+            val streak = formatStandingStreak(t.streak)
+            Text(
+                streak,
+                Modifier.weight(StandingCol.streak),
+                color = when {
+                    streak.endsWith("승") -> WinGreen
+                    streak.endsWith("패") -> LoseRed
+                    else -> textColor
+                },
                 fontWeight = weight,
                 fontSize = 12.sp,
             )
             Text(
                 String.format(Locale.US, "%.3f", t.wra),
-                Modifier.weight(0.14f),
+                Modifier.weight(StandingCol.wra),
                 color = textColor,
                 fontWeight = weight,
                 fontSize = 12.sp,
             )
             Text(
                 formatGb(gb),
-                Modifier.weight(0.18f),
+                Modifier.weight(StandingCol.gb),
                 color = textColor,
                 fontWeight = weight,
                 fontSize = 12.sp,

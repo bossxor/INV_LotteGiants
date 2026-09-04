@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -354,14 +353,6 @@ class SnapshotStore(private val context: Context) {
         context.dataStore.edit { it[KEY_WIDGET_OPP_LOGO] = show }
     }
 
-    val wearLastSyncFlow: Flow<Long> = context.dataStore.data.map {
-        it[KEY_WEAR_LAST_SYNC] ?: 0L
-    }
-
-    suspend fun setWearLastSync(millis: Long) {
-        context.dataStore.edit { it[KEY_WEAR_LAST_SYNC] = millis }
-    }
-
     suspend fun lastRaceFingerprint(): String =
         context.dataStore.data.map { it[KEY_LAST_RACE].orEmpty() }.first()
 
@@ -395,7 +386,6 @@ class SnapshotStore(private val context: Context) {
         private val KEY_QUIET_END = intPreferencesKey("quiet_end_hour")
         private val KEY_WIDGET_OPACITY = intPreferencesKey("widget_opacity_pct")
         private val KEY_WIDGET_OPP_LOGO = booleanPreferencesKey("widget_show_opp_logo")
-        private val KEY_WEAR_LAST_SYNC = longPreferencesKey("wear_last_sync_millis")
         private val KEY_LAST_RACE = stringPreferencesKey("last_race_fingerprint")
     }
 }

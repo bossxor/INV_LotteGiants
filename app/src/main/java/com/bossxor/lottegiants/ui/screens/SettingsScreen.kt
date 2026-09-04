@@ -62,7 +62,6 @@ import com.bossxor.lottegiants.data.NotificationType
 import com.bossxor.lottegiants.data.UpdateCheckResult
 import com.bossxor.lottegiants.data.UpdateChecker
 import com.bossxor.lottegiants.domain.AlertPreset
-import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTE_OPTIONS
 import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.ThemeMode
@@ -71,8 +70,6 @@ import com.bossxor.lottegiants.domain.liveLeadLabel
 import com.bossxor.lottegiants.live.LiveScoreService
 import com.bossxor.lottegiants.live.NotificationHelper
 import com.bossxor.lottegiants.widget.WidgetUpdater
-import java.time.Instant
-import java.time.format.DateTimeFormatter
 import com.bossxor.lottegiants.ui.LoseRed
 import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.components.PlayerAvatar
@@ -388,16 +385,6 @@ fun SettingsScreen(
                             }
                         }
                     }
-                }
-                val wearSync by store.wearLastSyncFlow.collectAsState(initial = 0L)
-                if (wearSync > 0L) {
-                    val clock = Instant.ofEpochMilli(wearSync).atZone(KBO_ZONE).toLocalTime()
-                        .format(DateTimeFormatter.ofPattern("HH:mm"))
-                    Text(
-                        "워치 마지막 동기화 $clock",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
                 Spacer(Modifier.height(12.dp))
                 Button(

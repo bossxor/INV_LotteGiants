@@ -25,7 +25,6 @@ import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.teamKeuboSlug
-import com.bossxor.lottegiants.live.WearBridge
 import com.bossxor.lottegiants.widget.WidgetUpdater
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -399,7 +398,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _snapshot.value = it
                 _refreshError.value = null
                 WidgetUpdater.updateAll(getApplication())
-                WearBridge.syncSnapshot(getApplication(), it)
                 if (_selectedDate.value == kboToday()) {
                     syncTodayGamesFromSnapshot(it)
                 }

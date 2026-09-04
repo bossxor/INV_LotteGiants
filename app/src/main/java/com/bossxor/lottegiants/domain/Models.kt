@@ -934,6 +934,20 @@ data class TeamStanding(
     val lastFive: String = "",
 )
 
+/** 순위표용. `3연승`·`W3` → `3승`, `1연패`·`L1` → `1패`. */
+fun formatStandingStreak(raw: String): String {
+    val s = raw.trim()
+    if (s.isBlank() || s == "-") return "-"
+    Regex("""(\d+)\s*(연)?(승|패)""").find(s)?.let { m ->
+        return "${m.groupValues[1]}${m.groupValues[3]}"
+    }
+    Regex("""([WL])\s*(\d+)""", RegexOption.IGNORE_CASE).matchEntire(s)?.let { m ->
+        val n = m.groupValues[2]
+        return if (m.groupValues[1].equals("W", ignoreCase = true)) "${n}승" else "${n}패"
+    }
+    return s
+}
+
 /** KBO CANCEL_SC_ID → 짧은 사유 */
 fun kboCancelReasonById(id: Int): String? = when (id) {
     1 -> "우천"

@@ -159,7 +159,6 @@ class EventDetector(private val store: SnapshotStore) {
                         gameId = game.gameId, detailTab = "relay",
                     )
                     store.setHighlight(title)
-                    WearBridge.sendScoreEvent(context, title)
                 } else {
                     val title = formatLotteScoreTitle(lotteWho, lotteRuns, score, how)
                     maybeNotify(
@@ -167,7 +166,6 @@ class EventDetector(private val store: SnapshotStore) {
                         gameId = game.gameId, detailTab = "relay",
                     )
                     store.setHighlight(title)
-                    WearBridge.sendScoreEvent(context, "$title · ${game.inningLabel}")
                 }
             }
             if (oppScored) {
@@ -179,7 +177,6 @@ class EventDetector(private val store: SnapshotStore) {
                     gameId = game.gameId, detailTab = "relay",
                 )
                 store.setHighlight(title)
-                WearBridge.sendScoreEvent(context, "$title · ${game.inningLabel}")
             }
             leadChangeTitle(
                 lastLotteScore, lastOppScore, game.lotteScore, game.opponentScore, game.opponentName,
