@@ -1,7 +1,6 @@
 package com.bossxor.lottegiants.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -116,12 +114,50 @@ fun StandingsScreen(
 
             race?.let { summary ->
                 item {
-                    RaceCard(
+                    RaceStatusCard(
                         summary = summary,
                         onShare = {
                             ScoreShare.shareText(context, "사직스코어 레이스", shareRaceText(summary))
                         },
                     )
+                }
+                val homeLeft = summary.remainingOpponents.sumOf { it.home }
+                val awayLeft = summary.remainingOpponents.sumOf { it.away }
+                if (homeLeft + awayLeft > 0 || summary.remainingOpponents.isNotEmpty()) {
+                    item {
+                        SectionHeader(
+                            title = "잔여 상대",
+                            subtitle = buildString {
+                                if (homeLeft > 0) append("홈 $homeLeft")
+                                if (homeLeft > 0 && awayLeft > 0) append(" · ")
+                                if (awayLeft > 0) append("원정 $awayLeft")
+                            },
+                        )
+                    }
+                    item {
+                        SectionCard {
+                            RemainingOpponentsGrid(summary.remainingOpponents)
+                        }
+                    }
+                }
+                if (summary.upcomingGames.isNotEmpty()) {
+                    item {
+                        val first = summary.upcomingGames.first()
+                        val last = summary.upcomingGames.last()
+                        SectionHeader(
+                            title = "다음 ${summary.upcomingGames.size}경기",
+                            subtitle = if (first.gameDate == last.gameDate) {
+                                formatMdDate(first.gameDate)
+                            } else {
+                                "${formatMdDate(first.gameDate)} ~ ${formatMdDate(last.gameDate)}"
+                            },
+                        )
+                    }
+                    item {
+                        SectionCard(padding = 8.dp) {
+                            UpcomingGamesList(summary.upcomingGames)
+                        }
+                    }
                 }
             }
 
@@ -288,12 +324,14 @@ private fun SectionHeader(title: String, subtitle: String) {
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(
-            subtitle,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 2.dp),
-        )
+        if (subtitle.isNotBlank()) {
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
     }
 }
 
@@ -443,18 +481,14 @@ private fun CompactSparkCard(
 private val HomeBlue = Color(0xFF2F6FED)
 private val AwayRed = Color(0xFFE23B3B)
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RaceCard(summary: RaceSummary, onShare: () -> Unit) {
+private fun RaceStatusCard(summary: RaceSummary, onShare: () -> Unit) {
     val formLine = summary.lines.firstOrNull { it.startsWith("최근") }.orEmpty()
     val raceLines = summary.lines.filterNot {
         it.startsWith("최근") || it.startsWith("잔여 홈")
     }
-    val homeLeft = summary.remainingOpponents.sumOf { it.home }
-    val awayLeft = summary.remainingOpponents.sumOf { it.away }
-
     SectionCard {
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     summary.headline,
@@ -479,16 +513,6 @@ private fun RaceCard(summary: RaceSummary, onShare: () -> Unit) {
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-            if (homeLeft + awayLeft > 0 || summary.remainingOpponents.isNotEmpty()) {
-                RemainingBlock(
-                    home = homeLeft,
-                    away = awayLeft,
-                    opponents = summary.remainingOpponents,
-                )
-            }
-            if (summary.upcomingGames.isNotEmpty()) {
-                UpcomingGamesBlock(summary.upcomingGames)
             }
         }
     }
@@ -515,38 +539,31 @@ private fun RecentFormLine(line: String) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun RemainingBlock(home: Int, away: Int, opponents: List<RemainingOpponent>) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("잔여 상대", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = LotteRed)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (home > 0) HaChip("홈 $home", HomeBlue)
-            if (away > 0) HaChip("원정 $away", AwayRed)
-        }
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            opponents.forEach { opp ->
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 0.dp,
+private fun RemainingOpponentsGrid(opponents: List<RemainingOpponent>) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        opponents.forEach { opp ->
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp,
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Row(
-                        Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        TeamLogo(teamLogoUrl(opp.code), size = 22)
-                        Text(opp.name.ifBlank { opp.code }, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                        Text(
-                            "${opp.games}",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
+                    TeamLogo(teamLogoUrl(opp.code), size = 22)
+                    Text(opp.name.ifBlank { opp.code }, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        "${opp.games}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
                 }
             }
         }
@@ -554,44 +571,14 @@ private fun RemainingBlock(home: Int, away: Int, opponents: List<RemainingOppone
 }
 
 @Composable
-private fun HaChip(label: String, color: Color) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = color.copy(alpha = 0.12f),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
-    ) {
-        Text(
-            label,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            color = color,
-        )
-    }
-}
-
-@Composable
-private fun UpcomingGamesBlock(games: List<MiniGame>) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("다음 ${games.size}경기", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = LotteRed)
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .background(
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                    RoundedCornerShape(14.dp),
+private fun UpcomingGamesList(games: List<MiniGame>) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        games.forEachIndexed { index, g ->
+            UpcomingGameRow(g)
+            if (index < games.lastIndex) {
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
                 )
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            games.forEachIndexed { index, g ->
-                UpcomingGameRow(g)
-                if (index < games.lastIndex) {
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                    )
-                }
             }
         }
     }
