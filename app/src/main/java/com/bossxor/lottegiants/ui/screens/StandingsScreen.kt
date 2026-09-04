@@ -4,14 +4,16 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -38,12 +40,17 @@ import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LeaderPlayer
 import com.bossxor.lottegiants.domain.LotteTeamCard
 import com.bossxor.lottegiants.domain.MiniGame
+import com.bossxor.lottegiants.domain.RaceSummary
+import com.bossxor.lottegiants.domain.RemainingOpponent
 import com.bossxor.lottegiants.domain.TeamStanding
+import com.bossxor.lottegiants.domain.formatMdDate
+import com.bossxor.lottegiants.domain.formatStandingStreak
+import com.bossxor.lottegiants.domain.isTeamHome
 import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.lotteRaceSummary
 import com.bossxor.lottegiants.domain.remainingOpponentsFrom
 import com.bossxor.lottegiants.domain.shareRaceText
-import com.bossxor.lottegiants.domain.formatStandingStreak
+import com.bossxor.lottegiants.domain.teamCodeToName
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
@@ -58,7 +65,7 @@ import com.bossxor.lottegiants.ui.components.TeamLogo
 import java.util.Locale
 import kotlin.math.abs
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun StandingsScreen(
     standings: List<TeamStanding>,
@@ -104,55 +111,17 @@ fun StandingsScreen(
         ) {
             item {
                 Spacer(Modifier.height(8.dp))
-                ScreenTitle("순위", "한 팀을 누르면 그 팀 기준 게임차")
+                ScreenTitle("순위")
             }
 
             race?.let { summary ->
                 item {
-                    SectionCard {
-                        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    summary.headline,
-                                    modifier = Modifier.weight(1f),
-                                    fontWeight = FontWeight.Bold,
-                                    color = LotteRed,
-                                )
-                                Text(
-                                    "공유",
-                                    modifier = Modifier.clickable {
-                                        ScoreShare.shareText(context, "사직스코어 레이스", shareRaceText(summary))
-                                    },
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                            summary.lines.forEach { line ->
-                                Text(
-                                    line,
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                            if (summary.upcoming.isNotEmpty()) {
-                                Spacer(Modifier.height(6.dp))
-                                Text(
-                                    "다음 ${summary.upcoming.size}경기",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 12.sp,
-                                    color = LotteRed,
-                                )
-                                summary.upcoming.forEach { line ->
-                                    Text(
-                                        line,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    RaceCard(
+                        summary = summary,
+                        onShare = {
+                            ScoreShare.shareText(context, "사직스코어 레이스", shareRaceText(summary))
+                        },
+                    )
                 }
             }
 
@@ -467,6 +436,218 @@ private fun CompactSparkCard(
             } else {
                 Text("데이터 준비 중", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
             }
+        }
+    }
+}
+
+private val HomeBlue = Color(0xFF2F6FED)
+private val AwayRed = Color(0xFFE23B3B)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RaceCard(summary: RaceSummary, onShare: () -> Unit) {
+    val formLine = summary.lines.firstOrNull { it.startsWith("최근") }.orEmpty()
+    val raceLines = summary.lines.filterNot {
+        it.startsWith("최근") || it.startsWith("잔여 홈")
+    }
+    val homeLeft = summary.remainingOpponents.sumOf { it.home }
+    val awayLeft = summary.remainingOpponents.sumOf { it.away }
+
+    SectionCard {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    summary.headline,
+                    modifier = Modifier.weight(1f),
+                    fontWeight = FontWeight.Bold,
+                    color = LotteRed,
+                )
+                Text(
+                    "공유",
+                    modifier = Modifier.clickable(onClick = onShare),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            if (formLine.isNotBlank()) {
+                RecentFormLine(formLine)
+            }
+            raceLines.forEach { line ->
+                Text(
+                    line,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (homeLeft + awayLeft > 0 || summary.remainingOpponents.isNotEmpty()) {
+                RemainingBlock(
+                    home = homeLeft,
+                    away = awayLeft,
+                    opponents = summary.remainingOpponents,
+                )
+            }
+            if (summary.upcomingGames.isNotEmpty()) {
+                UpcomingGamesBlock(summary.upcomingGames)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentFormLine(line: String) {
+    val marks = line.substringAfter("경기 ").trim()
+    val label = line.substringBefore("경기 ").trim() + "경기"
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            marks.forEach { ch ->
+                val color = when (ch) {
+                    '승' -> WinGreen
+                    '패' -> LoseRed
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                Text("$ch", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = color)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RemainingBlock(home: Int, away: Int, opponents: List<RemainingOpponent>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("잔여 상대", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = LotteRed)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (home > 0) HaChip("홈 $home", HomeBlue)
+            if (away > 0) HaChip("원정 $away", AwayRed)
+        }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            opponents.forEach { opp ->
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 0.dp,
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        TeamLogo(teamLogoUrl(opp.code), size = 22)
+                        Text(opp.name.ifBlank { opp.code }, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        Text(
+                            "${opp.games}",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HaChip(label: String, color: Color) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = color.copy(alpha = 0.12f),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = color,
+        )
+    }
+}
+
+@Composable
+private fun UpcomingGamesBlock(games: List<MiniGame>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("다음 ${games.size}경기", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = LotteRed)
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                    RoundedCornerShape(14.dp),
+                )
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            games.forEachIndexed { index, g ->
+                UpcomingGameRow(g)
+                if (index < games.lastIndex) {
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpcomingGameRow(g: MiniGame) {
+    val home = g.isTeamHome(LOTTE_TEAM_CODE) == true
+    val oppCode = (if (home) g.awayTeamCode else g.homeTeamCode).ifBlank {
+        if (home) g.awayName else g.homeName
+    }
+    val oppName = teamCodeToName(oppCode).ifBlank { if (home) g.awayName else g.homeName }
+    val time = g.startTime.trim()
+    val stadium = g.stadium.trim().ifBlank { if (home) "사직" else "" }
+    val haColor = if (home) HomeBlue else AwayRed
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        TeamLogo(teamLogoUrl(oppCode), size = 32)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    buildString {
+                        append(formatMdDate(g.gameDate))
+                        if (time.isNotBlank()) {
+                            append("  ")
+                            append(time)
+                        }
+                        if (g.doubleHeaderNo > 0) append("  DH${g.doubleHeaderNo}")
+                    },
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                )
+                Text(oppName, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            }
+            if (stadium.isNotBlank()) {
+                Text(stadium, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Surface(
+            shape = RoundedCornerShape(999.dp),
+            color = haColor.copy(alpha = 0.12f),
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+        ) {
+            Text(
+                if (home) "홈" else "원정",
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = haColor,
+            )
         }
     }
 }

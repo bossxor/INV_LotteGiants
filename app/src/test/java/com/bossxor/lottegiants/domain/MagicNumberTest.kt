@@ -216,10 +216,12 @@ class MagicNumberTest {
         )
         val race = lotteRaceSummary(standings, seasonGames = games, todayIso = "2026-08-28")!!
         assertTrue(race.lines.any { it == "잔여 홈 3 · 원정 1" })
-        assertTrue(race.lines.any { it.contains("두산") && it.contains("3연전") })
+        assertTrue(race.remainingOpponents.any { it.name == "두산" && it.games == 3 })
+        assertTrue(race.lines.none { it.contains("연전") })
         assertTrue(race.lines.any { it.startsWith("최근 2경기") && it.contains("승") && it.contains("패") })
         assertEquals("9/1 홈 두산 18:30", race.upcoming.first())
         assertTrue(race.upcoming.any { it.contains("원정 한화") })
+        assertEquals(4, race.upcomingGames.size)
         val vs = formatVsRaceOpponent(remainingOpponentsFrom(games, "2026-08-28"), standings)
         assertTrue(vs.contains("잔여 맞대결 없음"))
     }

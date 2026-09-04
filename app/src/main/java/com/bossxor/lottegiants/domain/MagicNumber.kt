@@ -14,6 +14,8 @@ data class RaceSummary(
     val headline: String,
     val lines: List<String>,
     val upcoming: List<String> = emptyList(),
+    val remainingOpponents: List<RemainingOpponent> = emptyList(),
+    val upcomingGames: List<MiniGame> = emptyList(),
 )
 
 data class RemainingSeries(
@@ -543,7 +545,6 @@ fun lotteRaceSummary(
     }
     val lines = mutableListOf<String>()
 
-    lotte.streak.trim().takeIf { it.isNotBlank() }?.let { lines += it }
     when {
         lotte.lastFive.isNotBlank() -> lines += "최근 5경기 ${lotte.lastFive.trim()}"
         else -> lastFiveMarks(seasonGames, today, lotteCode).takeIf { it.isNotBlank() }?.let { lines += it }
@@ -599,10 +600,14 @@ fun lotteRaceSummary(
 
     formatPaceLine(lotte, seasonG).takeIf { it.isNotBlank() }?.let { lines += it }
     formatHomeAwayRemaining(remaining).takeIf { it.isNotBlank() }?.let { lines += it }
-    formatVsRaceOpponent(remaining, sorted, lotteCode).takeIf { it.isNotBlank() }?.let { lines += it }
-    formatRemainingOpponents(remaining).takeIf { it.isNotBlank() }?.let { lines += it }
-    formatRemainingSeries(remainingSeriesFrom(seasonGames, today, lotteCode)).forEach { lines += it }
-    val upcoming = upcomingLotteGames(seasonGames, today, lotteCode).take(5).map { formatUpcomingLine(it, lotteCode) }
+    val upcomingGames = upcomingLotteGames(seasonGames, today, lotteCode).take(5)
+    val upcoming = upcomingGames.map { formatUpcomingLine(it, lotteCode) }
 
-    return RaceSummary(headline, lines, upcoming)
+    return RaceSummary(
+        headline = headline,
+        lines = lines,
+        upcoming = upcoming,
+        remainingOpponents = remaining,
+        upcomingGames = upcomingGames,
+    )
 }
