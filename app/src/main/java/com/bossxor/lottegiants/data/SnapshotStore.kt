@@ -261,6 +261,21 @@ class SnapshotStore(private val context: Context) {
         context.dataStore.edit { it[KEY_NOTIFIED_END] = gameId }
     }
 
+    /**
+     * 사용자가 종료·취소 스코어 알림을 스와이프로 지운 경기.
+     * 같은 경기는 다시 올리지 않는다(다시 표시·새 LIVE만 예외).
+     */
+    suspend fun dismissedFinishedLiveGameId(): String =
+        context.dataStore.data.map { it[KEY_DISMISSED_FINISHED_LIVE].orEmpty() }.first()
+
+    suspend fun setDismissedFinishedLiveGameId(gameId: String) {
+        context.dataStore.edit { it[KEY_DISMISSED_FINISHED_LIVE] = gameId }
+    }
+
+    suspend fun clearDismissedFinishedLiveGameId() {
+        context.dataStore.edit { it.remove(KEY_DISMISSED_FINISHED_LIVE) }
+    }
+
     /** 권한 대기 중인 업데이트 APK (절대 경로). 빈 문자열이면 없음. */
     suspend fun pendingUpdateApkPath(): String =
         context.dataStore.data.map { it[KEY_PENDING_UPDATE_APK].orEmpty() }.first()
@@ -374,6 +389,7 @@ class SnapshotStore(private val context: Context) {
         private val KEY_BANNER_DAY = stringPreferencesKey("perm_banner_dismissed_day")
         private val KEY_NOTIFIED_CANCEL = stringPreferencesKey("notified_cancel_game_id")
         private val KEY_NOTIFIED_END = stringPreferencesKey("notified_end_game_id")
+        private val KEY_DISMISSED_FINISHED_LIVE = stringPreferencesKey("dismissed_finished_live_game_id")
         private val KEY_NOTIFIED_ROSTER = stringSetPreferencesKey("notified_roster_keys")
         private val KEY_LIVE_NOTIFY = stringPreferencesKey("last_live_notify_key")
         private val KEY_NOTIFIED_LINEUP = stringPreferencesKey("notified_lineup_state")

@@ -199,6 +199,9 @@ object NotificationHelper {
      * pinned·lead 창 안이면 알림만 갱신한다. 경기 전 '다시 표시'는 FGS 없이 유지.
      * LIVE일 때만 [LiveScoreService]를 켠다.
      */
+    fun finishedLiveKey(game: LotteGameInfo): String =
+        game.gameId.ifBlank { game.gameDate }
+
     suspend fun refreshLiveNotificationIfNeeded(context: Context) {
         val app = context.applicationContext
         val repo = com.bossxor.lottegiants.data.GiantsRepository.get(app)
@@ -214,6 +217,15 @@ object NotificationHelper {
             ignoreLeadWindow = pinned,
         ) ?: return
         if (!pinned && !shouldPostLiveNotification(game, lead)) return
+        if (game.status == GameStatus.LIVE) {
+            repo.store.clearDismissedFinishedLiveGameId()
+        } else if (
+            (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED) &&
+            !pinned
+        ) {
+            val dismissed = repo.store.dismissedFinishedLiveGameId()
+            if (dismissed.isNotBlank() && dismissed == finishedLiveKey(game)) return
+        }
         val mode = repo.store.liveDisplayMode()
         val n = buildLiveNotification(app, game, mode, snap.winProbSeries)
         notifyLive(app, n, liveNotificationKey(game, mode))

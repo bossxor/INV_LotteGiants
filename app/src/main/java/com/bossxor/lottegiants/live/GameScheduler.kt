@@ -420,7 +420,20 @@ class GameAlarmReceiver : BroadcastReceiver() {
                         }
                         GameSchedulerWorker.ACTION_HIDE_LIVE -> {
                             runBlocking {
-                                GiantsRepository.get(context).store.setLiveNotificationPinned(false)
+                                val repo = GiantsRepository.get(context)
+                                repo.store.setLiveNotificationPinned(false)
+                                val game = NotificationHelper.liveNotificationGame(
+                                    repo.store.loadSnapshot(),
+                                    allowUpcoming = false,
+                                )
+                                if (game != null &&
+                                    (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED)
+                                ) {
+                                    // 지운 종료·취소 카드를 앱 재실행·워커가 다시 올리지 않게 한다.
+                                    repo.store.setDismissedFinishedLiveGameId(
+                                        NotificationHelper.finishedLiveKey(game),
+                                    )
+                                }
                             }
                             LiveScoreService.stop(context)
                             NotificationHelper.cancelLive(context)

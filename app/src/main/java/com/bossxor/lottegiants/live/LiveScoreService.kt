@@ -86,7 +86,7 @@ class LiveScoreService : Service() {
         foregroundStarted = true
         NotificationHelper.notifyLive(this, notification, notifyKey, force = true)
         if (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED) {
-            detachFinished(notification)
+            detachFinished(notification, game)
             return START_NOT_STICKY
         }
         startPolling()
@@ -126,6 +126,9 @@ class LiveScoreService : Service() {
                     stopSelf()
                     break
                 }
+                if (game.status == GameStatus.LIVE) {
+                    repo.store.clearDismissedFinishedLiveGameId()
+                }
                 NotificationHelper.notifyLive(this@LiveScoreService, live, notifyKey)
                 WidgetUpdater.updateAll(this@LiveScoreService)
                 detector.process(this@LiveScoreService, game)
@@ -147,7 +150,7 @@ class LiveScoreService : Service() {
                     GameStatus.LIVE -> delay(5_000L)
                     GameStatus.ENDED, GameStatus.CANCELED -> {
                         delay(3_000L)
-                        detachFinished(live)
+                        detachFinished(live, game)
                         break
                     }
                     else -> {
@@ -176,8 +179,26 @@ class LiveScoreService : Service() {
         return shouldPostLiveNotification(game, lead)
     }
 
-    private fun detachFinished(notification: android.app.Notification) {
+    private fun detachFinished(
+        notification: android.app.Notification,
+        game: LotteGameInfo?,
+    ) {
         val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+        // 종료 직후 사용자가 먼저 지웠으면 3초 뒤 다시 올리지 않는다.
+        if (game != null) {
+            val dismissed = runBlocking {
+                GiantsRepository.get(this@LiveScoreService).store.dismissedFinishedLiveGameId()
+            }
+            if (dismissed.isNotBlank() &&
+                dismissed == NotificationHelper.finishedLiveKey(game)
+            ) {
+                ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+                foregroundStarted = false
+                NotificationHelper.cancelLive(this)
+                stopSelf()
+                return
+            }
+        }
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
         foregroundStarted = false
         nm.notify(NotificationHelper.LIVE_NOTIFICATION_ID, notification)
@@ -230,6 +251,7 @@ class LiveScoreService : Service() {
             val repo = GiantsRepository.get(app)
             repo.store.setLiveScoreEnabled(true)
             repo.store.setLiveNotificationPinned(true)
+            repo.store.clearDismissedFinishedLiveGameId()
             NotificationHelper.createChannels(app)
             val snap = runCatching { repo.refreshSnapshot(force = true) }.getOrNull()
                 ?: repo.store.loadSnapshot()
