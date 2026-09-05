@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive icon은 바깥 ~18%가 잘릴 수 있다.
+  원본 배지가 캔버스를 거의 채워서 홈 화면에서 과하게 보이므로 inset으로 줄인다.
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_launcher_foreground_art"
+    android:inset="16%" />

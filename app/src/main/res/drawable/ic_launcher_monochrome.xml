@@ -4,24 +4,25 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- 컬러 전경과 비슷한 비율로 가운데에 맞춤 (약 16% inset) -->
     <!-- Stadium roof -->
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M30,40 Q54,22 78,40 L74,40 Q54,28 34,40 Z" />
+        android:pathData="M36,42 Q54,28 72,42 L69,42 Q54,32 39,42 Z" />
     <!-- Light towers -->
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M28,40 h5 v10 h-5 z M75,40 h5 v10 h-5 z" />
+        android:pathData="M34,42 h4 v8 h-4 z M70,42 h4 v8 h-4 z" />
     <!-- Shield body -->
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M26,44 h56 v24 h-56 z M30,68 l24,14 24,-14 v-4 H30 z" />
+        android:pathData="M34,45 h40 v18 h-40 z M37,63 l17,10 17,-10 v-3 H37 z" />
     <!-- SAJIK bar -->
     <path
         android:fillColor="#FF041E42"
-        android:pathData="M32,50 h44 v12 h-44 z" />
+        android:pathData="M38,50 h32 v9 h-32 z" />
     <!-- Home plate -->
     <path
         android:fillColor="#FF041E42"
-        android:pathData="M48,62 L54,58 60,62 58,68 50,68 Z" />
+        android:pathData="M49,60 L54,57 59,60 57.5,65 50.5,65 Z" />
 </vector>
