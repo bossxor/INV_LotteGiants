@@ -332,6 +332,8 @@ class MainActivity : ComponentActivity() {
                     seasonGames = seasonGames,
                     seasonLoading = seasonLoading,
                     onNeedSeasonGames = vm::ensureSeasonGames,
+                    onNeedStandingsTab = vm::ensureStandingsTab,
+                    onNeedResultsTab = vm::ensureResultsTab,
                     overlayTeamCode = overlayTeamCode,
                     overlayTeamCard = overlayTeamCard,
                     onOpenTeamHistory = vm::openTeamHistory,
@@ -472,6 +474,8 @@ private fun AppScaffold(
     seasonGames: List<com.bossxor.lottegiants.domain.MiniGame>,
     seasonLoading: Boolean,
     onNeedSeasonGames: () -> Unit,
+    onNeedStandingsTab: () -> Unit,
+    onNeedResultsTab: () -> Unit,
     overlayTeamCode: String,
     overlayTeamCard: LotteTeamCard?,
     onOpenTeamHistory: (String) -> Unit,
@@ -493,7 +497,13 @@ private fun AppScaffold(
             showOnboarding = true
         }
     }
-    LaunchedEffect(initialTab) { tab = initialTab }
+    LaunchedEffect(initialTab) {
+        tab = initialTab
+        when (initialTab) {
+            1 -> onNeedResultsTab()
+            2 -> onNeedStandingsTab()
+        }
+    }
     LaunchedEffect(openEntryNonce) {
         if (openEntryNonce == 0) return@LaunchedEffect
         if (openEntry) {
@@ -537,6 +547,7 @@ private fun AppScaffold(
                     "경기 중 점수를 빨리 보려면 아래를 켜 두세요.\n\n" +
                         "· 알림 허용\n" +
                         "· 배터리 사용량 최적화 제외\n" +
+                        "· 삼성 잠자기 앱에서 빼기\n" +
                         "· 홈 화면 위젯\n\n" +
                         "설정에서 언제든 바꿀 수 있습니다.",
                 )
@@ -563,6 +574,10 @@ private fun AppScaffold(
                     onSelectTab = { index ->
                         if (index == 0) onBackToLotte()
                         tab = index
+                        when (index) {
+                            1 -> onNeedResultsTab()
+                            2 -> onNeedStandingsTab()
+                        }
                     },
                 )
             }
@@ -706,7 +721,15 @@ private fun AppScaffold(
                         onRefresh = onRefreshStandings,
                         refreshing = isRefreshing,
                         seasonGames = seasonGames,
-                        onAppear = onNeedSeasonGames,
+                        onAppear = onNeedStandingsTab,
+                        favoriteCodes = favoriteCodes,
+                        onToggleFavorite = { p ->
+                            onToggleFavorite(p.playerCode, p.name, p.team)
+                        },
+                        onLeaderClick = { p ->
+                            showPlayerSheet = true
+                            onLeaderPlayerClick(p)
+                        },
                     )
                     3 -> SettingsScreen(
                         themeMode = themeMode,

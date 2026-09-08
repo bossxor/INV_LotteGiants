@@ -7,6 +7,8 @@ import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -492,12 +494,79 @@ fun SettingsScreen(
         }
 
         Spacer(Modifier.height(24.dp))
+        Text("설정 백업", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        val exportLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.CreateDocument("application/json"),
+        ) { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            scope.launch {
+                runCatching {
+                    val raw = store.encodeUserSettings(store.exportUserSettings())
+                    context.contentResolver.openOutputStream(uri)?.use { it.write(raw.toByteArray()) }
+                }.onSuccess {
+                    Toast.makeText(context, "설정을 저장했습니다.", Toast.LENGTH_SHORT).show()
+                }.onFailure {
+                    Toast.makeText(context, "저장 실패: ${it.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+        val importLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.OpenDocument(),
+        ) { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            scope.launch {
+                runCatching {
+                    val raw = context.contentResolver.openInputStream(uri)
+                        ?.bufferedReader()
+                        ?.use { it.readText() }
+                        .orEmpty()
+                    store.importUserSettings(store.decodeUserSettings(raw))
+                }.onSuccess {
+                    Toast.makeText(context, "설정을 복원했습니다. 알림·즐겨찾기를 확인하세요.", Toast.LENGTH_LONG).show()
+                }.onFailure {
+                    Toast.makeText(context, "복원 실패: ${it.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+        SectionCard {
+            Column {
+                Text(
+                    "즐겨찾기·알림 종류·테마·위젯을 JSON으로 빼 두었다가, 앱을 다시 깔 때 가져옵니다.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = { exportLauncher.launch("sajik-settings.json") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                ) { Text("설정 내보내기", fontWeight = FontWeight.Bold) }
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                ) { Text("설정 가져오기", fontWeight = FontWeight.Bold) }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
         Text("위젯 / 배터리", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         SectionCard {
             Column {
+                val ignoring = remember {
+                    context.getSystemService(PowerManager::class.java)
+                        ?.isIgnoringBatteryOptimizations(context.packageName) == true
+                }
                 Text(
-                    "경기 중 빠른 갱신을 위해 배터리 최적화 예외가 필요합니다.",
+                    if (ignoring) {
+                        "배터리 최적화 예외는 켜져 있습니다. 삼성 잠자기 앱에 들어가면 알림이 또 끊깁니다."
+                    } else {
+                        "경기 중 빠른 갱신을 위해 배터리 최적화 예외가 필요합니다."
+                    },
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -505,7 +574,7 @@ fun SettingsScreen(
                 Button(
                     onClick = {
                         val pm = context.getSystemService(PowerManager::class.java)
-                        if (!pm.isIgnoringBatteryOptimizations(context.packageName)) {
+                        if (pm != null && !pm.isIgnoringBatteryOptimizations(context.packageName)) {
                             context.startActivity(
                                 Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                                     data = Uri.parse("package:${context.packageName}")
@@ -524,6 +593,15 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("배터리 최적화 예외 설정", fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = { openSamsungSleepSettings(context) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                ) {
+                    Text("삼성 잠자기 앱에서 빼기", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -637,6 +715,27 @@ fun SettingsScreen(
                 Text("잠시만요…", color = MaterialTheme.colorScheme.onSurfaceVariant)
             },
         )
+    }
+}
+
+private fun openSamsungSleepSettings(context: android.content.Context) {
+    val candidates = listOf(
+        Intent("com.samsung.android.sm.ACTION_SM_TIPS"),
+        Intent("com.samsung.android.sm.ACTION_BATTERY"),
+        Intent().setClassName(
+            "com.samsung.android.lool",
+            "com.samsung.android.sm.battery.ui.BatteryActivity",
+        ),
+        Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = Uri.parse("package:${context.packageName}")
+        },
+    )
+    for (intent in candidates) {
+        runCatching {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        }.onSuccess { return }
     }
 }
 

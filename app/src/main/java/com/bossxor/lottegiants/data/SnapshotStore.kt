@@ -375,6 +375,54 @@ class SnapshotStore(private val context: Context) {
         context.dataStore.edit { it[KEY_LAST_RACE] = value }
     }
 
+    suspend fun exportUserSettings(): UserSettingsBackup {
+        val notifs = NotificationType.entries.associate { it.name to isNotificationEnabled(it) }
+        return UserSettingsBackup(
+            favorites = favoritePlayers(),
+            notifications = notifs,
+            liveEnabled = isLiveScoreEnabled(),
+            liveMode = liveDisplayMode().name,
+            liveLeadMinutes = liveLeadMinutes(),
+            theme = themeModeFlow.first(),
+            widgetOpacity = widgetOpacity(),
+            widgetShowOppLogo = widgetShowOppLogo(),
+            alertsLiveOnly = alertsLiveOnly(),
+            quietEnabled = quietHoursEnabled(),
+            quietStartHour = quietStartHour(),
+            quietEndHour = quietEndHour(),
+        )
+    }
+
+    suspend fun importUserSettings(backup: UserSettingsBackup) {
+        context.dataStore.edit { prefs ->
+            val favs = backup.favorites.filter { it.code.isNotBlank() }
+            prefs[KEY_FAVORITE_PLAYERS] =
+                json.encodeToString(ListSerializer(FavoritePlayer.serializer()), favs)
+            prefs[KEY_FAVORITES] = favs.joinToString(",") { it.code }
+            backup.notifications.forEach { (name, on) ->
+                if (NotificationType.entries.any { it.name == name }) {
+                    prefs[booleanPreferencesKey("notif_$name")] = on
+                }
+            }
+            prefs[KEY_LIVE_ENABLED] = backup.liveEnabled
+            if (backup.liveMode.isNotBlank()) prefs[KEY_LIVE_MODE] = backup.liveMode
+            prefs[KEY_LIVE_LEAD_MINUTES] = clampLiveLeadMinutes(backup.liveLeadMinutes)
+            if (backup.theme.isNotBlank()) prefs[KEY_THEME] = backup.theme
+            prefs[KEY_WIDGET_OPACITY] = backup.widgetOpacity.coerceIn(20, 100)
+            prefs[KEY_WIDGET_OPP_LOGO] = backup.widgetShowOppLogo
+            prefs[KEY_ALERTS_LIVE_ONLY] = backup.alertsLiveOnly
+            prefs[KEY_QUIET_ENABLED] = backup.quietEnabled
+            prefs[KEY_QUIET_START] = backup.quietStartHour.coerceIn(0, 23)
+            prefs[KEY_QUIET_END] = backup.quietEndHour.coerceIn(0, 23)
+        }
+    }
+
+    fun encodeUserSettings(backup: UserSettingsBackup): String =
+        json.encodeToString(UserSettingsBackup.serializer(), backup)
+
+    fun decodeUserSettings(raw: String): UserSettingsBackup =
+        json.decodeFromString(UserSettingsBackup.serializer(), raw)
+
     companion object {
         private val KEY_SNAPSHOT = stringPreferencesKey("live_snapshot")
         private val KEY_THEME = stringPreferencesKey("theme_mode")

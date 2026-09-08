@@ -3,6 +3,8 @@ package com.bossxor.lottegiants
 import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
 import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.data.UpdateChecker
 import com.bossxor.lottegiants.domain.IMAGE_USER_AGENT
@@ -32,7 +34,7 @@ class GiantsApp : Application(), ImageLoaderFactory {
             runCatching {
                 val repo = GiantsRepository.get(this@GiantsApp)
                 repo.store.migrateToScorecardModeIfNeeded()
-                val snap = repo.refreshSnapshot(force = true)
+                val snap = repo.refreshSnapshot(force = false)
                 WidgetUpdater.updateAll(this@GiantsApp)
                 GameSchedulerWorker.enqueue(this@GiantsApp)
                 GameSchedulerWorker.scheduleKboDayRollover(this@GiantsApp)
@@ -73,6 +75,15 @@ class GiantsApp : Application(), ImageLoaderFactory {
             .build()
         return ImageLoader.Builder(this)
             .okHttpClient(client)
+            .memoryCache {
+                MemoryCache.Builder(this@GiantsApp).maxSizePercent(0.12).build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(cacheDir.resolve("image_cache"))
+                    .maxSizeBytes(40L * 1024 * 1024)
+                    .build()
+            }
             .crossfade(true)
             .build()
     }

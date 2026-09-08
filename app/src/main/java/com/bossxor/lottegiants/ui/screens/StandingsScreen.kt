@@ -16,9 +16,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -75,6 +80,9 @@ fun StandingsScreen(
     refreshing: Boolean = false,
     seasonGames: List<MiniGame> = emptyList(),
     onAppear: () -> Unit = {},
+    favoriteCodes: Set<String> = emptySet(),
+    onToggleFavorite: (LeaderPlayer) -> Unit = {},
+    onLeaderClick: (LeaderPlayer) -> Unit = {},
 ) {
     var baseTeamId by remember(standings) {
         mutableStateOf(
@@ -110,6 +118,57 @@ fun StandingsScreen(
             item {
                 Spacer(Modifier.height(8.dp))
                 ScreenTitle("순위")
+            }
+            item {
+                var query by remember { mutableStateOf("") }
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text("선수 이름 검색 · ☆ 즐겨찾기") },
+                )
+                val q = query.trim()
+                if (q.isNotBlank()) {
+                    val hits = remember(q, batterLeaders, pitcherLeaders) {
+                        (batterLeaders + pitcherLeaders)
+                            .filter { it.name.contains(q, ignoreCase = true) }
+                            .distinctBy { it.playerCode.ifBlank { it.name } }
+                            .take(12)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    if (hits.isEmpty()) {
+                        Text("검색 결과가 없습니다.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        hits.forEach { p ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onLeaderClick(p) }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    p.name,
+                                    modifier = Modifier.weight(1f),
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    p.team.ifBlank { "—" },
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Icon(
+                                    imageVector = if (p.playerCode in favoriteCodes) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                                    contentDescription = "즐겨찾기",
+                                    tint = if (p.playerCode in favoriteCodes) LotteGold else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.clickable { onToggleFavorite(p) },
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             race?.let { summary ->

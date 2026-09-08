@@ -158,24 +158,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _snapshot.value = repo.store.loadSnapshot()
             refreshWeatherFromSnapshot(_snapshot.value)
         }
-        viewModelScope.launch {
-            runCatching { repo.fetchStandings() }.onSuccess { _standings.value = it }
-        }
-        viewModelScope.launch {
-            runCatching { repo.fetchLotteTeamCard() }.onSuccess { _teamCard.value = it }
-        }
-        viewModelScope.launch {
-            runCatching { repo.fetchLeaders(false) }
-                .onSuccess { _batterLeaders.value = it }
-            runCatching { repo.fetchLeaders(true) }
-                .onSuccess { _pitcherLeaders.value = it }
-        }
-        viewModelScope.launch {
-            runCatching { repo.fetchRecentRosterMoves(7) }.onSuccess { _recentMoves.value = it }
-        }
-        loadGamesForDate(kboToday())
-        loadMonthGames(YearMonth.from(kboToday()))
-        openEntrySmart()
     }
 
     fun startPolling() {
@@ -183,13 +165,41 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         pollJob = viewModelScope.launch {
             while (isActive) {
                 refreshOnce()
-                for (left in POLL_LIVE_SEC downTo 1) {
+                val wait = pollIntervalSec()
+                for (left in wait downTo 1) {
                     _secondsUntilRefresh.value = left
                     delay(1_000L)
                     if (!isActive) return@launch
                 }
                 _secondsUntilRefresh.value = 0
             }
+        }
+    }
+
+    private fun pollIntervalSec(): Int {
+        val live = _snapshot.value?.lotteGame?.status == GameStatus.LIVE
+        return if (live) POLL_LIVE_SEC else POLL_IDLE_SEC
+    }
+
+    fun ensureStandingsTab() {
+        if (_standings.value.isEmpty()) {
+            refreshStandings()
+        } else {
+            ensureSeasonGames()
+            ensureLeaders()
+        }
+    }
+
+    fun ensureResultsTab() {
+        if (_dayGames.value.isEmpty()) loadGamesForDate(_selectedDate.value)
+        if (_monthGames.value.isEmpty()) loadMonthGames(_calendarMonth.value)
+    }
+
+    fun ensureLeaders() {
+        if (_batterLeaders.value.isNotEmpty() && _pitcherLeaders.value.isNotEmpty()) return
+        viewModelScope.launch {
+            runCatching { repo.fetchLeaders(false) }.onSuccess { _batterLeaders.value = it }
+            runCatching { repo.fetchLeaders(true) }.onSuccess { _pitcherLeaders.value = it }
         }
     }
 
@@ -557,6 +567,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openLeadersForTeam(code: String) {
         _overlayTeamCode.value = code.ifBlank { LOTTE_TEAM_CODE }
+        ensureLeaders()
     }
 
     fun openEntrySmart() = openEntryForTeam(LOTTE_TEAM_CODE)
@@ -715,6 +726,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         const val POLL_LIVE_SEC = 10
+        const val POLL_IDLE_SEC = 45
 
         fun sortLotteFirst(games: List<MiniGame>): List<MiniGame> =
             games.sortedByDescending {

@@ -30,11 +30,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.bossxor.lottegiants.domain.playerPhotoCandidates
 import com.bossxor.lottegiants.domain.teamLogoCandidates
 import com.bossxor.lottegiants.ui.BaseOccupied
@@ -48,8 +51,10 @@ fun TeamLogo(url: String, size: Int = 40, modifier: Modifier = Modifier) {
     val urls = remember(url) { teamLogoCandidates(kboUrl = url) }
     var idx by remember(url) { mutableIntStateOf(0) }
     val model = urls.getOrNull(idx) ?: return
+    val context = LocalContext.current
+    val px = with(LocalDensity.current) { size.dp.roundToPx() }
     AsyncImage(
-        model = model,
+        model = ImageRequest.Builder(context).data(model).size(px).build(),
         contentDescription = null,
         contentScale = ContentScale.Fit,
         modifier = modifier.size(size.dp),
@@ -79,8 +84,10 @@ fun PlayerAvatar(
     ) {
         val url = urls.getOrNull(idx)
         if (url != null) {
+            val context = LocalContext.current
+            val px = with(LocalDensity.current) { size.roundToPx() }
             AsyncImage(
-                model = url,
+                model = ImageRequest.Builder(context).data(url).size(px).build(),
                 contentDescription = name,
                 modifier = Modifier.size(size),
                 contentScale = ContentScale.Crop,

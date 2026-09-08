@@ -20,9 +20,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.time.ZonedDateTime
 import com.bossxor.lottegiants.domain.KBO_ZONE
+import com.bossxor.lottegiants.domain.parseKboStartMillis
 
 /**
- * 삼성 등 배터리 최적화에서 AlarmManager가 끊겨도 엔트리·라인업을 본다.
+ * 등말소(08–23시) 또는 라인업 창(경기 6시간 전~시작 후 30분)에만 켠다.
  * 라인업 15초 · 등말소 25초. 알람과 겹치면 [AlertPollGate]가 건너뛴다.
  */
 class AlertWatchService : Service() {
@@ -48,7 +49,7 @@ class AlertWatchService : Service() {
         pollJob = scope.launch {
             var failStreak = 0
             while (isActive) {
-                if (!inWatchHours() || !runBlocking { shouldRun() }) {
+                if (!runBlocking { shouldRun() }) {
                     stopSelf()
                     break
                 }
@@ -79,23 +80,31 @@ class AlertWatchService : Service() {
     companion object {
         private const val NOTIFICATION_ID = 9001
         private const val POLL_INTERVAL_MS = 15_000L
-        private const val WATCH_START_HOUR = 7
-        private const val WATCH_END_HOUR = 24
 
         @Volatile
         private var running = false
 
         fun inWatchHours(): Boolean {
             val hour = ZonedDateTime.now(KBO_ZONE).hour
-            return hour in WATCH_START_HOUR until WATCH_END_HOUR
+            return hour in AlertWatchGate.ROSTER_START_HOUR until AlertWatchGate.ROSTER_END_HOUR
         }
 
         suspend fun shouldRun(context: Context): Boolean {
-            if (!inWatchHours()) return false
             val store = GiantsRepository.get(context).store
-            return store.isNotificationEnabled(NotificationType.LINEUP) ||
-                store.isNotificationEnabled(NotificationType.ROSTER) ||
+            val lineupOn = store.isNotificationEnabled(NotificationType.LINEUP)
+            val rosterOn = store.isNotificationEnabled(NotificationType.ROSTER) ||
                 store.isNotificationEnabled(NotificationType.FAVORITE_ROSTER)
+            if (!lineupOn && !rosterOn) return false
+            val snap = store.loadSnapshot()
+            val game = snap?.lotteGame ?: snap?.nextLotteGame
+            val start = game?.let { parseKboStartMillis(it.gameDate, it.startTime) }
+            return AlertWatchGate.shouldWatch(
+                nowHour = ZonedDateTime.now(KBO_ZONE).hour,
+                nowMillis = System.currentTimeMillis(),
+                lineupEnabled = lineupOn,
+                rosterEnabled = rosterOn,
+                gameStartMillis = start,
+            )
         }
 
         fun startIfNeeded(context: Context) {
