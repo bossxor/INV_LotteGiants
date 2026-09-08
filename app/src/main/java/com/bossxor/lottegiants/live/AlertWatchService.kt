@@ -22,8 +22,8 @@ import java.time.ZonedDateTime
 import com.bossxor.lottegiants.domain.KBO_ZONE
 
 /**
- * 삼성 등 배터리 최적화에서 AlarmManager가 끊겨도 엔트리·라인업을 20초마다 본다.
- * WorkManager(최소 15분)만으로는 루타 대비 30분 늦어질 수 있어 포그라운드 감시를 둔다.
+ * 삼성 등 배터리 최적화에서 AlarmManager가 끊겨도 엔트리·라인업을 본다.
+ * 라인업 15초 · 등말소 25초. 알람과 겹치면 [AlertPollGate]가 건너뛴다.
  */
 class AlertWatchService : Service() {
 
@@ -46,6 +46,7 @@ class AlertWatchService : Service() {
         )
         if (pollJob?.isActive == true) return START_STICKY
         pollJob = scope.launch {
+            var failStreak = 0
             while (isActive) {
                 if (!inWatchHours() || !runBlocking { shouldRun() }) {
                     stopSelf()
@@ -53,9 +54,12 @@ class AlertWatchService : Service() {
                 }
                 val repo = GiantsRepository.get(this@AlertWatchService)
                 val detector = EventDetector(repo.store)
-                GameSchedulerWorker.pollRosterAlerts(this@AlertWatchService, detector, repo)
-                GameSchedulerWorker.pollLineupAlert(this@AlertWatchService, detector, repo)
-                delay(POLL_INTERVAL_MS)
+                val ok = runCatching {
+                    GameSchedulerWorker.pollRosterAlerts(this@AlertWatchService, detector, repo)
+                    GameSchedulerWorker.pollLineupAlert(this@AlertWatchService, detector, repo)
+                }.isSuccess
+                failStreak = if (ok) 0 else (failStreak + 1).coerceAtMost(4)
+                delay(POLL_INTERVAL_MS + failStreak * 10_000L)
             }
         }
         return START_STICKY
@@ -74,7 +78,7 @@ class AlertWatchService : Service() {
 
     companion object {
         private const val NOTIFICATION_ID = 9001
-        private const val POLL_INTERVAL_MS = 20_000L
+        private const val POLL_INTERVAL_MS = 15_000L
         private const val WATCH_START_HOUR = 7
         private const val WATCH_END_HOUR = 24
 

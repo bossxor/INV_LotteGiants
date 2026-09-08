@@ -66,7 +66,6 @@ import com.bossxor.lottegiants.domain.teamNameToCode
 import com.bossxor.lottegiants.domain.parseKboStartMillis
 import com.bossxor.lottegiants.domain.belongsToKboToday
 import com.bossxor.lottegiants.domain.gameCountdownLabel
-import com.bossxor.lottegiants.domain.snapshotStaleForKboDay
 import com.bossxor.lottegiants.domain.widgetFooterLine
 import com.bossxor.lottegiants.live.GameSchedulerWorker
 
@@ -95,14 +94,7 @@ class LotteWidget : GlanceAppWidget() {
             getAppWidgetState(context, PreferencesGlanceStateDefinition, id)[widgetRefreshingKey] == true
         }.getOrDefault(false)
         val current = repo.store.loadSnapshot()
-        val stale = current == null ||
-            snapshotStaleForKboDay(current.updatedAtMillis) ||
-            (current.lotteGame != null && !current.lotteGame.belongsToKboToday())
-        val snap = if (stale && !refreshingNow) {
-            runCatching { repo.refreshSnapshot(force = true) }.getOrNull() ?: current
-        } else {
-            current
-        }
+        val snap = current
         val opacityPct = repo.store.widgetOpacity()
         val showOppLogo = repo.store.widgetShowOppLogo()
         val game = snap?.lotteGame?.takeIf { it.belongsToKboToday() } ?: snap?.nextLotteGame
@@ -775,9 +767,9 @@ class LotteWidgetReceiver : GlanceAppWidgetReceiver() {
         Thread {
             kotlinx.coroutines.runBlocking {
                 setWidgetRefreshing(context, true)
-                val snap = runCatching {
-                    GiantsRepository.get(context).refreshSnapshot(force = true)
-                }.getOrNull()
+                val repo = GiantsRepository.get(context)
+                val snap = runCatching { repo.refreshSnapshot(force = true) }.getOrNull()
+                    ?: repo.store.loadSnapshot()
                 GameSchedulerWorker.scheduleKboDayRollover(context)
                 if (snap?.lotteGame?.status == GameStatus.LIVE) {
                     com.bossxor.lottegiants.live.LiveScoreService.start(context)

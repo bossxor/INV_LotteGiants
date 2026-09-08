@@ -43,8 +43,6 @@ class GiantsApp : Application(), ImageLoaderFactory {
                     val kboMoves = repo.pollRosterMovesForAlert()
                     if (kboMoves.isNotEmpty()) {
                         detector.processRosterMoves(this@GiantsApp, kboMoves)
-                    } else {
-                        detector.processRosterMoves(this@GiantsApp, repo.fetchRecentRosterMoves(3))
                     }
                 }
                 if (repo.store.isLiveScoreEnabled()) {

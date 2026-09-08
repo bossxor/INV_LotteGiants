@@ -105,6 +105,11 @@ class LiveScoreService : Service() {
                 val mode = repo.store.liveDisplayMode()
                 val lead = repo.store.liveLeadMinutes()
                 val snap = runCatching { repo.refreshSnapshot(force = false) }.getOrNull()
+                    ?: repo.store.loadSnapshot()
+                if (snap == null) {
+                    delay(8_000L)
+                    continue
+                }
                 val game = liveGame(snap, lead)
                 val live = NotificationHelper.buildLiveNotification(
                     this@LiveScoreService,
@@ -140,11 +145,6 @@ class LiveScoreService : Service() {
                         com.bossxor.lottegiants.domain.raceRelevantGames(snap),
                     )
                 }
-                val moves = runCatching { repo.pollRosterMovesForAlert() }.getOrDefault(emptyList())
-                    .ifEmpty {
-                        runCatching { repo.fetchRecentRosterMoves(2) }.getOrDefault(emptyList())
-                    }
-                detector.processRosterMoves(this@LiveScoreService, moves)
 
                 when (game.status) {
                     GameStatus.LIVE -> delay(5_000L)

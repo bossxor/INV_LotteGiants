@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `1.3.84` (`versionCode` **1092**) |
+| **버전** | `1.3.85` (`versionCode` **1093**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 
@@ -112,8 +112,8 @@
 
 | 계층 | 역할 | 주기 |
 |------|------|------|
-| **AlertWatchService** | 포그라운드 감시 (삼성 배터리 최적화 대비) | **20초** (07~24시) |
-| **AlarmManager** | fast poll(라인업) + roster poll(엔트리) | 20~30초 |
+| **AlertWatchService** | 포그라운드 감시 (삼성 배터리 최적화 대비) | 라인업 **15초** · 등말소 **25초** (07~24시) |
+| **AlarmManager** | 라인업·등말소 백업. 감시와 겹치면 건너뜀 | 25~35초 |
 | **WorkManager** | 전체 스냅샷·알람 재등록 | 15분 (보조) |
 
 ### 실시간 스코어 알림 (1.3.64~)
@@ -212,8 +212,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `1.3.84` |
-| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1092` |
+| `versionName` | 사용자에게 보이는 버전 | `1.3.85` |
+| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1093` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -241,8 +241,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 ```json
 {
-  "versionCode": 1092,
-  "versionName": "1.3.84",
+  "versionCode": 1093,
+  "versionName": "1.3.85",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }
@@ -254,6 +254,7 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 버전 | 내용 |
 |------|------|
+| **1.3.85** | 실시간 조회 과다 호출을 줄여 오류·폰 차단을 완화. 라인업 15초·등말소 25초 |
 | **1.3.84** | 런처 SAJIK 배지 여백 (전경 16% inset) |
 | **1.3.83** | 종료·취소 알림을 지우면 같은 경기를 다시 올리지 않음 |
 | **1.3.82** | 순위 상단을 레이스 요약 · 잔여 상대 · 다음 5경기로 분리 |
