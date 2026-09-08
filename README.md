@@ -130,7 +130,7 @@
 - 각 팀 로고 **위에 순위**, 선발은 `로드리게스 vs 보스` 한 줄
 - 하단은 `잔여 n`만 (텍스트 잘림 방지)
 - 경기 전 카운트다운
-- 새로고침은 오른쪽 위 오버레이 버튼. 누르면 금색으로 바뀌고 강제 fetch (1.3.77). 컴팩트 위젯은 순위·로고를 가운데 크게.
+- 새로고침은 오른쪽 위 오버레이 버튼. 누르면 금색으로 바뀌고 강제 fetch (1.3.77). 실패해도 마지막 스코어를 다시 그린다 (1.3.85). 컴팩트 위젯은 순위·로고를 가운데 크게.
 - **경기일 경계는 서울 오전 5시**. 그 시각이 지나면 어제 종료 결과를 버리고 오늘·다음 경기를 보여 준다 (1.3.74). 앱 내부 업데이트 뒤에도 위젯을 다시 그린다.
 
 ---
@@ -148,7 +148,8 @@
 | 보완 | `ruta.co.kr` | 승률 곡선, 하이라이트 문구·링크 |
 | 보완 | Open-Meteo | 구장 날씨 |
 
-점수는 앱 · 백그라운드 서비스 · 위젯이 **8초 이내 스냅샷을 재사용**한다. 당겨서 새로고침만 강제 fetch.
+점수는 앱 · 백그라운드 서비스 · 위젯이 **8초 이내 스냅샷을 재사용**한다. 당겨서 새로고침만 강제 fetch.  
+시즌 일정(최근 21일·향후 14일)은 **10분**마다 받고, 연속 실패 시 15초~2분 쉬면서 **마지막 성공 스냅샷**을 유지한다 (1.3.85).
 
 ### KBO 공식 API (주요)
 
@@ -185,11 +186,13 @@
 Set-Location L:\
 .\gradlew.bat :app:assembleDebug
 .\gradlew.bat :app:testDebugUnitTest
-Copy-Item L:\app\build\outputs\apk\debug\app-debug.apk $env:TEMP\sajik.apk
-adb -s R5KL10FHTTN install -r $env:TEMP\sajik.apk
+# 회사 PC 키와 폰(CI latest) 서명이 다를 수 있다. 덮어쓰기가 거절되면 latest를 받는다.
+gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.apk --dir $env:TEMP --clobber
+adb -s R5KL10FHTTN install -r $env:TEMP\LotteGiants.apk
 ```
 
-NAS 경로에서 `adb install`이 자주 걸리므로 APK는 `%TEMP%`로 복사한 뒤 넣는다.
+NAS 경로에서 `adb install`이 자주 걸리므로 APK는 `%TEMP%`로 복사한 뒤 넣는다.  
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE`이면 한 번 지운 뒤 같은 APK로 다시 설치한다 (`adb uninstall com.bossxor.lottegiants`).
 
 | 산출물 | 경로 |
 |--------|------|
@@ -270,9 +273,9 @@ app/src/main/java/com/bossxor/lottegiants/
   data/          KboOfficialApi, GiantsRepository, SnapshotStore, UpdateChecker …
   domain/        Models, MagicNumber, WinProb, 중계 그룹핑, 득점·역전 알림 문구
   ui/screens/    라이브, 결과, 순위, 엔트리, 설정 …
-  live/          LiveScoreService, AlertWatchService, NotificationHelper, EventDetector …
+  live/          LiveScoreService, AlertWatchService, AlertPollGate, NotificationHelper …
   widget/        LotteWidget, WidgetAssets
-app/src/test/    중계 분류, 역전/득점, 매직 사유, 승률 파싱 단위 테스트
+app/src/test/    중계 분류, 역전/득점, 매직 사유, 승률 파싱, 알림 폴링 간격 단위 테스트
 wear/            Wear OS 모듈 (폰 APK에는 넣지 않음. 갤럭시 웨어러블 자동설치가 안 됨)
 scripts/         env.ps1, build.ps1, publish-latest, CI 서명 설정
 .github/workflows/publish-latest.yml
