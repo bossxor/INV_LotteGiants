@@ -27,9 +27,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BrightnessAuto
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -122,7 +122,7 @@ fun SettingsScreen(
                 ) {
                     ThemeOption(
                         selected = pickedTheme == ThemeMode.LIGHT,
-                        icon = Icons.Default.LightMode,
+                        icon = Icons.Default.Star,
                         label = "라이트",
                         modifier = Modifier.weight(1f),
                         onClick = {
@@ -132,7 +132,7 @@ fun SettingsScreen(
                     )
                     ThemeOption(
                         selected = pickedTheme == ThemeMode.DARK,
-                        icon = Icons.Default.DarkMode,
+                        icon = Icons.Default.Check,
                         label = "다크",
                         modifier = Modifier.weight(1f),
                         onClick = {
@@ -142,7 +142,7 @@ fun SettingsScreen(
                     )
                     ThemeOption(
                         selected = pickedTheme == ThemeMode.SYSTEM,
-                        icon = Icons.Default.BrightnessAuto,
+                        icon = Icons.Default.Settings,
                         label = "시스템",
                         modifier = Modifier.weight(1f),
                         onClick = {
@@ -252,6 +252,22 @@ fun SettingsScreen(
                     Switch(
                         checked = liveOnly,
                         onCheckedChange = { on -> scope.launch { store.setAlertsLiveOnly(on) } },
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                val vibrateOn by store.alertVibrateFlow.collectAsState(initial = true)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("득점·역전 진동", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "꺼도 소리는 나고, 진동만 끕니다",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = vibrateOn,
+                        onCheckedChange = { on -> scope.launch { store.setAlertVibrate(on) } },
                     )
                 }
             }

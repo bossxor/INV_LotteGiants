@@ -18,7 +18,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -160,7 +160,7 @@ fun StandingsScreen(
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Icon(
-                                    imageVector = if (p.playerCode in favoriteCodes) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                                    imageVector = if (p.playerCode in favoriteCodes) Icons.Filled.Star else Icons.Outlined.Star,
                                     contentDescription = "즐겨찾기",
                                     tint = if (p.playerCode in favoriteCodes) LotteGold else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.clickable { onToggleFavorite(p) },

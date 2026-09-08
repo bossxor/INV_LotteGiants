@@ -15,6 +15,7 @@ data class UserSettingsBackup(
     val widgetOpacity: Int = 100,
     val widgetShowOppLogo: Boolean = true,
     val alertsLiveOnly: Boolean = false,
+    val alertVibrate: Boolean = true,
     val quietEnabled: Boolean = false,
     val quietStartHour: Int = 23,
     val quietEndHour: Int = 8,

@@ -327,6 +327,7 @@ class MainActivity : ComponentActivity() {
                     viewingLoading = viewingLoading,
                     onOpenGame = vm::openGame,
                     onBackToLotte = vm::backToLotte,
+                    onNeedFullRelay = vm::ensureFullRelay,
                     resultsTeamCode = resultsTeamCode,
                     onSelectResultsTeam = vm::setResultsTeam,
                     seasonGames = seasonGames,
@@ -469,6 +470,7 @@ private fun AppScaffold(
     viewingLoading: Boolean,
     onOpenGame: (String) -> Unit,
     onBackToLotte: () -> Unit,
+    onNeedFullRelay: (String) -> Unit,
     resultsTeamCode: String,
     onSelectResultsTeam: (String) -> Unit,
     seasonGames: List<com.bossxor.lottegiants.domain.MiniGame>,
@@ -686,6 +688,7 @@ private fun AppScaffold(
                         viewingLoading = viewingLoading,
                         onOpenGame = onOpenGame,
                         onBackToLotte = onBackToLotte,
+                        onNeedFullRelay = onNeedFullRelay,
                         initialDetailTab = openDetailTab,
                         focusNonce = openEntryNonce,
                     )

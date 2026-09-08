@@ -27,10 +27,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -129,6 +129,7 @@ fun LiveScreen(
     viewingLoading: Boolean = false,
     onOpenGame: (String) -> Unit = {},
     onBackToLotte: () -> Unit = {},
+    onNeedFullRelay: (String) -> Unit = {},
     initialDetailTab: String? = null,
     focusNonce: Int = 0,
 ) {
@@ -159,9 +160,19 @@ fun LiveScreen(
     val viewingOther = viewingGame != null
     val viewingOtherTeam = viewingOther && game?.isFocusLotte() == false
     val focusTeam = game?.focusTeamCode?.ifBlank { LOTTE_TEAM_CODE } ?: LOTTE_TEAM_CODE
-    val showHero = viewingOther || lotteNow != null || snapshot?.nextLotteGame != null
+    val offDay = viewingGame == null && lotteNow == null
+    val showOffDayHero = offDay &&
+        (snapshot?.lastLotteGame != null || snapshot?.nextLotteGame != null)
+    val showHero = viewingOther || lotteNow != null
     val showSpinner = (loading && snapshot == null && viewingGame == null) ||
         (viewingLoading && viewingGame == null)
+
+    LaunchedEffect(selectedTab, game?.gameId) {
+        if (selectedTab == 3) {
+            val id = game?.gameId.orEmpty()
+            if (id.isNotBlank()) onNeedFullRelay(id)
+        }
+    }
 
     LaunchedEffect(snapshot?.lotteGame?.gameId, snapshot?.lotteGame?.gameDate, snapshot?.lotteGame?.status) {
         val stale = snapshot?.lotteGame?.takeUnless { it.belongsToKboToday() }
@@ -194,7 +205,18 @@ fun LiveScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 16.dp),
                 ) {
-                    if (showHero) {
+                    if (showOffDayHero) {
+                        item(key = "hero") {
+                            OffDayHero(
+                                last = snapshot?.lastLotteGame,
+                                next = snapshot?.nextLotteGame,
+                                secondsUntilRefresh = secondsUntilRefresh,
+                                isRefreshing = isRefreshing,
+                                onRefresh = onRefresh,
+                                onOpenGame = onOpenGame,
+                            )
+                        }
+                    } else if (showHero) {
                         item(key = "hero") {
                             HeroCard(
                                 g = game,
@@ -364,6 +386,16 @@ fun LiveScreen(
             }
             else -> {
                 Column(Modifier.fillMaxSize()) {
+                    if (showOffDayHero) {
+                        OffDayHero(
+                            last = snapshot?.lastLotteGame,
+                            next = snapshot?.nextLotteGame,
+                            secondsUntilRefresh = secondsUntilRefresh,
+                            isRefreshing = isRefreshing,
+                            onRefresh = onRefresh,
+                            onOpenGame = onOpenGame,
+                        )
+                    } else {
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -377,6 +409,7 @@ fun LiveScreen(
                         )
                         Spacer(Modifier.weight(1f))
                         CompactRefresh(secondsUntilRefresh, isRefreshing, onRefresh)
+                    }
                     }
                     Column(
                         Modifier
@@ -608,7 +641,7 @@ private fun QuickLinks(onHistory: () -> Unit, onEntry: () -> Unit, onLeaders: ()
     ) {
         QuickLinkCard(
             modifier = Modifier.weight(1f),
-            icon = Icons.Filled.History,
+            icon = Icons.Filled.DateRange,
             label = "히스토리",
             caption = "팀 연혁",
             accent = LotteGold,
@@ -616,7 +649,7 @@ private fun QuickLinks(onHistory: () -> Unit, onEntry: () -> Unit, onLeaders: ()
         )
         QuickLinkCard(
             modifier = Modifier.weight(1f),
-            icon = Icons.Filled.SwapHoriz,
+            icon = Icons.Filled.Person,
             label = "엔트리",
             caption = "등말소",
             accent = WinGreen,
@@ -624,7 +657,7 @@ private fun QuickLinks(onHistory: () -> Unit, onEntry: () -> Unit, onLeaders: ()
         )
         QuickLinkCard(
             modifier = Modifier.weight(1f),
-            icon = Icons.Filled.EmojiEvents,
+            icon = Icons.Filled.Star,
             label = "타이틀",
             caption = "순위표",
             accent = LotteRed,
@@ -2090,6 +2123,104 @@ private fun InningPill(text: String, live: Boolean, onHero: Color) {
         fontWeight = FontWeight.Bold,
         fontSize = 13.sp,
     )
+}
+
+@Composable
+private fun OffDayHero(
+    last: LotteGameInfo?,
+    next: LotteGameInfo?,
+    secondsUntilRefresh: Int,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    onOpenGame: (String) -> Unit,
+) {
+    val dark = isAppDark()
+    val onHero = heroOnColor()
+    val muted = onHero.copy(alpha = if (dark) 0.45f else 0.42f)
+    val soft = onHero.copy(alpha = if (dark) 0.7f else 0.62f)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(
+                heroGradient(),
+                if (dark) {
+                    RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
+                } else {
+                    RoundedCornerShape(0.dp)
+                },
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "SAJIK",
+                color = muted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 2.sp,
+            )
+            Spacer(Modifier.weight(1f))
+            CompactRefresh(secondsUntilRefresh, isRefreshing, onRefresh, onDark = dark)
+        }
+        last?.let { g ->
+            Spacer(Modifier.height(12.dp))
+            val (wl, wlColor) = when {
+                g.lotteScore > g.opponentScore -> "승" to WinGreen
+                g.lotteScore < g.opponentScore -> "패" to LoseRed
+                else -> "무" to LotteGold
+            }
+            val yesterday = remember { com.bossxor.lottegiants.domain.kboToday().minusDays(1).toString() }
+            val lastLabel = if (g.gameDate.take(10) == yesterday) "어제" else "최근"
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = g.gameId.isNotBlank()) { onOpenGame(g.gameId) },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(lastLabel, color = muted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp))
+                TeamLogo(g.opponentLogoUrl, size = 28)
+                Spacer(Modifier.width(8.dp))
+                Text(g.opponentName, color = onHero, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "${g.lotteScore}:${g.opponentScore}",
+                    color = onHero,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 20.sp,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(wl, color = wlColor, fontWeight = FontWeight.Black, fontSize = 14.sp)
+            }
+        }
+        next?.let { g ->
+            Spacer(Modifier.height(10.dp))
+            val countdown = remember(g.gameDate, g.startTime) {
+                com.bossxor.lottegiants.domain.gameCountdownLabel(g.gameDate, g.startTime)
+            }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = g.gameId.isNotBlank()) { onOpenGame(g.gameId) },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("다음", color = muted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp))
+                TeamLogo(g.opponentLogoUrl, size = 28)
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("vs ${g.opponentName}", color = onHero, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text(
+                        listOf(
+                            g.startTime,
+                            if (g.isHome) "홈" else g.stadium.ifBlank { "원정" },
+                            countdown,
+                        ).filter { it.isNotBlank() }.joinToString(" · "),
+                        color = soft,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

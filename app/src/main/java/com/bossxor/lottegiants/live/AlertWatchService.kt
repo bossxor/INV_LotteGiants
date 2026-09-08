@@ -23,8 +23,8 @@ import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.parseKboStartMillis
 
 /**
- * 등말소(08–23시) 또는 라인업 창(경기 6시간 전~시작 후 30분)에만 켠다.
- * 라인업 15초 · 등말소 25초. 알람과 겹치면 [AlertPollGate]가 건너뛴다.
+ * 등말소(14–23시) 또는 라인업 창(경기 6시간 전~시작 후 30분)에만 켠다.
+ * 라인업 창 15초 · 그 외 45초. 알람과 겹치면 [AlertPollGate]가 건너뛴다.
  */
 class AlertWatchService : Service() {
 
@@ -60,7 +60,10 @@ class AlertWatchService : Service() {
                     GameSchedulerWorker.pollLineupAlert(this@AlertWatchService, detector, repo)
                 }.isSuccess
                 failStreak = if (ok) 0 else (failStreak + 1).coerceAtMost(4)
-                delay(POLL_INTERVAL_MS + failStreak * 10_000L)
+                val snap = runCatching { repo.store.loadSnapshot() }.getOrNull()
+                val game = snap?.lotteGame ?: snap?.nextLotteGame
+                val start = game?.let { parseKboStartMillis(it.gameDate, it.startTime) }
+                delay(AlertWatchGate.pollIntervalMs(System.currentTimeMillis(), start) + failStreak * 10_000L)
             }
         }
         return START_STICKY
@@ -79,7 +82,6 @@ class AlertWatchService : Service() {
 
     companion object {
         private const val NOTIFICATION_ID = 9001
-        private const val POLL_INTERVAL_MS = 15_000L
 
         @Volatile
         private var running = false

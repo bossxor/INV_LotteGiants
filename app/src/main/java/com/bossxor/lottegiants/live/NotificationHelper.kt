@@ -44,11 +44,13 @@ object NotificationHelper {
      */
     const val CHANNEL_LIVE_CARD = "live_score_card_v4"
     const val CHANNEL_SCORE = "event_score"
+    const val CHANNEL_SCORE_QUIET = "event_score_quiet"
     const val CHANNEL_CONCEDE = "event_concede"
     const val CHANNEL_PITCHER = "event_pitcher"
     const val CHANNEL_HOMERUN = "event_homerun"
     const val CHANNEL_CHANCE = "event_chance"
     const val CHANNEL_LEAD = "event_lead"
+    const val CHANNEL_LEAD_QUIET = "event_lead_quiet"
     const val CHANNEL_INNING = "event_inning"
     const val CHANNEL_EIGHTH = "event_eighth"
     const val CHANNEL_EXTRA = "event_extra"
@@ -124,11 +126,23 @@ object NotificationHelper {
         runCatching { nm.deleteNotificationChannel("live_score_card_v2") }
         runCatching { nm.deleteNotificationChannel("live_score_card_v3") }
         ch(CHANNEL_SCORE, "득점", NotificationManager.IMPORTANCE_HIGH)
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_SCORE_QUIET, "득점 (진동 없음)", NotificationManager.IMPORTANCE_HIGH).also {
+                it.enableVibration(false)
+                it.vibrationPattern = longArrayOf(0)
+            },
+        )
         ch(CHANNEL_CONCEDE, "실점", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_PITCHER, "투수 교체")
         ch(CHANNEL_HOMERUN, "홈런", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_CHANCE, "득점권 찬스", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_LEAD, "역전/동점", NotificationManager.IMPORTANCE_HIGH)
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_LEAD_QUIET, "역전/동점 (진동 없음)", NotificationManager.IMPORTANCE_HIGH).also {
+                it.enableVibration(false)
+                it.vibrationPattern = longArrayOf(0)
+            },
+        )
         ch(CHANNEL_INNING, "이닝 교대")
         ch(CHANNEL_EIGHTH, "8회말", NotificationManager.IMPORTANCE_HIGH)
         ch(CHANNEL_EXTRA, "연장", NotificationManager.IMPORTANCE_HIGH)
@@ -678,13 +692,20 @@ object NotificationHelper {
         gameId: String = "",
         detailTab: String? = null,
     ) {
+        val vibrateScoreLead = if (type == NotificationType.SCORE || type == NotificationType.LEAD_CHANGE) {
+            kotlinx.coroutines.runBlocking {
+                com.bossxor.lottegiants.data.GiantsRepository.get(context.applicationContext).store.alertVibrate()
+            }
+        } else {
+            true
+        }
         val channel = when (type) {
-            NotificationType.SCORE -> CHANNEL_SCORE
+            NotificationType.SCORE -> if (vibrateScoreLead) CHANNEL_SCORE else CHANNEL_SCORE_QUIET
             NotificationType.CONCEDING -> CHANNEL_CONCEDE
             NotificationType.PITCHER_CHANGE -> CHANNEL_PITCHER
             NotificationType.HOMERUN -> CHANNEL_HOMERUN
             NotificationType.SCORING_CHANCE -> CHANNEL_CHANCE
-            NotificationType.LEAD_CHANGE -> CHANNEL_LEAD
+            NotificationType.LEAD_CHANGE -> if (vibrateScoreLead) CHANNEL_LEAD else CHANNEL_LEAD_QUIET
             NotificationType.INNING_CHANGE -> CHANNEL_INNING
             NotificationType.EIGHTH_INNING -> CHANNEL_EIGHTH
             NotificationType.EXTRA_INNINGS -> CHANNEL_EXTRA

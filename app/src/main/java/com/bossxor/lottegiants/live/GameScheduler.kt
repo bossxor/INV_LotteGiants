@@ -113,10 +113,10 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         const val WORK_NAME = "giants_scheduler"
         /** 라인업 백업 알람. 감시는 15초, 여기서는 겹치면 건너뛴다. */
         private const val FAST_POLL_INTERVAL_MS = 25_000L
-        /** 등말소 백업 알람 (08:00~23:00). 감시는 25초. */
+        /** 등말소 백업 알람 (14:00~23:00). 감시는 25초. */
         private const val ROSTER_POLL_INTERVAL_MS = 35_000L
         private const val LINEUP_POLL_WINDOW_MS = 6 * 60 * 60_000L
-        private const val ROSTER_POLL_START_HOUR = 8
+        private const val ROSTER_POLL_START_HOUR = 14
         private const val ROSTER_POLL_END_HOUR = 23
 
         fun enqueue(context: Context) {
@@ -192,7 +192,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             setAlarmSafe(am, nextAt, pi)
         }
 
-        /** 08:00~23:00 KST — KBO 공식 GetRoster로 엔트리 등말소를 검사 */
+        /** 14:00~23:00 KST — KBO 공식 GetRoster로 엔트리 등말소를 검사 */
         fun scheduleRosterPoll(context: Context) {
             val zone = KBO_ZONE
             val now = ZonedDateTime.now(zone)

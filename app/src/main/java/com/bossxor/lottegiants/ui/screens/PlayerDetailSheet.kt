@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -104,7 +104,7 @@ private fun PlayerDetailContent(
             if (d.playerCode.isNotBlank()) {
                 IconButton(onClick = onToggleFavorite) {
                     Icon(
-                        imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                        imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.Star,
                         contentDescription = "즐겨찾기",
                         tint = if (isFavorite) LotteGold else MaterialTheme.colorScheme.onSurfaceVariant,
                     )

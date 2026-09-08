@@ -145,6 +145,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val overlayTeamCard: StateFlow<LotteTeamCard?> = _overlayTeamCard.asStateFlow()
 
     private var viewingGameId: String? = null
+    private var fullRelayFor: String? = null
 
     private var pollJob: Job? = null
     private var dayGamesJob: Job? = null
@@ -226,6 +227,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (gameId.isBlank()) return
         viewingGameId = null
         _viewingGame.value = null
+        fullRelayFor = null
         viewModelScope.launch {
             repo.store.setPreferredLiveGameId(gameId)
             refreshNow()
@@ -434,6 +436,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         viewingGameId = gameId
+        fullRelayFor = null
         viewModelScope.launch {
             _viewingLoading.value = true
             try {
@@ -455,6 +458,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewingGameId = null
         _viewingGame.value = null
         _viewingLoading.value = false
+        fullRelayFor = null
+    }
+
+    /** 중계 탭을 열 때 지난 이닝 문자중계를 한 번에 합친다. */
+    fun ensureFullRelay(gameId: String) {
+        if (gameId.isBlank() || fullRelayFor == gameId) return
+        viewModelScope.launch {
+            val current = _viewingGame.value?.takeIf { it.gameId == gameId }
+                ?: _snapshot.value?.lotteGame?.takeIf { it.gameId == gameId }
+                ?: _snapshot.value?.nextLotteGame?.takeIf { it.gameId == gameId }
+                ?: return@launch
+            val expanded = runCatching { repo.expandFullRelay(current) }.getOrNull() ?: return@launch
+            fullRelayFor = gameId
+            when {
+                _viewingGame.value?.gameId == gameId -> _viewingGame.value = expanded
+                _snapshot.value?.lotteGame?.gameId == gameId ->
+                    _snapshot.value = _snapshot.value?.copy(lotteGame = expanded)
+                _snapshot.value?.nextLotteGame?.gameId == gameId ->
+                    _snapshot.value = _snapshot.value?.copy(nextLotteGame = expanded)
+            }
+        }
     }
 
     private fun isTodayLotteGame(gameId: String, snap: LiveSnapshot?): Boolean {

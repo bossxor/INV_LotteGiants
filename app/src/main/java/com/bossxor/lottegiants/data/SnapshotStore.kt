@@ -319,6 +319,16 @@ class SnapshotStore(private val context: Context) {
         context.dataStore.edit { it[KEY_ALERTS_LIVE_ONLY] = enabled }
     }
 
+    val alertVibrateFlow: Flow<Boolean> = context.dataStore.data.map {
+        it[KEY_ALERT_VIBRATE] ?: true
+    }
+
+    suspend fun alertVibrate(): Boolean = alertVibrateFlow.first()
+
+    suspend fun setAlertVibrate(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_ALERT_VIBRATE] = enabled }
+    }
+
     val quietHoursEnabledFlow: Flow<Boolean> = context.dataStore.data.map {
         it[KEY_QUIET_ENABLED] ?: false
     }
@@ -387,6 +397,7 @@ class SnapshotStore(private val context: Context) {
             widgetOpacity = widgetOpacity(),
             widgetShowOppLogo = widgetShowOppLogo(),
             alertsLiveOnly = alertsLiveOnly(),
+            alertVibrate = alertVibrate(),
             quietEnabled = quietHoursEnabled(),
             quietStartHour = quietStartHour(),
             quietEndHour = quietEndHour(),
@@ -411,6 +422,7 @@ class SnapshotStore(private val context: Context) {
             prefs[KEY_WIDGET_OPACITY] = backup.widgetOpacity.coerceIn(20, 100)
             prefs[KEY_WIDGET_OPP_LOGO] = backup.widgetShowOppLogo
             prefs[KEY_ALERTS_LIVE_ONLY] = backup.alertsLiveOnly
+            prefs[KEY_ALERT_VIBRATE] = backup.alertVibrate
             prefs[KEY_QUIET_ENABLED] = backup.quietEnabled
             prefs[KEY_QUIET_START] = backup.quietStartHour.coerceIn(0, 23)
             prefs[KEY_QUIET_END] = backup.quietEndHour.coerceIn(0, 23)
@@ -445,6 +457,7 @@ class SnapshotStore(private val context: Context) {
         private val KEY_PENDING_UPDATE_CODE = stringPreferencesKey("pending_update_code")
         private val KEY_PREFERRED_LIVE = stringPreferencesKey("preferred_live_game_id")
         private val KEY_ALERTS_LIVE_ONLY = booleanPreferencesKey("alerts_live_only")
+        private val KEY_ALERT_VIBRATE = booleanPreferencesKey("alert_vibrate_score_lead")
         private val KEY_QUIET_ENABLED = booleanPreferencesKey("quiet_hours_enabled")
         private val KEY_QUIET_START = intPreferencesKey("quiet_start_hour")
         private val KEY_QUIET_END = intPreferencesKey("quiet_end_hour")

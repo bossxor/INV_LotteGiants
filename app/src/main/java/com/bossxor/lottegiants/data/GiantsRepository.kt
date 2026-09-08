@@ -90,6 +90,10 @@ class GiantsRepository private constructor(context: Context) {
     /** 종료된 이닝 문자중계 캐시 (gameId → inning → relays). 현재 이닝은 매번 재조회. */
     private val relayInningCache = ConcurrentHashMap<String, ConcurrentHashMap<Int, List<TextRelayDto>>>()
 
+    @Volatile private var lastRutaAt = 0L
+    @Volatile private var lastRutaGameId = ""
+    @Volatile private var lastRutaExtras = RutaGameExtras(connected = false)
+
     /** 날짜별 KBO 일정 캐시 (yyyy-MM-dd → fetchedAt, games) */
     private val kboDateCache = ConcurrentHashMap<String, Pair<Long, List<KboOfficialGame>>>()
 
@@ -249,20 +253,8 @@ class GiantsRepository private constructor(context: Context) {
                 lotteInfo.status == GameStatus.ENDED ||
                 lotteInfo.status == GameStatus.BEFORE
             if (wantRelay) {
-                val relayResult = if (
-                    lotteInfo.status == GameStatus.BEFORE &&
-                    lotteInfo.lineupAnnounced
-                ) {
-                    runCatching { fetchLineupRelay(relayGameId) }.let { quick ->
-                        val quickData = quick.getOrNull()
-                        if (quickData != null && relayHasLineup(quickData)) {
-                            quick
-                        } else {
-                            runCatching { fetchFullRelay(relayGameId) }
-                        }
-                    }
-                } else {
-                    runCatching { fetchFullRelay(relayGameId) }
+                val relayResult = runCatching {
+                    fetchRelayForPoll(relayGameId, lotteInfo.status, lotteInfo.lineupAnnounced)
                 }
                 relayData = relayResult.getOrNull()
                 if (relayData != null) {
@@ -305,7 +297,9 @@ class GiantsRepository private constructor(context: Context) {
                     enrichFromKboDetail(prevNext, kbo)
                 } else {
                     var info = enrichFromKboDetail(kbo.toLotteBase(), kbo)
-                    runCatching { fetchFullRelay(kbo.naverGameId()) }.getOrNull()?.let { relay ->
+                    runCatching {
+                        fetchRelayForPoll(kbo.naverGameId(), info.status, info.lineupAnnounced)
+                    }.getOrNull()?.let { relay ->
                         info = mergeRelay(info, relay)
                     }
                     enrichGameSummary(info, kboRange, kbo)
@@ -331,7 +325,7 @@ class GiantsRepository private constructor(context: Context) {
 
         val focusGame = lotteInfo ?: nextLotte
         val rutaExtras = if (focusGame != null && rutaConnected) {
-            fetchRutaExtras(focusGame.gameId, focusGame.isHome)
+            cachedRutaExtras(focusGame.gameId, focusGame.isHome)
         } else {
             RutaGameExtras(connected = rutaConnected)
         }
@@ -486,7 +480,9 @@ class GiantsRepository private constructor(context: Context) {
                 info.status == GameStatus.ENDED ||
                 info.status == GameStatus.BEFORE
             if (wantRelay) {
-                val relayResult = runCatching { fetchFullRelay(kbo.naverGameId()) }
+                val relayResult = runCatching {
+                    fetchRelayForPoll(kbo.naverGameId(), info.status, info.lineupAnnounced)
+                }
                 val relay = relayResult.getOrNull()
                 if (relay != null) {
                     info = mergeRelay(info, relay)
@@ -513,7 +509,7 @@ class GiantsRepository private constructor(context: Context) {
             dto.homeTeamCode.trim().uppercase().ifBlank { LOTTE_TEAM_CODE }
         }
         var info = dto.toLotteBase(focusTeamCode = focus)
-        runCatching { fetchFullRelay(gameId) }.getOrNull()?.let { relay ->
+        runCatching { fetchRelayForPoll(gameId, info.status, info.lineupAnnounced) }.getOrNull()?.let { relay ->
             info = mergeRelay(info, relay)
         }
         val season = fetchKboGamesCached(date.minusDays(45), date.plusDays(1))
@@ -544,15 +540,30 @@ class GiantsRepository private constructor(context: Context) {
         }.getOrNull()
     }
 
-    private suspend fun tryConnectRuta(): Boolean = runCatching {
-        val deviceId = UUID.nameUUIDFromBytes(
-            (android.provider.Settings.Secure.getString(
-                appContext.contentResolver,
-                android.provider.Settings.Secure.ANDROID_ID,
-            ) ?: "sajik-score").toByteArray(),
-        ).toString()
-        RutaApi.tryEnsureGuestToken(rutaApi, deviceId) && !RutaApi.bearerOrNull().isNullOrBlank()
-    }.getOrDefault(false)
+    private suspend fun tryConnectRuta(): Boolean {
+        if (!RutaApi.bearerOrNull().isNullOrBlank()) return true
+        return runCatching {
+            val deviceId = UUID.nameUUIDFromBytes(
+                (android.provider.Settings.Secure.getString(
+                    appContext.contentResolver,
+                    android.provider.Settings.Secure.ANDROID_ID,
+                ) ?: "sajik-score").toByteArray(),
+            ).toString()
+            RutaApi.tryEnsureGuestToken(rutaApi, deviceId) && !RutaApi.bearerOrNull().isNullOrBlank()
+        }.getOrDefault(false)
+    }
+
+    private suspend fun cachedRutaExtras(gameId: String, isHome: Boolean): RutaGameExtras {
+        val now = System.currentTimeMillis()
+        if (gameId == lastRutaGameId && now - lastRutaAt < RUTA_TTL_MS) {
+            return lastRutaExtras
+        }
+        val extras = fetchRutaExtras(gameId, isHome)
+        lastRutaGameId = gameId
+        lastRutaAt = now
+        lastRutaExtras = extras
+        return extras
+    }
 
     /** 루타 우선 고급 데이터. 실패 시 빈 extras → 호출부가 네이버 fallback 사용 */
     private suspend fun fetchRutaExtras(gameId: String, isHome: Boolean): RutaGameExtras {
@@ -1721,6 +1732,57 @@ class GiantsRepository private constructor(context: Context) {
             .any { dto -> dto.batter.any { it.name.isNotBlank() } }
 
     /**
+     * 스냅샷 폴링용. 현재 이닝 1회 + 직전 이닝이 캐시에 없을 때만 1회.
+     * 전체 이닝은 [expandFullRelay] (중계 탭)에서 채운다.
+     */
+    private suspend fun fetchLiveRelay(gameId: String): TextRelayData? {
+        val base = api.getRelay(gameId).result?.textRelayData ?: return null
+        val cache = relayInningCache.getOrPut(gameId) { ConcurrentHashMap() }
+        if (base.textRelays.isNotEmpty()) {
+            val currentOnly = base.textRelays.filter { it.inn == base.inn || it.inn == 0 }
+                .ifEmpty { base.textRelays }
+            cache[base.inn] = currentOnly
+        }
+        val prevInn = base.inn - 1
+        val hadHistory = cache.keys.any { it != base.inn }
+        if (hadHistory && prevInn >= 1 && cache[prevInn].isNullOrEmpty()) {
+            val chunk = runCatching {
+                api.getRelay(gameId, inning = prevInn).result?.textRelayData?.textRelays.orEmpty()
+            }.getOrDefault(emptyList())
+            if (chunk.isNotEmpty()) cache[prevInn] = chunk
+        }
+        fun scoreKeys(map: Map<String, String>?) =
+            map?.keys?.mapNotNull { it.toIntOrNull() }?.maxOrNull() ?: 0
+        val maxFromScore = maxOf(
+            scoreKeys(base.inningScore?.home),
+            scoreKeys(base.inningScore?.away),
+        )
+        val maxInn = maxOf(base.inn, maxFromScore, 1).coerceAtMost(18)
+        val merged = (1..maxInn).flatMap { cache[it].orEmpty() }
+            .ifEmpty { base.textRelays }
+        return base.copy(textRelays = merged)
+    }
+
+    private suspend fun fetchRelayForPoll(
+        gameId: String,
+        status: GameStatus,
+        lineupAnnounced: Boolean,
+    ): TextRelayData? {
+        if (status == GameStatus.BEFORE && lineupAnnounced) {
+            val quick = fetchLineupRelay(gameId)
+            if (quick != null && relayHasLineup(quick)) return quick
+        }
+        return fetchLiveRelay(gameId)
+    }
+
+    /** 중계 탭을 열었을 때 1~현재 이닝을 합친다. 끝난 이닝은 캐시를 재사용한다. */
+    suspend fun expandFullRelay(game: LotteGameInfo): LotteGameInfo? {
+        if (game.gameId.isBlank()) return null
+        val relay = fetchFullRelay(game.gameId) ?: return null
+        return mergeRelay(game, relay)
+    }
+
+    /**
      * 네이버 relay는 기본 응답에 현재 이닝 문자중계만 포함된다.
      * `?inning=N`으로 1~현재 이닝을 병렬 조회해 textRelays를 합친다.
      * 이미 끝난 이닝은 메모리 캐시해 폴링 부하를 줄인다.
@@ -2063,6 +2125,7 @@ class GiantsRepository private constructor(context: Context) {
         private const val WEATHER_TTL_MS = 15 * 60_000L
         private const val SUMMARY_TTL_MS = 5 * 60_000L
         private const val SNAPSHOT_FRESH_MS = 8_000L
+        private const val RUTA_TTL_MS = 25_000L
 
         @Volatile
         private var instance: GiantsRepository? = null
