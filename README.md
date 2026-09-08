@@ -194,6 +194,7 @@ adb -s R5KL10FHTTN install -r $env:TEMP\LotteGiants.apk
 ```
 
 NAS 경로에서 `adb install`이 자주 걸리므로 APK는 `%TEMP%`로 복사한 뒤 넣는다.  
+같은 CI `latest`끼리(예: 1.3.85 → 1.3.86)는 `install -r`로 덮어쓴다.  
 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`이면 한 번 지운 뒤 같은 APK로 다시 설치한다 (`adb uninstall com.bossxor.lottegiants`).
 
 | 산출물 | 경로 |
@@ -259,7 +260,7 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 버전 | 내용 |
 |------|------|
-| **1.3.86** | 시작·탭 로딩 지연, 비경기 폴링 45초, 감시 FGS 축소, 설정 백업, 순위 선수 검색 |
+| **1.3.86** | 시작·탭 로딩 지연, 비경기 폴링 45초, 감시 FGS 축소, 설정 백업, 순위 선수 검색. S26에 `latest` 덮어쓰기 설치 |
 | **1.3.85** | 실시간 조회 과다 호출을 줄여 오류·폰 차단을 완화. 라인업 15초·등말소 25초 |
 | **1.3.84** | 런처 SAJIK 배지 여백 (전경 16% inset) |
 | **1.3.83** | 종료·취소 알림을 지우면 같은 경기를 다시 올리지 않음 |
