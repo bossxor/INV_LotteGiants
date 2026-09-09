@@ -16,6 +16,7 @@ keystore.properties
 
 # Misc
 .DS_Store
+Thumbs.db
 captures/
 *.log
 
