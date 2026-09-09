@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">사직스코어</string>
-    <string name="widget_description">사직스코어 · 롯데 실시간 경기 현황</string>
+    <string name="app_name">집관</string>
+    <string name="widget_description">집관 · KBO 실시간 경기 현황</string>
+    <string name="launcher_lt">집관 사직</string>
+    <string name="launcher_ob">집관 잠실</string>
+    <string name="launcher_lg">집관 잠실</string>
+    <string name="launcher_ss">집관 대구</string>
+    <string name="launcher_hh">집관 대전</string>
+    <string name="launcher_kt">집관 수원</string>
+    <string name="launcher_ht">집관 광주</string>
+    <string name="launcher_nc">집관 창원</string>
+    <string name="launcher_sk">집관 인천</string>
+    <string name="launcher_wo">집관 고척</string>
 </resources>

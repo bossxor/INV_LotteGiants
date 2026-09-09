@@ -238,7 +238,7 @@ fun LiveScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
-                                    "사직스코어",
+                                    "집관",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Black,
                                 )
@@ -403,7 +403,7 @@ fun LiveScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            "사직스코어",
+                            "집관",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Black,
                         )

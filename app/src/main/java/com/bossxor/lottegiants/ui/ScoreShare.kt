@@ -22,7 +22,7 @@ object ScoreShare {
             append(" ${game.lotteScore}:${game.opponentScore} ")
             append(game.opponentName)
             append(" · ${game.inningLabel}")
-            append("\n#사직스코어")
+            append("\n#집관")
             append("\n$deepLink")
         }
         val bitmap = renderBoard(game)
@@ -40,7 +40,7 @@ object ScoreShare {
             type = "image/png"
             putExtra(Intent.EXTRA_STREAM, uri)
             putExtra(Intent.EXTRA_TEXT, caption)
-            putExtra(Intent.EXTRA_SUBJECT, "사직스코어")
+            putExtra(Intent.EXTRA_SUBJECT, "집관")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(Intent.createChooser(send, "점수 공유"))
@@ -84,7 +84,7 @@ object ScoreShare {
             textSize = 34f
             textAlign = Paint.Align.CENTER
         }
-        c.drawText("사직스코어", 48f, 64f, title)
+        c.drawText("집관", 48f, 64f, title)
         val showScore = g.status == GameStatus.LIVE || g.status == GameStatus.ENDED
         val leftName = if (g.isHome) g.opponentName.ifBlank { "상대" } else g.focusName()
         val rightName = if (g.isHome) g.focusName() else g.opponentName.ifBlank { "상대" }
@@ -99,7 +99,7 @@ object ScoreShare {
             c.drawText(":", w * 0.5f, 330f, scorePaint)
         }
         c.drawText(g.inningLabel.ifBlank { g.startTime }, w * 0.5f, 470f, sub)
-        c.drawText("#사직스코어", w * 0.5f, 520f, sub)
+        c.drawText("#집관", w * 0.5f, 520f, sub)
         return bmp
     }
 }

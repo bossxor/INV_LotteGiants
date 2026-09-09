@@ -1,12 +1,12 @@
-# 사직스코어
+# 집관
 
-**롯데 자이언츠 중심 KBO 실시간 스코어 앱**
+**KBO 실시간 스코어 앱** (기본 응원팀은 롯데 자이언츠)
 
-홈 위젯 · 실시간 스코어 알림 · 이벤트 알림을 지원합니다.
+홈 위젯 · 실시간 스코어 알림 · 이벤트 알림을 지원합니다. 홈 화면 아이콘은 구장 배지 10종을 두고, 팀을 바꾸면 alias로 바꿉니다.
 
 | | |
 |---|---|
-| **버전** | `1.3.87` (`versionCode` **1095**) |
+| **버전** | `2.0.0` (`versionCode` **2000**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 
@@ -122,7 +122,7 @@
 
 - **다시 표시**: 표시 시작 시간과 무관하게 알림을 고정. 경기 전에는 FGS 없이 알림만 둔다.
 - **펼친 알림**: 로고–점수–다이아몬드–점수–로고 / 투수·BSO·타자 / 승률 바
-- **상태표시줄 아이콘**: 야구공 실루엣. 런처는 SAJIK 배지(전경 16% inset, 1.3.84)
+- **상태표시줄 아이콘**: 야구공 실루엣. 런처는 구장 배지 10종(전경에 16% 여백). 기본은 사직. 홈 화면 이름은 `집관 사직`처럼 구장으로 붙고, 설정·알림 헤더는 `집관`
 - 경기 전 FGS를 반복 켜지 않아 알림이 깜빡이지 않게 함
 
 ---
@@ -220,8 +220,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `1.3.87` |
-| `versionCode` | 업데이트 비교용 정수 (배포마다 +1) | `1095` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.0` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2000` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -249,8 +249,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 ```json
 {
-  "versionCode": 1095,
-  "versionName": "1.3.87",
+  "versionCode": 2000,
+  "versionName": "2.0.0",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }
@@ -262,6 +262,7 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.0** | 앱 이름 집관. 10구단 구장 배지 런처 아이콘·activity-alias. 위젯 추가 화면 중립화. Wear 모듈 삭제. `versionCode` 2000 |
 | **1.3.87** | 등말소 14시부터. LIVE는 현재 이닝만·중계 탭에서 전체. 루타 25초, 감시 45초, 아이콘 축소, 휴일 히어로, 득점·역전 진동 설정. S26에 `latest` 덮어쓰기 설치 |
 | **1.3.86** | 시작·탭 로딩 지연, 비경기 폴링 45초, 감시 FGS 축소, 설정 백업, 순위 선수 검색. S26에 `latest` 덮어쓰기 설치 |
 | **1.3.85** | 실시간 조회 과다 호출을 줄여 오류·폰 차단을 완화. 라인업 15초·등말소 25초 |
@@ -283,7 +284,7 @@ app/src/main/java/com/bossxor/lottegiants/
   live/          LiveScoreService, AlertWatchService, AlertPollGate, NotificationHelper …
   widget/        LotteWidget, WidgetAssets
 app/src/test/    중계 분류, 역전/득점, 매직 사유, 승률 파싱, 알림 폴링 간격 단위 테스트
-wear/            Wear OS 모듈 (폰 APK에는 넣지 않음. 갤럭시 웨어러블 자동설치가 안 됨)
+tools/team-icons/ 구장 배지 런처 아이콘 생성기
 scripts/         env.ps1, build.ps1, publish-latest, CI 서명 설정
 .github/workflows/publish-latest.yml
 ```

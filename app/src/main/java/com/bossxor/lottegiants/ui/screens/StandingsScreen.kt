@@ -176,7 +176,7 @@ fun StandingsScreen(
                     RaceStatusCard(
                         summary = summary,
                         onShare = {
-                            ScoreShare.shareText(context, "사직스코어 레이스", shareRaceText(summary))
+                            ScoreShare.shareText(context, "집관 레이스", shareRaceText(summary))
                         },
                     )
                 }

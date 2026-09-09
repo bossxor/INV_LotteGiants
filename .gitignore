@@ -53,3 +53,8 @@ Logo/
 
 # KBO API debug samples (local only)
 kbo_*_sample.json
+
+# Team icon generator output (res copies are tracked)
+tools/team-icons/out/
+tools/team-icons/probe-out.txt
+tools/team-icons/map.txt

@@ -2,13 +2,13 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#041E42"
+    android:background="#3A3F47"
     android:padding="16dp">
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
-        android:text="롯데 라이브"
+        android:text="경기 로딩 중"
         android:textColor="#FFFFFF"
         android:textSize="14sp" />
 </FrameLayout>

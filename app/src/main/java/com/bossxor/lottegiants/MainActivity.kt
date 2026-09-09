@@ -352,6 +352,11 @@ class MainActivity : ComponentActivity() {
         applyOpenIntent(intent)
     }
 
+    override fun onStop() {
+        super.onStop()
+        LauncherIcon.applyPending(this)
+    }
+
     private fun applyOpenIntent(intent: Intent?) {
         var tab = intent?.getStringExtra(EXTRA_OPEN_TAB)
         var gameId = intent?.getStringExtra(EXTRA_GAME_ID)
@@ -543,7 +548,7 @@ private fun AppScaffold(
     if (showOnboarding) {
         AlertDialog(
             onDismissRequest = { },
-            title = { Text("사직스코어 안내", fontWeight = FontWeight.Bold) },
+            title = { Text("집관 안내", fontWeight = FontWeight.Bold) },
             text = {
                 Text(
                     "경기 중 점수를 빨리 보려면 아래를 켜 두세요.\n\n" +

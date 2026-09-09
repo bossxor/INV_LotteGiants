@@ -344,7 +344,7 @@ fun shareRaceText(summary: RaceSummary): String = buildString {
             append(line)
         }
     }
-    append("\n#사직스코어")
+    append("\n#집관")
 }
 
 fun racePulse(

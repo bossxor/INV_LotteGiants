@@ -21,4 +21,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "LotteGiantsLive"
 include(":app")
-include(":wear")
