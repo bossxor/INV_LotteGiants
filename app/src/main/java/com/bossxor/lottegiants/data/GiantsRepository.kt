@@ -152,12 +152,18 @@ class GiantsRepository private constructor(context: Context) {
                 Log.e(TAG, "refreshSnapshot failed", e)
                 snapshotFailCount += 1
                 snapshotCooldownUntil = System.currentTimeMillis() + snapshotBackoffMs(snapshotFailCount)
-                val fallback = lockedStale
-                    ?: runCatching { fetchTodayOnlySnapshot() }.getOrNull()
-                    ?: emptyFocusSnapshot()
+                // 빈 스냅샷을 stale로 붙잡으면 오늘 경기 폴백을 영구히 막는다.
+                val todayOnly = runCatching { fetchTodayOnlySnapshot() }.getOrNull()
+                val fallback = when {
+                    todayOnly?.lotteGame != null || todayOnly?.nextLotteGame != null -> todayOnly
+                    lockedStale?.lotteGame != null || lockedStale?.nextLotteGame != null -> lockedStale
+                    todayOnly != null -> todayOnly
+                    else -> emptyFocusSnapshot()
+                }
                 fallback.also {
                     memorySnapshot = it
                     memorySnapshotAt = System.currentTimeMillis()
+                    runCatching { store.saveSnapshot(it) }
                 }
             }
         }
@@ -314,7 +320,9 @@ class GiantsRepository private constructor(context: Context) {
                 }
                 relayData = relayResult.getOrNull()
                 if (relayData != null) {
-                    lotteInfo = mergeRelay(lotteInfo, relayData)
+                    lotteInfo = runCatching { mergeRelay(lotteInfo, relayData) }
+                        .onFailure { Log.e(TAG, "mergeRelay ${lotteInfo.gameId}", it) }
+                        .getOrDefault(lotteInfo)
                 } else if (relayResult.isFailure &&
                     lotteInfo.lotteLineup.isEmpty() &&
                     lotteInfo.recentTexts.isEmpty()
@@ -356,7 +364,7 @@ class GiantsRepository private constructor(context: Context) {
                     runCatching {
                         fetchRelayForPoll(kbo.naverGameId(), info.status, info.lineupAnnounced)
                     }.getOrNull()?.let { relay ->
-                        info = mergeRelay(info, relay)
+                        info = runCatching { mergeRelay(info, relay) }.getOrDefault(info)
                     }
                     safeEnrich(info, kboRange, kbo)
                 }
@@ -1907,7 +1915,13 @@ class GiantsRepository private constructor(context: Context) {
         return base.copy(textRelays = merged)
     }
 
-    private fun mergeRelay(base: LotteGameInfo, relay: TextRelayData): LotteGameInfo {
+    private fun mergeRelay(base: LotteGameInfo, relay: TextRelayData): LotteGameInfo = runCatching {
+        mergeRelayUnsafe(base, relay)
+    }.onFailure {
+        Log.e(TAG, "mergeRelay ${base.gameId}", it)
+    }.getOrDefault(base)
+
+    private fun mergeRelayUnsafe(base: LotteGameInfo, relay: TextRelayData): LotteGameInfo {
         val isHome = base.isHome
         val lotteLineupDto = if (isHome) relay.homeLineup else relay.awayLineup
         val oppLineupDto = if (isHome) relay.awayLineup else relay.homeLineup
@@ -1926,12 +1940,18 @@ class GiantsRepository private constructor(context: Context) {
         fun LineupDto.currentByOrder(): Map<Int, LineupBatterDto> =
             batter.filter { it.batOrder in 1..9 }
                 .groupBy { it.batOrder }
-                .mapValues { (_, list) -> list.maxBy { it.seqno } }
+                .mapNotNull { (order, list) ->
+                    list.maxByOrNull { it.seqno }?.let { order to it }
+                }
+                .toMap()
 
         fun LineupDto.startersByOrder(): Map<Int, LineupBatterDto> {
             val withOrder = batter.filter { it.batOrder in 1..9 }
                 .groupBy { it.batOrder }
-                .mapValues { (_, list) -> list.minBy { it.seqno } }
+                .mapNotNull { (order, list) ->
+                    list.minByOrNull { it.seqno }?.let { order to it }
+                }
+                .toMap()
             if (withOrder.isNotEmpty()) return withOrder
             val starters = batter.filter { it.seqno <= 1 }
                 .ifEmpty { batter }
@@ -1967,7 +1987,7 @@ class GiantsRepository private constructor(context: Context) {
             batter.filter { it.batOrder in 1..9 }
                 .groupBy { it.batOrder }
                 .flatMap { (order, list) ->
-                    val starterSeq = list.minOf { it.seqno }
+                    val starterSeq = list.minOfOrNull { it.seqno } ?: return@flatMap emptyList()
                     list.filter { it.seqno > starterSeq }
                         .sortedBy { it.seqno }
                         .map { mapBatter(order, it, list).copy(isSubstitute = true) }

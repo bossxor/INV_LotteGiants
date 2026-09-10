@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.5` (`versionCode` **2005**) |
+| **버전** | `2.0.6` (`versionCode` **2006**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 
@@ -221,8 +221,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.5` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2005` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.6` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2006` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -250,8 +250,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 ```json
 {
-  "versionCode": 2005,
-  "versionName": "2.0.5",
+  "versionCode": 2006,
+  "versionName": "2.0.6",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }
@@ -263,6 +263,7 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.6** | 중계 라인업 병합 예외(`NoSuchElementException`)로 라이브·위젯이 비던 문제 수정. 빈 캐시가 오늘 경기 폴백을 막지 않게 함 |
 | **2.0.5** | DataStore 읽기 실패 때도 오늘 경기는 보여 줌. 라이브 공백 수정 |
 | **2.0.4** | 라이브·위젯이 상세 보강 예외 때문에 오늘 경기까지 버리지 않게 함. KBO 경기 전 null 필드 허용 |
 | **2.0.3** | 위젯 새로고침과 순위가 겹치지 않게 순위를 로고 아래로. 라이브 첫 조회 실패 시 스피너 대신 다시 시도 |
