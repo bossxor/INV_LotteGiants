@@ -272,9 +272,13 @@ private fun CompactLive(
         )
         Spacer(GlanceModifier.height(8.dp))
         StatusPill(if (g.isSuspended) g.suspendLabel else "LIVE  ${g.inningLabel}")
+        if (g.stadium.isNotBlank()) {
+            Spacer(GlanceModifier.height(3.dp))
+            Text(g.stadium, style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 10.sp), maxLines = 1)
+        }
         val footer = widgetFooterLine(snap?.lotteRemainingGames ?: 0)
         if (footer.isNotBlank()) {
-            Text(footer, style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 8.sp), maxLines = 1)
+            Text(footer, style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 10.sp), maxLines = 1)
         }
     }
 }
@@ -299,6 +303,14 @@ private fun CompactScore(
         )
         Spacer(GlanceModifier.height(8.dp))
         StatusPill(label)
+        if (g.stadium.isNotBlank()) {
+            Spacer(GlanceModifier.height(3.dp))
+            Text(
+                g.stadium,
+                style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 10.sp),
+                maxLines = 1,
+            )
+        }
     }
 }
 
@@ -322,15 +334,19 @@ private fun CompactBefore(
         Spacer(GlanceModifier.height(8.dp))
         val cd = gameCountdownLabel(g.gameDate, g.startTime)
         StatusPill(cd.ifBlank { g.startTime.ifBlank { "예정" } })
+        if (g.stadium.isNotBlank()) {
+            Spacer(GlanceModifier.height(3.dp))
+            Text(g.stadium, style = TextStyle(color = muted, fontSize = 10.sp), maxLines = 1)
+        }
         Spacer(GlanceModifier.height(4.dp))
         Text(
             startersAwayVsHome(g),
-            style = TextStyle(color = white, fontSize = 9.sp),
+            style = TextStyle(color = white, fontSize = 11.sp),
             maxLines = 1,
         )
         val footer = widgetFooterLine(snap?.lotteRemainingGames ?: 0)
         if (footer.isNotBlank()) {
-            Text(footer, style = TextStyle(color = muted, fontSize = 8.sp), maxLines = 1)
+            Text(footer, style = TextStyle(color = muted, fontSize = 10.sp), maxLines = 1)
         }
     }
 }
@@ -489,6 +505,10 @@ private fun LiveWide(
             if (g.isLotteBatting) "롯데 공격" else "롯데 수비",
             style = TextStyle(color = muted, fontSize = 11.sp),
         )
+        if (g.stadium.isNotBlank()) {
+            Spacer(GlanceModifier.width(8.dp))
+            Text(g.stadium, style = TextStyle(color = muted, fontSize = 11.sp), maxLines = 1)
+        }
     }
     Spacer(GlanceModifier.height(4.dp))
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -522,7 +542,7 @@ private fun LiveWide(
         Spacer(GlanceModifier.width(6.dp))
         Text(
             "P ${g.currentPitcherName.ifBlank { "-" }}",
-            style = TextStyle(color = white, fontSize = 11.sp),
+            style = TextStyle(color = white, fontSize = 13.sp),
             maxLines = 1,
             modifier = GlanceModifier.defaultWeight(),
         )
@@ -531,7 +551,7 @@ private fun LiveWide(
         Spacer(GlanceModifier.width(6.dp))
         Text(
             "B ${g.currentBatterName.ifBlank { "-" }}",
-            style = TextStyle(color = white, fontSize = 11.sp),
+            style = TextStyle(color = white, fontSize = 13.sp),
             maxLines = 1,
             modifier = GlanceModifier.defaultWeight(),
         )
@@ -545,7 +565,7 @@ private fun LiveWide(
     FormRow(snap)
     val footer = widgetFooterLine(snap?.lotteRemainingGames ?: 0)
     if (footer.isNotBlank()) {
-        Text(footer, style = TextStyle(color = muted, fontSize = 10.sp), maxLines = 1)
+        Text(footer, style = TextStyle(color = muted, fontSize = 12.sp), maxLines = 1)
     }
 }
 
@@ -628,18 +648,18 @@ private fun BeforeWide(
     }
     Spacer(GlanceModifier.height(4.dp))
     Text(
-        "${g.gameDate} ${g.startTime} · ${g.stadium}",
-        style = TextStyle(color = muted, fontSize = 11.sp),
+        listOf(g.gameDate, g.startTime, g.stadium).filter { it.isNotBlank() }.joinToString(" · "),
+        style = TextStyle(color = muted, fontSize = 12.sp),
         maxLines = 1,
     )
     Text(
         startersAwayVsHome(g),
-        style = TextStyle(color = white, fontSize = 11.sp),
+        style = TextStyle(color = white, fontSize = 13.sp),
         maxLines = 1,
     )
     val footer = widgetFooterLine(snap?.lotteRemainingGames ?: 0)
     if (footer.isNotBlank()) {
-        Text(footer, style = TextStyle(color = muted, fontSize = 11.sp), maxLines = 1)
+        Text(footer, style = TextStyle(color = muted, fontSize = 13.sp), maxLines = 1)
     }
     if (pregame && snap?.weather != null) {
         val w = snap.weather!!
@@ -681,6 +701,9 @@ private fun EndedWide(
         else -> "무승부"
     }
     Text(result, style = TextStyle(color = red, fontSize = 12.sp, fontWeight = FontWeight.Bold))
+    if (g.stadium.isNotBlank()) {
+        Text(g.stadium, style = TextStyle(color = muted, fontSize = 12.sp), maxLines = 1)
+    }
     FormRow(snap)
 }
 
