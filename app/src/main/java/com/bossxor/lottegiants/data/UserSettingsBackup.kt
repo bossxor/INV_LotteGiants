@@ -19,4 +19,5 @@ data class UserSettingsBackup(
     val quietEnabled: Boolean = false,
     val quietStartHour: Int = 23,
     val quietEndHour: Int = 8,
+    val myTeam: String = "",
 )

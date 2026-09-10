@@ -54,6 +54,7 @@ import com.bossxor.lottegiants.domain.lotteRaceSummary
 import com.bossxor.lottegiants.domain.remainingOpponentsFrom
 import com.bossxor.lottegiants.domain.shareRaceText
 import com.bossxor.lottegiants.domain.teamCodeToName
+import com.bossxor.lottegiants.domain.teamHomeStadiumName
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
@@ -83,24 +84,27 @@ fun StandingsScreen(
     favoriteCodes: Set<String> = emptySet(),
     onToggleFavorite: (LeaderPlayer) -> Unit = {},
     onLeaderClick: (LeaderPlayer) -> Unit = {},
+    myTeamCode: String = LOTTE_TEAM_CODE,
 ) {
-    var baseTeamId by remember(standings) {
+    val focusCode = myTeamCode.ifBlank { LOTTE_TEAM_CODE }
+    val focusName = teamCodeToName(focusCode).ifBlank { "롯데" }
+    var baseTeamId by remember(standings, focusCode) {
         mutableStateOf(
-            standings.firstOrNull { it.teamId == LOTTE_TEAM_CODE }?.teamId
+            standings.firstOrNull { it.teamId.equals(focusCode, true) }?.teamId
                 ?: standings.firstOrNull()?.teamId.orEmpty(),
         )
     }
     val baseTeam = remember(standings, baseTeamId) {
         standings.firstOrNull { it.teamId == baseTeamId }
     }
-    val lotteStanding = remember(standings) {
-        standings.firstOrNull { it.teamId == LOTTE_TEAM_CODE }
+    val lotteStanding = remember(standings, focusCode) {
+        standings.firstOrNull { it.teamId.equals(focusCode, true) }
     }
-    val remaining = remember(seasonGames) {
-        remainingOpponentsFrom(seasonGames, kboToday().toString())
+    val remaining = remember(seasonGames, focusCode) {
+        remainingOpponentsFrom(seasonGames, kboToday().toString(), focusCode)
     }
-    val race = remember(standings, seasonGames) {
-        lotteRaceSummary(standings, remainingOpponents = remaining, seasonGames = seasonGames, todayIso = kboToday().toString())
+    val race = remember(standings, seasonGames, focusCode) {
+        lotteRaceSummary(standings, remainingOpponents = remaining, seasonGames = seasonGames, todayIso = kboToday().toString(), lotteCode = focusCode)
     }
     val context = LocalContext.current
 
@@ -214,17 +218,17 @@ fun StandingsScreen(
                     }
                     item {
                         SectionCard(padding = 8.dp) {
-                            UpcomingGamesList(summary.upcomingGames)
+                            UpcomingGamesList(summary.upcomingGames, focusCode)
                         }
                     }
                 }
             }
 
             // ── 섹션 1: 롯데 시즌 트렌드 ──
-            if (teamCard != null) {
+            if (teamCard != null && (teamCard.currentRank > 0 || teamCard.rankHistory.isNotEmpty() || teamCard.streak.isNotBlank())) {
                 item {
                     SectionHeader(
-                        title = "롯데 시즌 트렌드",
+                        title = "$focusName 시즌 트렌드",
                         subtitle = "순위 변동 · 주간 타율 · 주간 방어율",
                     )
                 }
@@ -275,7 +279,7 @@ fun StandingsScreen(
                     ) {
                         SectionHeader(
                             title = "KBO 순위표",
-                            subtitle = "게임차 = ${baseTeam?.teamName ?: "롯데"} 기준 · 탭으로 기준팀 변경",
+                            subtitle = "게임차 = ${baseTeam?.teamName ?: focusName} 기준 · 탭으로 기준팀 변경",
                         )
                         if (lotteStanding != null) {
                             Spacer(Modifier.height(6.dp))
@@ -364,7 +368,7 @@ fun StandingsScreen(
                             t = t,
                             base = baseTeam,
                             isBase = t.teamId == baseTeamId,
-                            isLotte = t.teamId == LOTTE_TEAM_CODE,
+                            isLotte = t.teamId.equals(focusCode, true),
                             onClick = { baseTeamId = t.teamId },
                         )
                     }
@@ -630,10 +634,10 @@ private fun RemainingOpponentsGrid(opponents: List<RemainingOpponent>) {
 }
 
 @Composable
-private fun UpcomingGamesList(games: List<MiniGame>) {
+private fun UpcomingGamesList(games: List<MiniGame>, myTeamCode: String = LOTTE_TEAM_CODE) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         games.forEachIndexed { index, g ->
-            UpcomingGameRow(g)
+            UpcomingGameRow(g, myTeamCode)
             if (index < games.lastIndex) {
                 HorizontalDivider(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
@@ -644,14 +648,14 @@ private fun UpcomingGamesList(games: List<MiniGame>) {
 }
 
 @Composable
-private fun UpcomingGameRow(g: MiniGame) {
-    val home = g.isTeamHome(LOTTE_TEAM_CODE) == true
+private fun UpcomingGameRow(g: MiniGame, myTeamCode: String = LOTTE_TEAM_CODE) {
+    val home = g.isTeamHome(myTeamCode) == true
     val oppCode = (if (home) g.awayTeamCode else g.homeTeamCode).ifBlank {
         if (home) g.awayName else g.homeName
     }
     val oppName = teamCodeToName(oppCode).ifBlank { if (home) g.awayName else g.homeName }
     val time = g.startTime.trim()
-    val stadium = g.stadium.trim().ifBlank { if (home) "사직" else "" }
+    val stadium = g.stadium.trim().ifBlank { if (home) teamHomeStadiumName(myTeamCode) else "" }
     val haColor = if (home) HomeBlue else AwayRed
     Row(
         Modifier

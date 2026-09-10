@@ -9,11 +9,13 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.bossxor.lottegiants.domain.AlertPreset
 import com.bossxor.lottegiants.domain.FavoritePlayer
+import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTES_DEFAULT
 import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.ThemeMode
 import com.bossxor.lottegiants.domain.clampLiveLeadMinutes
+import com.bossxor.lottegiants.domain.normalizeTeamCode
 import com.bossxor.lottegiants.domain.typesForPreset
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -385,6 +387,25 @@ class SnapshotStore(private val context: Context) {
         context.dataStore.edit { it[KEY_LAST_RACE] = value }
     }
 
+    val myTeamCodeFlow: Flow<String> = context.dataStore.data.map {
+        normalizeTeamCode(it[KEY_MY_TEAM].orEmpty().ifBlank { LOTTE_TEAM_CODE })
+    }
+
+    suspend fun myTeamCode(): String = myTeamCodeFlow.first()
+
+    suspend fun setMyTeamCode(code: String) {
+        context.dataStore.edit { it[KEY_MY_TEAM] = normalizeTeamCode(code) }
+    }
+
+    /** 팀을 바꿀 때 이전 팀 스냅샷·중복알림 키를 지운다. */
+    suspend fun clearTeamTransientKeys() {
+        context.dataStore.edit { prefs ->
+            TEAM_SWITCH_CLEAR_KEYS.forEach { key ->
+                prefs.asMap().keys.firstOrNull { it.name == key }?.let { prefs.remove(it) }
+            }
+        }
+    }
+
     suspend fun exportUserSettings(): UserSettingsBackup {
         val notifs = NotificationType.entries.associate { it.name to isNotificationEnabled(it) }
         return UserSettingsBackup(
@@ -401,6 +422,7 @@ class SnapshotStore(private val context: Context) {
             quietEnabled = quietHoursEnabled(),
             quietStartHour = quietStartHour(),
             quietEndHour = quietEndHour(),
+            myTeam = myTeamCode(),
         )
     }
 
@@ -426,6 +448,7 @@ class SnapshotStore(private val context: Context) {
             prefs[KEY_QUIET_ENABLED] = backup.quietEnabled
             prefs[KEY_QUIET_START] = backup.quietStartHour.coerceIn(0, 23)
             prefs[KEY_QUIET_END] = backup.quietEndHour.coerceIn(0, 23)
+            if (backup.myTeam.isNotBlank()) prefs[KEY_MY_TEAM] = normalizeTeamCode(backup.myTeam)
         }
     }
 
@@ -464,29 +487,47 @@ class SnapshotStore(private val context: Context) {
         private val KEY_WIDGET_OPACITY = intPreferencesKey("widget_opacity_pct")
         private val KEY_WIDGET_OPP_LOGO = booleanPreferencesKey("widget_show_opp_logo")
         private val KEY_LAST_RACE = stringPreferencesKey("last_race_fingerprint")
+        private val KEY_MY_TEAM = stringPreferencesKey("my_team_code")
+
+        val TEAM_SWITCH_CLEAR_KEYS: List<String> = listOf(
+            "live_snapshot",
+            "notified_roster_keys",
+            "notified_lineup_state",
+            "last_live_notify_key",
+            "preferred_live_game_id",
+            "dismissed_finished_live_game_id",
+            "notified_cancel_game_id",
+            "notified_end_game_id",
+            "last_race_fingerprint",
+        )
     }
 }
 
 enum class NotificationType(val label: String, val description: String) {
-    SCORE("득점", "롯데가 득점할 때 알림"),
+    SCORE("득점", "내 팀이 득점할 때 알림"),
     CONCEDING("실점", "상대가 득점할 때 알림"),
     PITCHER_CHANGE("투수 교체", "양 팀 투수 교체 시 알림"),
-    HOMERUN("홈런", "홈런이 나오면 알림 (롯데는 강조)"),
-    SCORING_CHANCE("롯데 득점권 찬스", "누가 어떤 타구·볼넷·도루로 득점권이 됐는지 알림"),
+    HOMERUN("홈런", "홈런이 나오면 알림 (내 팀은 강조)"),
+    SCORING_CHANCE("내 팀 득점권 찬스", "누가 어떤 타구·볼넷·도루로 득점권이 됐는지 알림"),
     LEAD_CHANGE("역전/동점", "리드가 바뀌거나 동점이 되는 순간 알림"),
     INNING_CHANGE("이닝 교대", "매 이닝 종료 시 중간 스코어 알림"),
-    EIGHTH_INNING("8회말", "롯데 경기 8회말 시작 알림"),
-    EXTRA_INNINGS("연장 시작", "롯데 경기 연장전 진입 알림"),
-    GAME_START("경기 시작", "롯데 경기 시작 알림"),
+    EIGHTH_INNING("8회말", "내 팀 경기 8회말 시작 알림"),
+    EXTRA_INNINGS("연장 시작", "내 팀 경기 연장전 진입 알림"),
+    GAME_START("경기 시작", "내 팀 경기 시작 알림"),
     GAME_END("경기 종료", "최종 결과 알림"),
     PREGAME_REMINDER("경기 30분 전", "경기 시작 30분 전 리마인더"),
     LINEUP("선발 라인업", "라인업 발표 시 선발투수와 타순 알림"),
     CANCELED("경기 취소", "우천 취소·순연 알림"),
-    ROSTER("엔트리 등말소", "롯데 선수 등록·말소 공시 알림"),
+    ROSTER("엔트리 등말소", "내 팀 선수 등록·말소 공시 알림"),
     FAVORITE_AT_BAT("즐겨찾기 타석", "즐겨찾기 선수가 타석에 설 때"),
     FAVORITE_PITCHING("즐겨찾기 등판", "즐겨찾기 투수가 마운드에 오를 때"),
     FAVORITE_ROSTER("즐겨찾기 등말소", "즐겨찾기 선수 등록·말소 시"),
     RACE_NUMBER("매직·트래직", "매직넘버·트래직넘버가 줄거나 확정·탈락될 때"),
+}
+
+fun NotificationType.descriptionFor(teamName: String): String {
+    val name = teamName.trim().ifBlank { "내 팀" }
+    return if (name == "내 팀") description else description.replace("내 팀", name)
 }
 
 /** 알림을 눌렀을 때 열 화면. `openTab`은 하단 탭/오버레이, `detailTab`은 라이브 상세. */

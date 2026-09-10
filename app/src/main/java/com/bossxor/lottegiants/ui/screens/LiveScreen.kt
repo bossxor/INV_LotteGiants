@@ -61,7 +61,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bossxor.lottegiants.domain.GameStatus
-import com.bossxor.lottegiants.domain.LOTTE_LOGO_URL
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LineupSlot
 import com.bossxor.lottegiants.domain.LiveSnapshot
@@ -69,7 +68,11 @@ import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.toZone
 import com.bossxor.lottegiants.domain.belongsToKboToday
 import com.bossxor.lottegiants.domain.focusName
-import com.bossxor.lottegiants.domain.isFocusLotte
+import com.bossxor.lottegiants.domain.matchesTeam
+import com.bossxor.lottegiants.domain.stadiumWatermark
+import com.bossxor.lottegiants.domain.teamCodeToName
+import com.bossxor.lottegiants.domain.teamHomeStadiumName
+import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.StadiumWeather
 import com.bossxor.lottegiants.domain.cancelLabel
@@ -155,11 +158,12 @@ fun LiveScreen(
         ) != android.content.pm.PackageManager.PERMISSION_GRANTED
     val needBattery = !isIgnoringBatteryOptimizations(context)
 
+    val myTeam = snapshot?.myTeamCode?.ifBlank { LOTTE_TEAM_CODE } ?: LOTTE_TEAM_CODE
     val lotteNow = snapshot?.lotteGame?.takeIf { it.belongsToKboToday() }
     val game = viewingGame ?: lotteNow ?: snapshot?.nextLotteGame
     val viewingOther = viewingGame != null
-    val viewingOtherTeam = viewingOther && game?.isFocusLotte() == false
-    val focusTeam = game?.focusTeamCode?.ifBlank { LOTTE_TEAM_CODE } ?: LOTTE_TEAM_CODE
+    val viewingOtherTeam = viewingOther && game?.focusTeamCode?.equals(myTeam, true) == false
+    val focusTeam = game?.focusTeamCode?.ifBlank { myTeam } ?: myTeam
     val offDay = viewingGame == null && lotteNow == null
     val showOffDayHero = offDay &&
         (snapshot?.lastLotteGame != null || snapshot?.nextLotteGame != null)
@@ -226,6 +230,8 @@ fun LiveScreen(
                                 isRefreshing = isRefreshing,
                                 onRefresh = onRefresh,
                                 viewingLabel = if (viewingOtherTeam) game.focusName() else null,
+                                myTeamName = teamCodeToName(myTeam).ifBlank { "집관" },
+                                myTeamCode = myTeam,
                                 raceLine = if (!viewingOtherTeam) snapshot?.widgetRaceLine.orEmpty() else "",
                             )
                         }
@@ -497,8 +503,8 @@ private fun ScoreTicker(
                         startTime = g.startTime,
                         isSuspended = g.isSuspended,
                         resumeTime = g.resumeTime,
-                        homeLogoUrl = if (g.isHome) g.lotteLogoUrl.ifBlank { LOTTE_LOGO_URL } else g.opponentLogoUrl,
-                        awayLogoUrl = if (g.isHome) g.opponentLogoUrl else g.lotteLogoUrl.ifBlank { LOTTE_LOGO_URL },
+                        homeLogoUrl = if (g.isHome) g.lotteLogoUrl.ifBlank { teamLogoUrl(g.focusTeamCode) } else g.opponentLogoUrl,
+                        awayLogoUrl = if (g.isHome) g.opponentLogoUrl else g.lotteLogoUrl.ifBlank { teamLogoUrl(g.focusTeamCode) },
                         homeTeamCode = if (g.isHome) "LT" else g.opponentCode,
                         awayTeamCode = if (g.isHome) g.opponentCode else "LT",
                     )
@@ -1033,8 +1039,8 @@ private fun SummaryTab(
         Spacer(Modifier.height(10.dp))
     }
 
-    val clipText = if (!viewingOther && g.isFocusLotte()) snapshot?.mediaHighlightText.orEmpty() else ""
-    val clipUrl = if (!viewingOther && g.isFocusLotte()) snapshot?.mediaHighlightUrl.orEmpty() else ""
+    val clipText = if (!viewingOther) snapshot?.mediaHighlightText.orEmpty() else ""
+    val clipUrl = if (!viewingOther) snapshot?.mediaHighlightUrl.orEmpty() else ""
     if (clipText.isNotBlank() || clipUrl.isNotBlank()) {
         val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
         SectionCard {
@@ -1174,7 +1180,7 @@ private fun SummaryTab(
     }
     Spacer(Modifier.height(10.dp))
 
-    val winSeries = if (g.isFocusLotte()) snapshot?.winProbSeries.orEmpty() else emptyList()
+    val winSeries = if (!viewingOther) snapshot?.winProbSeries.orEmpty() else emptyList()
     val lotteProb = WinProb.resolveDisplayFocusProb(g, winSeries.lastOrNull()?.homeProb)
     if (lotteProb != null) {
         SectionCard {
@@ -1245,7 +1251,7 @@ private fun SummaryTab(
                 )
             }
         }
-    } else if (g.isFocusLotte() && (g.status == GameStatus.LIVE || g.status == GameStatus.ENDED)) {
+    } else if (!viewingOther && (g.status == GameStatus.LIVE || g.status == GameStatus.ENDED)) {
         SectionCard {
             Column {
                 SectionHeader("${g.focusName()} 승리 확률")
@@ -1262,7 +1268,7 @@ private fun SummaryTab(
 
     KeyPlayerChip(batterLeaders, g) { code, name -> onKeyPlayerClick(code, name) }
 
-    if (g.isFocusLotte()) {
+    if (!viewingOther) {
         val recent = snapshot?.recentLotteGames.orEmpty()
         if (recent.isNotEmpty()) {
             RecentFiveCard(recent)
@@ -2232,6 +2238,8 @@ private fun HeroCard(
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = {},
     viewingLabel: String? = null,
+    myTeamName: String = "롯데",
+    myTeamCode: String = LOTTE_TEAM_CODE,
     raceLine: String = "",
 ) {
     val showScore = g.status == GameStatus.LIVE || g.status == GameStatus.ENDED
@@ -2242,8 +2250,9 @@ private fun HeroCard(
     val soft = onHero.copy(alpha = if (dark) 0.7f else 0.62f)
     val awayName = if (g.isHome) g.opponentName else g.focusName()
     val homeName = if (g.isHome) g.focusName() else g.opponentName
-    val awayLogo = if (g.isHome) g.opponentLogoUrl else g.lotteLogoUrl.ifBlank { if (g.isFocusLotte()) LOTTE_LOGO_URL else "" }
-    val homeLogo = if (g.isHome) g.lotteLogoUrl.ifBlank { if (g.isFocusLotte()) LOTTE_LOGO_URL else "" } else g.opponentLogoUrl
+    val focusLogo = g.lotteLogoUrl.ifBlank { teamLogoUrl(g.focusTeamCode.ifBlank { myTeamCode }) }
+    val awayLogo = if (g.isHome) g.opponentLogoUrl else focusLogo
+    val homeLogo = if (g.isHome) focusLogo else g.opponentLogoUrl
     val awayScore = if (g.isHome) g.opponentScore else g.lotteScore
     val homeScore = if (g.isHome) g.lotteScore else g.opponentScore
     val awayStarter = if (g.isHome) g.opponentStartingPitcher else g.lotteStartingPitcher
@@ -2265,7 +2274,7 @@ private fun HeroCard(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             if (onBackToLotte != null) {
                 Text(
-                    if (viewingLabel.isNullOrBlank()) "← 롯데" else "← $viewingLabel · 롯데로",
+                    if (viewingLabel.isNullOrBlank()) "← $myTeamName" else "← $viewingLabel · ${myTeamName}로",
                     modifier = Modifier.clickable(onClick = onBackToLotte).padding(vertical = 4.dp),
                     color = onHero.copy(alpha = 0.85f),
                     fontSize = 12.sp,
@@ -2273,7 +2282,7 @@ private fun HeroCard(
                 )
             } else {
                 Text(
-                    "SAJIK",
+                    stadiumWatermark(myTeamCode.ifBlank { g.focusTeamCode }),
                     color = muted,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
@@ -2439,7 +2448,7 @@ private fun RecentResultCard(g: LotteGameInfo) {
         Column {
             SectionHeader("최근 경기 결과")
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                TeamLogo(g.lotteLogoUrl.ifBlank { if (g.isFocusLotte()) LOTTE_LOGO_URL else "" }, size = 36)
+                TeamLogo(g.lotteLogoUrl.ifBlank { teamLogoUrl(g.focusTeamCode) }, size = 36)
                 Spacer(Modifier.width(8.dp))
                 Text(g.focusName(), fontWeight = FontWeight.Bold)
                 Spacer(Modifier.weight(1f))
@@ -2496,14 +2505,14 @@ private fun NextGameContent(g: LotteGameInfo) {
             }
             Spacer(Modifier.height(14.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TeamLogo(LOTTE_LOGO_URL, size = 48)
+                TeamLogo(g.lotteLogoUrl.ifBlank { teamLogoUrl(g.focusTeamCode) }, size = 48)
                 Text("  vs  ", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TeamLogo(g.opponentLogoUrl, size = 48)
                 Spacer(Modifier.weight(1f))
                 Column(horizontalAlignment = Alignment.End) {
                     Text(g.opponentName, fontWeight = FontWeight.Black, fontSize = 16.sp)
                     Text(
-                        if (g.isHome) "사직 · 홈" else "${g.stadium.ifBlank { "원정" }}",
+                        if (g.isHome) "${teamHomeStadiumName(g.focusTeamCode)} · 홈" else "${g.stadium.ifBlank { "원정" }}",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -2615,10 +2624,8 @@ private fun pickKeyPlayer(
         return KeyPlayerPick(fromPreview.name, fromPreview.playerCode, metric, "주목할 타자")
     }
 
-    val leader = if (game.isFocusLotte()) {
-        leaders.firstOrNull { it.isLotte && !it.isPitcher }
-    } else {
-        null
+    val leader = leaders.firstOrNull {
+        !it.isPitcher && (it.matchesTeam(game.focusTeamCode) || (game.focusName() == "롯데" && it.isLotte))
     } ?: return null
     val metric = when {
         leader.avg.isNotBlank() -> "시즌 타율 ${leader.avg}"

@@ -8,7 +8,9 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -21,7 +23,9 @@ import androidx.core.view.WindowCompat
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.ThemeMode
+import com.bossxor.lottegiants.domain.teamAccentColor
 
 val LotteNavy = Color(0xFF041E42)
 val LotteRed = Color(0xFFE11D48)
@@ -30,12 +34,17 @@ val BaseOccupied = Color(0xFFCCFF00)
 val WinGreen = Color(0xFF2ECB7A)
 val LoseRed = Color(0xFFFF5C6A)
 
-private val DarkColors = darkColorScheme(
+val LocalTeamAccent = staticCompositionLocalOf { LotteRed }
+
+@Composable
+fun teamAccent(): Color = LocalTeamAccent.current
+
+private fun darkColors(accent: Color) = darkColorScheme(
     primary = Color(0xFFF6F6F4),
     onPrimary = Color(0xFF0A0A0A),
     secondary = LotteGold,
     onSecondary = Color(0xFF1A1406),
-    tertiary = LotteRed,
+    tertiary = accent,
     onTertiary = Color.White,
     background = Color(0xFF080808),
     surface = Color(0xFF141414),
@@ -48,15 +57,15 @@ private val DarkColors = darkColorScheme(
     primaryContainer = Color(0xFF1C1C1C),
     onPrimaryContainer = Color(0xFFF6F6F4),
     error = Color(0xFFFF8A8A),
-    inversePrimary = LotteRed,
+    inversePrimary = accent,
 )
 
-private val LightColors = lightColorScheme(
+private fun lightColors(accent: Color) = lightColorScheme(
     primary = Color(0xFF111111),
     onPrimary = Color.White,
     secondary = Color(0xFF8A6A12),
     onSecondary = Color.White,
-    tertiary = LotteRed,
+    tertiary = accent,
     onTertiary = Color.White,
     background = Color(0xFFF4F3EF),
     surface = Color(0xFFFFFFFF),
@@ -69,7 +78,7 @@ private val LightColors = lightColorScheme(
     primaryContainer = Color(0xFFF0EEE8),
     onPrimaryContainer = Color(0xFF111111),
     error = Color(0xFFB3261E),
-    inversePrimary = LotteRed,
+    inversePrimary = accent,
 )
 
 private val AppTypography = Typography(
@@ -123,13 +132,14 @@ fun isAppDark(): Boolean = MaterialTheme.colorScheme.background.luminance() < 0.
 @Composable
 fun heroGradient(): Brush {
     val dark = isAppDark()
+    val accent = teamAccent()
     return if (dark) {
         Brush.verticalGradient(
-            listOf(Color(0xFF2A0814), Color(0xFF0C0C0C)),
+            listOf(accent.copy(alpha = 0.38f), Color(0xFF0C0C0C)),
         )
     } else {
         Brush.verticalGradient(
-            listOf(Color(0xFFF6E4E8), Color(0xFFF4F3EF)),
+            listOf(accent.copy(alpha = 0.14f), Color(0xFFF4F3EF)),
         )
     }
 }
@@ -145,6 +155,7 @@ fun heroLeadScoreColor(): Color =
 @Composable
 fun LotteGiantsTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
+    teamCode: String = LOTTE_TEAM_CODE,
     content: @Composable () -> Unit,
 ) {
     val dark = when (themeMode) {
@@ -152,6 +163,7 @@ fun LotteGiantsTheme(
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
+    val accent = Color(teamAccentColor(teamCode))
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
@@ -161,12 +173,14 @@ fun LotteGiantsTheme(
             insets.isAppearanceLightNavigationBars = !dark
         }
     }
-    MaterialTheme(
-        colorScheme = if (dark) DarkColors else LightColors,
-        typography = AppTypography,
-        shapes = AppShapes,
-        content = content,
-    )
+    CompositionLocalProvider(LocalTeamAccent provides accent) {
+        MaterialTheme(
+            colorScheme = if (dark) darkColors(accent) else lightColors(accent),
+            typography = AppTypography,
+            shapes = AppShapes,
+            content = content,
+        )
+    }
 }
 
 private fun Context.findActivity(): Activity? {

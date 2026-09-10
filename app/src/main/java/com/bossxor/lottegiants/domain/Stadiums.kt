@@ -20,9 +20,13 @@ private val STADIUMS = listOf(
     StadiumCoord("포항", 36.0084, 129.3590),
 )
 
-fun resolveStadiumCoord(stadium: String): StadiumCoord {
+fun resolveStadiumCoord(stadium: String, fallbackName: String = "사직"): StadiumCoord {
     val key = stadium.trim()
-    return STADIUMS.firstOrNull { key.contains(it.name) } ?: StadiumCoord(key.ifBlank { "사직" }, 35.1941, 129.0616)
+    STADIUMS.firstOrNull { key.contains(it.name) }?.let { return it }
+    val fb = fallbackName.trim().ifBlank { "사직" }
+    val fallback = STADIUMS.firstOrNull { fb.contains(it.name) || it.name.contains(fb) }
+        ?: StadiumCoord("사직", 35.1941, 129.0616)
+    return if (key.isBlank()) fallback else StadiumCoord(key, fallback.lat, fallback.lon)
 }
 
 fun weatherSummaryKo(code: Int): String = when (code) {

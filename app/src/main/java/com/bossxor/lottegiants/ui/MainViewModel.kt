@@ -22,9 +22,13 @@ import com.bossxor.lottegiants.domain.TeamStanding
 import com.bossxor.lottegiants.domain.ThemeMode
 import com.bossxor.lottegiants.domain.belongsToKboToday
 import com.bossxor.lottegiants.domain.cancelLabel
+import com.bossxor.lottegiants.domain.focusName
+import com.bossxor.lottegiants.domain.involvesTeam
 import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.playerPhotoUrl
+import com.bossxor.lottegiants.domain.teamHomeStadiumName
 import com.bossxor.lottegiants.domain.teamKeuboSlug
+import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.widget.WidgetUpdater
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -117,6 +121,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         .map { runCatching { ThemeMode.valueOf(it) }.getOrDefault(ThemeMode.SYSTEM) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.SYSTEM)
 
+    val myTeamCode: StateFlow<String> = repo.store.myTeamCodeFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, LOTTE_TEAM_CODE)
+
     private val _secondsUntilRefresh = MutableStateFlow(POLL_LIVE_SEC)
     val secondsUntilRefresh: StateFlow<Int> = _secondsUntilRefresh.asStateFlow()
 
@@ -158,6 +165,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             _snapshot.value = repo.store.loadSnapshot()
             refreshWeatherFromSnapshot(_snapshot.value)
+            if (_resultsTeamCode.value.isBlank()) {
+                _resultsTeamCode.value = repo.store.myTeamCode()
+            }
         }
     }
 
@@ -532,7 +542,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _dayGamesLoading.value = true
         try {
             runCatching { repo.fetchGamesForDate(date) }
-                .onSuccess { _dayGames.value = sortLotteFirst(it) }
+                .onSuccess { _dayGames.value = sortMyTeamFirst(it, currentTeamCode()) }
                 .onFailure { e ->
                     if (_dayGames.value.isEmpty()) {
                         _error.value = e.message ?: "경기 일정을 불러오지 못했습니다."
@@ -682,9 +692,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun refreshWeatherFromSnapshot(snap: LiveSnapshot?) {
         val stadium = snap?.lotteGame?.stadium
             ?: snap?.nextLotteGame?.stadium
-            ?: "사직"
+            ?: teamHomeStadiumName(snap?.myTeamCode ?: currentTeamCode())
         viewModelScope.launch {
-            runCatching { repo.fetchStadiumWeather(stadium) }
+            runCatching { repo.fetchStadiumWeather(stadium, snap?.myTeamCode ?: currentTeamCode()) }
                 .onSuccess {
                     _weather.value = it
                     repo.store.setWeather(it)
@@ -705,34 +715,40 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (liveById.isEmpty()) return
         val current = _dayGames.value
         if (current.isEmpty()) return
-        _dayGames.value = sortLotteFirst(
+        _dayGames.value = sortMyTeamFirst(
             current.map { g -> liveById[g.gameId]?.let { live -> g.mergeLive(live) } ?: g },
+            snap.myTeamCode.ifBlank { currentTeamCode() },
         )
     }
 
-    private fun LotteGameInfo.toResultsMini(): MiniGame = MiniGame(
-        gameId = gameId,
-        homeName = if (isHome) "롯데" else opponentName,
-        awayName = if (isHome) opponentName else "롯데",
-        homeScore = if (isHome) lotteScore else opponentScore,
-        awayScore = if (isHome) opponentScore else lotteScore,
-        status = status,
-        statusText = if (status == GameStatus.CANCELED) cancelLabel else statusText,
-        cancelReason = cancelReason,
-        stadium = stadium,
-        startTime = startTime,
-        homeLogoUrl = if (isHome) lotteLogoUrl.ifBlank { com.bossxor.lottegiants.domain.LOTTE_LOGO_URL } else opponentLogoUrl,
-        awayLogoUrl = if (isHome) opponentLogoUrl else lotteLogoUrl.ifBlank { com.bossxor.lottegiants.domain.LOTTE_LOGO_URL },
-        homeStarter = if (isHome) lotteStartingPitcher else opponentStartingPitcher,
-        awayStarter = if (isHome) opponentStartingPitcher else lotteStartingPitcher,
-        broadChannel = broadChannel,
-        winPitcherName = winPitcherName,
-        losePitcherName = losePitcherName,
-        gameDate = gameDate,
-        homeTeamCode = if (isHome) LOTTE_TEAM_CODE else opponentCode,
-        awayTeamCode = if (isHome) opponentCode else LOTTE_TEAM_CODE,
-        doubleHeaderNo = doubleHeaderNo,
-    )
+    private fun LotteGameInfo.toResultsMini(): MiniGame {
+        val name = focusName()
+        val code = focusTeamCode.ifBlank { LOTTE_TEAM_CODE }
+        val logo = lotteLogoUrl.ifBlank { teamLogoUrl(code) }
+        return MiniGame(
+            gameId = gameId,
+            homeName = if (isHome) name else opponentName,
+            awayName = if (isHome) opponentName else name,
+            homeScore = if (isHome) lotteScore else opponentScore,
+            awayScore = if (isHome) opponentScore else lotteScore,
+            status = status,
+            statusText = if (status == GameStatus.CANCELED) cancelLabel else statusText,
+            cancelReason = cancelReason,
+            stadium = stadium,
+            startTime = startTime,
+            homeLogoUrl = if (isHome) logo else opponentLogoUrl,
+            awayLogoUrl = if (isHome) opponentLogoUrl else logo,
+            homeStarter = if (isHome) lotteStartingPitcher else opponentStartingPitcher,
+            awayStarter = if (isHome) opponentStartingPitcher else lotteStartingPitcher,
+            broadChannel = broadChannel,
+            winPitcherName = winPitcherName,
+            losePitcherName = losePitcherName,
+            gameDate = gameDate,
+            homeTeamCode = if (isHome) code else opponentCode,
+            awayTeamCode = if (isHome) opponentCode else code,
+            doubleHeaderNo = doubleHeaderNo,
+        )
+    }
 
     private fun MiniGame.mergeLive(live: MiniGame): MiniGame = copy(
         homeScore = live.homeScore,
@@ -748,15 +764,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         doubleHeaderNo = if (live.doubleHeaderNo > 0) live.doubleHeaderNo else doubleHeaderNo,
     )
 
+    private fun currentTeamCode(): String =
+        myTeamCode.value.ifBlank { _snapshot.value?.myTeamCode.orEmpty().ifBlank { LOTTE_TEAM_CODE } }
+
     companion object {
         const val POLL_LIVE_SEC = 10
         const val POLL_IDLE_SEC = 45
 
-        fun sortLotteFirst(games: List<MiniGame>): List<MiniGame> =
-            games.sortedByDescending {
-                it.homeTeamCode == LOTTE_TEAM_CODE || it.awayTeamCode == LOTTE_TEAM_CODE ||
-                    it.homeName.contains("롯데") || it.awayName.contains("롯데")
-            }
+        fun sortMyTeamFirst(games: List<MiniGame>, teamCode: String = LOTTE_TEAM_CODE): List<MiniGame> =
+            games.sortedByDescending { it.involvesTeam(teamCode) }
+
+        fun sortLotteFirst(games: List<MiniGame>): List<MiniGame> = sortMyTeamFirst(games, LOTTE_TEAM_CODE)
     }
 }
 

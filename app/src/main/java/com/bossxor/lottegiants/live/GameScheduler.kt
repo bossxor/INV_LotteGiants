@@ -20,6 +20,7 @@ import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.isCanceledGame
+import com.bossxor.lottegiants.domain.isTeamHome
 import com.bossxor.lottegiants.domain.shouldEmitAlert
 import com.bossxor.lottegiants.domain.shouldPostLiveNotification
 import com.bossxor.lottegiants.widget.WidgetUpdater
@@ -62,13 +63,14 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         }
 
         val lead = repo.store.liveLeadMinutes()
+        val myTeam = snap.myTeamCode.ifBlank { repo.store.myTeamCode() }
         val hasLive = todayGames.any { it.status == GameStatus.LIVE } || game?.status == GameStatus.LIVE
         if (hasLive) {
             LiveScoreService.start(applicationContext)
         }
         val befores = todayGames.filter { it.status == GameStatus.BEFORE && !it.isCanceledGame() }
         if (befores.isNotEmpty()) {
-            befores.forEach { mini -> scheduleForMini(applicationContext, mini, lead) }
+            befores.forEach { mini -> scheduleForMini(applicationContext, mini, lead, myTeam) }
             val withinLead = befores.any { mini ->
                 val date = mini.gameDate.ifBlank { com.bossxor.lottegiants.domain.kboToday().toString() }
                 val start = parseGameMillis(date, mini.startTime) ?: return@any false
@@ -271,13 +273,13 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             context: Context,
             mini: MiniGame,
             leadMinutes: Int = com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTES_DEFAULT,
+            myTeam: String = com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE,
         ) {
             if (mini.isCanceledGame()) {
                 cancelGameAlarms(context, mini.gameId)
                 return
             }
-            val lotteHome = mini.homeTeamCode.equals("LT", ignoreCase = true) ||
-                mini.homeName.contains("롯데")
+            val lotteHome = mini.isTeamHome(myTeam) == true
             val opponent = if (lotteHome) mini.awayName else mini.homeName
             val pitcher = if (lotteHome) mini.homeStarter else mini.awayStarter
             val date = mini.gameDate.ifBlank { com.bossxor.lottegiants.domain.kboToday().toString() }

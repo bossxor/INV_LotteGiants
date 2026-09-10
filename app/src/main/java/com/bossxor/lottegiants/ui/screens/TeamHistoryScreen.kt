@@ -24,7 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
-import com.bossxor.lottegiants.domain.LotteHistory
+import com.bossxor.lottegiants.domain.TeamHistory
 import com.bossxor.lottegiants.domain.LotteTeamCard
 import com.bossxor.lottegiants.domain.teamFullName
 import com.bossxor.lottegiants.domain.teamHomeLabel
@@ -40,7 +40,6 @@ fun TeamHistoryScreen(
     teamCard: LotteTeamCard? = null,
 ) {
     val code = teamCode.ifBlank { LOTTE_TEAM_CODE }
-    val isLotte = code.equals(LOTTE_TEAM_CODE, true)
     Column(
         Modifier
             .fillMaxSize()
@@ -93,9 +92,10 @@ fun TeamHistoryScreen(
                 }
             }
         }
-        if (isLotte) {
+        val history = TeamHistory.byCode(code)
+        if (history.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
-            LotteHistory.sections.forEach { section ->
+            history.forEach { section ->
                 SectionCard(modifier = Modifier.padding(bottom = 10.dp)) {
                     Column {
                         Text(section.title, style = MaterialTheme.typography.titleSmall)

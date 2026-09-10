@@ -122,7 +122,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val themeMode by vm.themeMode.collectAsState()
-            LotteGiantsTheme(themeMode = themeMode) {
+            val myTeamCode by vm.myTeamCode.collectAsState()
+            LotteGiantsTheme(themeMode = themeMode, teamCode = myTeamCode) {
                 val snapshot by vm.snapshot.collectAsState()
                 val standings by vm.standings.collectAsState()
                 val error by vm.error.collectAsState()
@@ -329,6 +330,7 @@ class MainActivity : ComponentActivity() {
                     onBackToLotte = vm::backToLotte,
                     onNeedFullRelay = vm::ensureFullRelay,
                     resultsTeamCode = resultsTeamCode,
+                    myTeamCode = myTeamCode,
                     onSelectResultsTeam = vm::setResultsTeam,
                     seasonGames = seasonGames,
                     seasonLoading = seasonLoading,
@@ -477,6 +479,7 @@ private fun AppScaffold(
     onBackToLotte: () -> Unit,
     onNeedFullRelay: (String) -> Unit,
     resultsTeamCode: String,
+    myTeamCode: String,
     onSelectResultsTeam: (String) -> Unit,
     seasonGames: List<com.bossxor.lottegiants.domain.MiniGame>,
     seasonLoading: Boolean,
@@ -556,7 +559,7 @@ private fun AppScaffold(
                         "· 배터리 사용량 최적화 제외\n" +
                         "· 삼성 잠자기 앱에서 빼기\n" +
                         "· 홈 화면 위젯\n\n" +
-                        "설정에서 언제든 바꿀 수 있습니다.",
+                        "설정에서 내 팀을 바꿀 수 있습니다.",
                 )
             },
             confirmButton = {
@@ -714,6 +717,7 @@ private fun AppScaffold(
                         },
                         resultsTeamCode = resultsTeamCode,
                         onSelectResultsTeam = onSelectResultsTeam,
+                        myTeamCode = myTeamCode,
                         seasonGames = seasonGames,
                         seasonLoading = seasonLoading,
                     )
@@ -722,8 +726,9 @@ private fun AppScaffold(
                         teamCard = teamCard,
                         batterLeaders = batterLeaders,
                         pitcherLeaders = pitcherLeaders,
+                        myTeamCode = myTeamCode,
                         onOpenLeaders = {
-                            onOpenLeadersForTeam(LOTTE_TEAM_CODE)
+                            onOpenLeadersForTeam(myTeamCode)
                             overlay = Overlay.Leaders
                         },
                         onRefresh = onRefreshStandings,
@@ -745,7 +750,7 @@ private fun AppScaffold(
                         favoritePlayers = favoritePlayers,
                         onRemoveFavorite = onRemoveFavorite,
                         onOpenPlayerSearch = {
-                            onOpenLeadersForTeam(LOTTE_TEAM_CODE)
+                            onOpenLeadersForTeam(myTeamCode)
                             overlay = Overlay.Leaders
                         },
                     )

@@ -39,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -61,9 +62,17 @@ import com.bossxor.lottegiants.BuildConfig
 import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.data.InstallResult
 import com.bossxor.lottegiants.data.NotificationType
+import com.bossxor.lottegiants.data.TeamSwitcher
 import com.bossxor.lottegiants.data.UpdateCheckResult
 import com.bossxor.lottegiants.data.UpdateChecker
+import com.bossxor.lottegiants.data.descriptionFor
 import com.bossxor.lottegiants.domain.AlertPreset
+import com.bossxor.lottegiants.domain.KBO_TEAMS
+import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
+import com.bossxor.lottegiants.domain.teamCodeToName
+import com.bossxor.lottegiants.domain.teamFullName
+import com.bossxor.lottegiants.domain.teamHomeLabel
+import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTE_OPTIONS
 import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.ThemeMode
@@ -77,6 +86,7 @@ import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.components.PlayerAvatar
 import com.bossxor.lottegiants.ui.components.ScreenTitle
 import com.bossxor.lottegiants.ui.components.SectionCard
+import com.bossxor.lottegiants.ui.components.TeamLogo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -102,6 +112,100 @@ fun SettingsScreen(
             .padding(16.dp),
     ) {
         ScreenTitle("설정", "테마 · 알림 · 업데이트")
+
+        val myTeam by store.myTeamCodeFlow.collectAsState(initial = LOTTE_TEAM_CODE)
+        var pickTeam by remember { mutableStateOf(false) }
+        var confirmTeam by remember { mutableStateOf<String?>(null) }
+        var switchingTeam by remember { mutableStateOf(false) }
+
+        Spacer(Modifier.height(20.dp))
+        Text("내 팀", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        SectionCard {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TeamLogo(teamLogoUrl(myTeam), size = 40)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(teamFullName(myTeam), fontWeight = FontWeight.Bold)
+                    Text(
+                        teamHomeLabel(myTeam),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Button(
+                    onClick = { pickTeam = true },
+                    shape = RoundedCornerShape(12.dp),
+                ) { Text("변경") }
+            }
+        }
+        if (pickTeam) {
+            AlertDialog(
+                onDismissRequest = { pickTeam = false },
+                title = { Text("내 팀", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column {
+                        KBO_TEAMS.forEach { team ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        pickTeam = false
+                                        if (team.code != myTeam) confirmTeam = team.code
+                                    }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                TeamLogo(teamLogoUrl(team.code), size = 32)
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    teamFullName(team.code),
+                                    fontWeight = if (team.code == myTeam) FontWeight.Bold else FontWeight.Normal,
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { pickTeam = false }) { Text("닫기") }
+                },
+            )
+        }
+        confirmTeam?.let { code ->
+            AlertDialog(
+                onDismissRequest = { if (!switchingTeam) confirmTeam = null },
+                title = { Text("팀을 바꿀까요?", fontWeight = FontWeight.Bold) },
+                text = {
+                    Text(
+                        "${teamFullName(code)}로 바꿉니다.\n" +
+                            "스냅샷·알림·위젯·홈 아이콘이 이 팀을 따라갑니다.\n" +
+                            "즐겨찾기 선수는 그대로 두므로, 다른 팀 선수가 남아 있을 수 있습니다.",
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = !switchingTeam,
+                        onClick = {
+                            switchingTeam = true
+                            scope.launch {
+                                runCatching { TeamSwitcher.switchTeam(context, code) }
+                                switchingTeam = false
+                                confirmTeam = null
+                            }
+                        },
+                    ) { Text(if (switchingTeam) "변경 중…" else "변경") }
+                },
+                dismissButton = {
+                    TextButton(
+                        enabled = !switchingTeam,
+                        onClick = { confirmTeam = null },
+                    ) { Text("취소") }
+                },
+            )
+        }
 
         Spacer(Modifier.height(20.dp))
         Text("화면 테마", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -284,7 +388,7 @@ fun SettingsScreen(
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(type.label, fontWeight = FontWeight.SemiBold)
-                            Text(type.description, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(type.descriptionFor(teamCodeToName(myTeam)), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Switch(
                             checked = enabled,
@@ -538,8 +642,9 @@ fun SettingsScreen(
                         ?.use { it.readText() }
                         .orEmpty()
                     store.importUserSettings(store.decodeUserSettings(raw))
+                    TeamSwitcher.afterImport(context)
                 }.onSuccess {
-                    Toast.makeText(context, "설정을 복원했습니다. 알림·즐겨찾기를 확인하세요.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "설정을 복원했습니다. 알림·즐겨찾기·내 팀을 확인하세요.", Toast.LENGTH_LONG).show()
                 }.onFailure {
                     Toast.makeText(context, "복원 실패: ${it.message}", Toast.LENGTH_LONG).show()
                 }

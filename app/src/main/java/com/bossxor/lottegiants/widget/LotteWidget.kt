@@ -53,8 +53,8 @@ import com.bossxor.lottegiants.MainActivity
 import com.bossxor.lottegiants.R
 import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.domain.GameStatus
-import com.bossxor.lottegiants.domain.LOTTE_LOGO_URL
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
+import com.bossxor.lottegiants.domain.focusName
 import com.bossxor.lottegiants.domain.LiveSnapshot
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.cancelLabel
@@ -98,7 +98,13 @@ class LotteWidget : GlanceAppWidget() {
         val opacityPct = repo.store.widgetOpacity()
         val showOppLogo = repo.store.widgetShowOppLogo()
         val game = snap?.lotteGame?.takeIf { it.belongsToKboToday() } ?: snap?.nextLotteGame
-        val lotteLogo = WidgetAssets.logoProvider(context, LOTTE_TEAM_CODE, LOTTE_LOGO_URL)
+        val myCode = game?.focusTeamCode?.ifBlank { snap?.myTeamCode }.orEmpty()
+            .ifBlank { snap?.myTeamCode.orEmpty() }.ifBlank { LOTTE_TEAM_CODE }
+        val lotteLogo = WidgetAssets.logoProvider(
+            context,
+            myCode,
+            game?.lotteLogoUrl?.ifBlank { teamLogoUrl(myCode) } ?: teamLogoUrl(myCode),
+        )
         val oppLogo = if (showOppLogo && game != null) {
             val oppCode = game.opponentCode.ifBlank { teamNameToCode(game.opponentName) }
             WidgetAssets.logoProvider(
@@ -458,13 +464,13 @@ private fun CanceledWide(
         Image(provider = if (g.isHome) oppLogo else lotteLogo, contentDescription = null, modifier = GlanceModifier.size(28.dp))
         Spacer(GlanceModifier.width(8.dp))
         Text(
-            if (g.isHome) g.opponentName else "롯데",
+            if (g.isHome) g.opponentName else g.focusName(),
             style = TextStyle(color = white, fontSize = 13.sp),
             modifier = GlanceModifier.defaultWeight(),
         )
         Text("vs", style = TextStyle(color = muted, fontSize = 12.sp))
         Text(
-            if (g.isHome) "롯데" else g.opponentName,
+            if (g.isHome) g.focusName() else g.opponentName,
             style = TextStyle(color = white, fontSize = 13.sp),
             modifier = GlanceModifier.defaultWeight(),
         )
@@ -502,7 +508,7 @@ private fun LiveWide(
         StatusPill(if (g.isSuspended) g.suspendLabel else "LIVE  ${g.inningLabel}")
         Spacer(GlanceModifier.width(8.dp))
         Text(
-            if (g.isLotteBatting) "롯데 공격" else "롯데 수비",
+            if (g.isLotteBatting) "${g.focusName()} 공격" else "${g.focusName()} 수비",
             style = TextStyle(color = muted, fontSize = 11.sp),
         )
         if (g.stadium.isNotBlank()) {
@@ -514,7 +520,7 @@ private fun LiveWide(
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         TeamSide(
             if (g.isHome) oppLogo else lotteLogo,
-            if (g.isHome) g.opponentName else "롯데",
+            if (g.isHome) g.opponentName else g.focusName(),
             if (g.isHome) g.opponentScore else g.lotteScore,
             awayRank(g, snap),
         )
@@ -531,7 +537,7 @@ private fun LiveWide(
         Spacer(GlanceModifier.width(6.dp))
         TeamSide(
             if (g.isHome) lotteLogo else oppLogo,
-            if (g.isHome) "롯데" else g.opponentName,
+            if (g.isHome) g.focusName() else g.opponentName,
             if (g.isHome) g.lotteScore else g.opponentScore,
             homeRank(g, snap),
         )
@@ -633,7 +639,7 @@ private fun BeforeWide(
             Image(lotteLogo, contentDescription = "lotte", modifier = GlanceModifier.size(28.dp))
         }
         Spacer(GlanceModifier.width(6.dp))
-        Text("롯데", style = TextStyle(color = white, fontSize = 13.sp, fontWeight = FontWeight.Bold))
+        Text(g.focusName(), style = TextStyle(color = white, fontSize = 13.sp, fontWeight = FontWeight.Bold))
         Spacer(GlanceModifier.width(8.dp))
         Text("vs", style = TextStyle(color = muted, fontSize = 12.sp))
         Spacer(GlanceModifier.width(8.dp))
@@ -688,7 +694,7 @@ private fun EndedWide(
         Image(lotteLogo, contentDescription = null, modifier = GlanceModifier.size(24.dp))
         Spacer(GlanceModifier.width(6.dp))
         Text(
-            "롯데 ${g.lotteScore} : ${g.opponentScore} ${g.opponentName}",
+            "${g.focusName()} ${g.lotteScore} : ${g.opponentScore} ${g.opponentName}",
             style = TextStyle(color = white, fontSize = 14.sp, fontWeight = FontWeight.Bold),
             maxLines = 1,
         )

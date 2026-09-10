@@ -559,6 +559,38 @@ fun teamHomeLabel(code: String): String = when (code.trim().uppercase()) {
     else -> ""
 }
 
+fun normalizeTeamCode(code: String): String {
+    val c = code.trim().uppercase()
+    return if (KBO_TEAMS.any { it.code == c }) c else LOTTE_TEAM_CODE
+}
+
+/** 히어로 워터마크. 런처 구장 배지와 같은 영문 */
+fun stadiumWatermark(code: String): String = when (normalizeTeamCode(code)) {
+    "LT" -> "SAJIK"
+    "OB", "LG" -> "JAMSIL"
+    "SS" -> "DAEGU"
+    "HT" -> "GWANGJU"
+    "KT" -> "SUWON"
+    "HH" -> "DAEJEON"
+    "NC" -> "CHANGWON"
+    "SK" -> "INCHEON"
+    "WO" -> "GOCHEOK"
+    else -> "SAJIK"
+}
+
+fun teamHomeStadiumName(code: String): String = when (normalizeTeamCode(code)) {
+    "LT" -> "사직"
+    "SS" -> "대구"
+    "HT" -> "광주"
+    "LG", "OB" -> "잠실"
+    "KT" -> "수원"
+    "HH" -> "대전"
+    "NC" -> "창원"
+    "SK" -> "인천"
+    "WO" -> "고척"
+    else -> "사직"
+}
+
 fun LeaderPlayer.matchesTeam(code: String): Boolean {
     val c = code.trim().uppercase()
     if (c.isBlank()) return false
@@ -690,22 +722,26 @@ fun LotteGameInfo.focusName(): String =
 fun LotteGameInfo.isFocusLotte(): Boolean =
     focusTeamCode.isBlank() || focusTeamCode.equals(LOTTE_TEAM_CODE, ignoreCase = true)
 
-fun LotteGameInfo.toRaceMiniGame(): MiniGame = MiniGame(
-    gameId = gameId,
-    homeName = if (isHome) "롯데" else opponentName,
-    awayName = if (isHome) opponentName else "롯데",
-    homeScore = if (isHome) lotteScore else opponentScore,
-    awayScore = if (isHome) opponentScore else lotteScore,
-    status = status,
-    statusText = statusText,
-    cancelReason = cancelReason,
-    isSuspended = isSuspended,
-    resumeTime = resumeTime,
-    gameDate = gameDate,
-    homeTeamCode = if (isHome) LOTTE_TEAM_CODE else opponentCode,
-    awayTeamCode = if (isHome) opponentCode else LOTTE_TEAM_CODE,
-    doubleHeaderNo = doubleHeaderNo,
-)
+fun LotteGameInfo.toRaceMiniGame(): MiniGame {
+    val name = focusName()
+    val code = focusTeamCode.ifBlank { LOTTE_TEAM_CODE }
+    return MiniGame(
+        gameId = gameId,
+        homeName = if (isHome) name else opponentName,
+        awayName = if (isHome) opponentName else name,
+        homeScore = if (isHome) lotteScore else opponentScore,
+        awayScore = if (isHome) opponentScore else lotteScore,
+        status = status,
+        statusText = statusText,
+        cancelReason = cancelReason,
+        isSuspended = isSuspended,
+        resumeTime = resumeTime,
+        gameDate = gameDate,
+        homeTeamCode = if (isHome) code else opponentCode,
+        awayTeamCode = if (isHome) opponentCode else code,
+        doubleHeaderNo = doubleHeaderNo,
+    )
+}
 
 /** 루타식 프리뷰 묶음 */
 @Serializable
@@ -917,6 +953,8 @@ data class LiveSnapshot(
     val lotteSeasonRank: Int = 0,
     val lotteRemainingGames: Int = 0,
     val widgetRaceLine: String = "",
+    /** 이 스냅샷을 만든 내 팀. 위젯·알림은 CompositionLocal을 못 쓴다. */
+    val myTeamCode: String = LOTTE_TEAM_CODE,
 )
 
 @Serializable

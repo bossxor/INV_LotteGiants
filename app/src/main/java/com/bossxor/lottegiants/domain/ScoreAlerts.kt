@@ -17,12 +17,13 @@ fun leadChangeTitle(
     nowLotte: Int,
     nowOpp: Int,
     opponentName: String,
+    teamName: String = "롯데",
 ): String? {
     val prev = leadOf(prevLotte, prevOpp)
     val now = leadOf(nowLotte, nowOpp)
     if (prev == now) return null
     if (now == 0) return "동점!"
-    if (now == 1 && prev == -1) return "롯데 역전!"
+    if (now == 1 && prev == -1) return "${teamName.ifBlank { "롯데" }} 역전!"
     if (now == -1 && prev == 1) return "${opponentName.ifBlank { "상대" }} 역전"
     return null
 }
@@ -108,24 +109,36 @@ fun describePlayHow(text: String): String? {
     return if (dir != null && hit) "$dir $kind" else kind
 }
 
-fun formatLotteScoreTitle(who: String?, runs: Int, score: String, how: String? = null): String {
+fun formatLotteScoreTitle(
+    who: String?,
+    runs: Int,
+    score: String,
+    how: String? = null,
+    teamName: String = "롯데",
+): String {
     val n = runs.coerceAtLeast(1)
     val whoPart = who?.trim().orEmpty()
     val howPart = how?.trim().orEmpty()
     val play = listOf(whoPart, howPart).filter { it.isNotBlank() }.joinToString(" ")
     return buildString {
-        append("롯데 득점!")
+        append("${teamName.ifBlank { "롯데" }} 득점!")
         if (play.isNotBlank()) append(" $play")
         append(" · ${n}타점 · $score")
     }
 }
 
-fun formatHomerunTitle(who: String?, runs: Int, score: String, how: String? = null): String {
+fun formatHomerunTitle(
+    who: String?,
+    runs: Int,
+    score: String,
+    how: String? = null,
+    teamName: String = "롯데",
+): String {
     val n = runs.coerceAtLeast(1)
     val howPart = how?.trim()?.takeIf { it.isNotBlank() } ?: "${n}점홈런"
     val whoPart = who?.trim().orEmpty()
     return buildString {
-        append("롯데 홈런!")
+        append("${teamName.ifBlank { "롯데" }} 홈런!")
         if (whoPart.isNotBlank()) append(" $whoPart")
         append(" $howPart · $score")
     }

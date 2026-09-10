@@ -12,6 +12,7 @@ import com.bossxor.lottegiants.domain.atBatForChance
 import com.bossxor.lottegiants.domain.basesKey
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.describePlayHow
+import com.bossxor.lottegiants.domain.focusName
 import com.bossxor.lottegiants.domain.formatConcedeTitle
 import com.bossxor.lottegiants.domain.formatHomerunTitle
 import com.bossxor.lottegiants.domain.formatLotteScoreTitle
@@ -153,14 +154,14 @@ class EventDetector(private val store: SnapshotStore) {
                 val lotteHr = text.contains("홈런") && isLotteHomerun(game, text)
                 if (lotteHr) {
                     val runs = parseHrRuns(text) ?: lotteRuns
-                    val title = formatHomerunTitle(lotteWho, runs, score, how)
+                    val title = formatHomerunTitle(lotteWho, runs, score, how, teamName = game.focusName())
                     maybeNotify(
                         context, NotificationType.HOMERUN, 3_000_000 + seq, title, body,
                         gameId = game.gameId, detailTab = "relay",
                     )
                     store.setHighlight(title)
                 } else {
-                    val title = formatLotteScoreTitle(lotteWho, lotteRuns, score, how)
+                    val title = formatLotteScoreTitle(lotteWho, lotteRuns, score, how, teamName = game.focusName())
                     maybeNotify(
                         context, NotificationType.SCORE, 1_000_000 + seq, title, body,
                         gameId = game.gameId, detailTab = "relay",
@@ -180,6 +181,7 @@ class EventDetector(private val store: SnapshotStore) {
             }
             leadChangeTitle(
                 lastLotteScore, lastOppScore, game.lotteScore, game.opponentScore, game.opponentName,
+                teamName = game.focusName(),
             )?.let { title ->
                 maybeNotify(
                     context, NotificationType.LEAD_CHANGE, 4_000_000 + seq,
@@ -222,7 +224,7 @@ class EventDetector(private val store: SnapshotStore) {
             if (game.out == 0 || game.inning != lastInning) {
                 maybeNotify(
                     context, NotificationType.INNING_CHANGE, 2501,
-                    game.inningLabel, "중간 스코어 롯데 ${game.lotteScore}:${game.opponentScore}",
+                    game.inningLabel, "중간 스코어 ${game.focusName()} ${game.lotteScore}:${game.opponentScore}",
                     gameId = game.gameId,
                 )
             }
@@ -234,7 +236,7 @@ class EventDetector(private val store: SnapshotStore) {
         ) {
             maybeNotify(
                 context, NotificationType.EIGHTH_INNING, 2510,
-                "8회말!", "롯데 ${game.lotteScore}:${game.opponentScore} · ${game.opponentName}",
+                "8회말!", "${game.focusName()} ${game.lotteScore}:${game.opponentScore} · ${game.opponentName}",
                 gameId = game.gameId,
             )
             eighthNotifiedFor = "${game.gameId}-8b"
@@ -430,8 +432,8 @@ class EventDetector(private val store: SnapshotStore) {
         val today = kboToday().toString()
         if (game.gameDate.isNotBlank() && game.gameDate != today) return
         val result = when {
-            game.lotteScore > game.opponentScore -> "롯데 승리!"
-            game.lotteScore < game.opponentScore -> "롯데 패배"
+            game.lotteScore > game.opponentScore -> "${game.focusName()} 승리!"
+            game.lotteScore < game.opponentScore -> "${game.focusName()} 패배"
             else -> "무승부"
         }
         maybeNotify(
@@ -579,7 +581,7 @@ class EventDetector(private val store: SnapshotStore) {
     private fun isLotteHomerun(game: LotteGameInfo, text: String): Boolean {
         if (game.lotteLineup.any { it.name.isNotBlank() && text.contains(it.name) }) return true
         if (game.lotteBenchBatters.any { it.name.isNotBlank() && text.contains(it.name) }) return true
-        if (text.contains("롯데") && !text.contains(game.opponentName)) return true
+        if (text.contains(game.focusName()) && !text.contains(game.opponentName)) return true
         return game.isLotteBatting && !text.contains(game.opponentName)
     }
 
@@ -620,9 +622,10 @@ class EventDetector(private val store: SnapshotStore) {
         standings: List<TeamStanding>,
         recentGames: List<com.bossxor.lottegiants.domain.MiniGame> = emptyList(),
     ) {
-        val now = racePulse(standings) ?: return
+        val teamCode = store.myTeamCode()
+        val now = racePulse(standings, teamCode) ?: return
         val prev = parseRacePulse(store.lastRaceFingerprint())
-        val alert = raceChangeAlert(prev, now, standings, recentGames)
+        val alert = raceChangeAlert(prev, now, standings, recentGames, teamCode)
         store.setLastRaceFingerprint(now.fingerprint())
         if (alert != null) {
             val live = emittingForLive

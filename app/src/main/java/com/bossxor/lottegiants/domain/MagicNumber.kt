@@ -429,10 +429,13 @@ fun raceChangeCause(
     now: RacePulse,
     standings: List<TeamStanding> = emptyList(),
     recentGames: List<MiniGame> = emptyList(),
+    teamCode: String = LOTTE_TEAM_CODE,
 ): String {
+    val focus = teamCode.ifBlank { LOTTE_TEAM_CODE }
+    val focusName = teamCodeToName(focus).ifBlank { "롯데" }
     val events = mutableListOf<String>()
-    val lotteGame = latestEndedFor(recentGames, LOTTE_TEAM_CODE)
-    if (lotteGame != null) events += formatEndedResult(lotteGame, LOTTE_TEAM_CODE)
+    val lotteGame = latestEndedFor(recentGames, focus)
+    if (lotteGame != null) events += formatEndedResult(lotteGame, focus)
 
     val vsRank = when {
         now.tragic != null || prev.tragic != null -> KBO_POSTSEASON_SPOTS
@@ -440,7 +443,7 @@ fun raceChangeCause(
     }
     if (vsRank != null) {
         val vs = standings.firstOrNull { it.ranking == vsRank }
-        if (vs != null && !vs.teamId.equals(LOTTE_TEAM_CODE, ignoreCase = true)) {
+        if (vs != null && !vs.teamId.equals(focus, ignoreCase = true)) {
             val vsGame = latestEndedFor(recentGames, vs.teamId)
             if (vsGame != null && vsGame.gameId != lotteGame?.gameId) {
                 events += formatEndedResult(vsGame, vs.teamId)
@@ -458,8 +461,8 @@ fun raceChangeCause(
     }
     val why = events.joinToString(" · ")
     val fallback = when {
-        now.tragic != null || prev.tragic != null -> "5위 승 또는 롯데 패"
-        else -> "롯데 승 또는 상대 패"
+        now.tragic != null || prev.tragic != null -> "5위 승 또는 ${focusName} 패"
+        else -> "${focusName} 승 또는 상대 패"
     }
     return when {
         delta.isNotBlank() && why.isNotBlank() -> "$delta · $why"
@@ -477,15 +480,17 @@ fun raceChangeAlert(
     now: RacePulse,
     standings: List<TeamStanding> = emptyList(),
     recentGames: List<MiniGame> = emptyList(),
+    teamCode: String = LOTTE_TEAM_CODE,
 ): Pair<String, String>? {
     if (prev == null) return null
     if (prev.fingerprint() == now.fingerprint()) return null
-    val cause = raceChangeCause(prev, now, standings, recentGames)
+    val focusName = teamCodeToName(teamCode.ifBlank { LOTTE_TEAM_CODE }).ifBlank { "롯데" }
+    val cause = raceChangeCause(prev, now, standings, recentGames, teamCode)
     if (now.tragic != null && now.tragic <= 0 && (prev.tragic == null || prev.tragic > 0)) {
         return "포스트시즌 탈락" to cause.ifBlank { "트래직넘버 소멸 · ${now.rank}위" }
     }
     if (now.magic != null && now.magic <= 0 && (prev.magic == null || prev.magic > 0) && now.rank <= KBO_POSTSEASON_SPOTS) {
-        return "${now.slot} 확정" to cause.ifBlank { "매직넘버 소멸 · 롯데 ${now.rank}위" }
+        return "${now.slot} 확정" to cause.ifBlank { "매직넘버 소멸 · $focusName ${now.rank}위" }
     }
     if (now.magic != null && prev.magic != null && now.magic < prev.magic) {
         val label = now.magicLabel.ifBlank { "매직넘버" }
@@ -495,7 +500,7 @@ fun raceChangeAlert(
         return "트래직넘버 ${now.tragic}" to cause
     }
     if (now.rank != prev.rank) {
-        return "롯데 ${now.rank}위" to cause
+        return "$focusName ${now.rank}위" to cause
     }
     return null
 }
@@ -528,6 +533,7 @@ fun lotteRaceSummary(
     if (standings.size < 2) return null
     val sorted = standings.sortedBy { it.ranking }
     val lotte = sorted.firstOrNull { it.teamId.equals(lotteCode, ignoreCase = true) } ?: return null
+    val focusName = teamCodeToName(lotteCode).ifBlank { lotte.teamName.ifBlank { "롯데" } }
     val seasonG = seasonLength(sorted)
     val rem = remainingGames(lotte, seasonG)
     val slot = kboPostseasonSlot(lotte.ranking)
@@ -539,7 +545,7 @@ fun lotteRaceSummary(
     fun at(rank: Int) = sorted.firstOrNull { it.ranking == rank } ?: sorted.getOrNull(rank - 1)
 
     val headline = buildString {
-        append("롯데 ${lotte.ranking}위")
+        append("$focusName ${lotte.ranking}위")
         if (slot.isNotBlank()) append(" · $slot")
         append(" · 잔여 ${rem}경기")
     }
@@ -561,7 +567,7 @@ fun lotteRaceSummary(
                 lines += if (elim <= 0) {
                     "포스트시즌 탈락"
                 } else {
-                    "와일드카드 트래직넘버 $elim (5위 승+롯데 패)"
+                    "와일드카드 트래직넘버 $elim (5위 승+${focusName} 패)"
                 }
             }
         }
@@ -578,7 +584,7 @@ fun lotteRaceSummary(
                 lines += if (m <= 0) {
                     "${kboPostseasonSlot(lotte.ranking)} 확정"
                 } else {
-                    "$label $m (롯데 승+${vsRank}위 패)"
+                    "$label $m (${focusName} 승+${vsRank}위 패)"
                 }
                 formatSelfClinchLine(lotte, vs, seasonG).takeIf { it.isNotBlank() }?.let { lines += it }
             }

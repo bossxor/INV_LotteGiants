@@ -16,7 +16,6 @@ import com.bossxor.lottegiants.R
 import com.bossxor.lottegiants.data.NotificationType
 import com.bossxor.lottegiants.data.destination
 import com.bossxor.lottegiants.domain.GameStatus
-import com.bossxor.lottegiants.domain.LOTTE_LOGO_URL
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.LiveSnapshot
@@ -30,6 +29,8 @@ import com.bossxor.lottegiants.domain.WinProb
 import com.bossxor.lottegiants.domain.estimateLotteWinProb
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.domain.kboToday
+import com.bossxor.lottegiants.domain.focusName
+import com.bossxor.lottegiants.domain.teamAccentColor
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.teamNameToCode
 import com.bossxor.lottegiants.widget.WidgetAssets
@@ -112,7 +113,8 @@ object NotificationHelper {
     /** 종료·취소 알림은 2시간 뒤 스스로 사라진다 (서비스가 멈춘 뒤에도 남는 걸 막는다). */
     private const val FINISHED_NOTIFICATION_TIMEOUT_MS = 2 * 60 * 60 * 1000L
 
-    private const val COLOR_LOTTE = 0xFFD00F31.toInt()
+    private fun accentFor(game: LotteGameInfo?): Int =
+        teamAccentColor(game?.focusTeamCode?.ifBlank { LOTTE_TEAM_CODE } ?: LOTTE_TEAM_CODE)
 
     fun createChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
@@ -261,16 +263,16 @@ object NotificationHelper {
         )
 
         val scoreTitle = if (game == null) {
-            "롯데 라이브"
+            "집관 라이브"
         } else {
-            "롯데 ${game.lotteScore} : ${game.opponentScore} ${game.opponentName}"
+            "${game.focusName()} ${game.lotteScore} : ${game.opponentScore} ${game.opponentName}"
         }
         val summary = gameSummary(game)
         val compactLine = gameCompactLine(game)
         val headerLine = if (game != null && game.status == GameStatus.LIVE && !game.isSuspended) {
             buildString {
                 append(game.inningLabel)
-                append(if (game.isLotteBatting) " · 롯데 공격" else " · 상대 공격")
+                append(if (game.isLotteBatting) " · ${game.focusName()} 공격" else " · 상대 공격")
             }
         } else {
             compactLine
@@ -278,8 +280,8 @@ object NotificationHelper {
 
         val (title, text) = when (mode) {
             LiveDisplayMode.STATUS_SCORE -> {
-                val shortTitle = if (game == null) "롯데 라이브"
-                else "롯데 ${game.lotteScore}:${game.opponentScore}"
+                val shortTitle = if (game == null) "집관 라이브"
+                else "${game.focusName()} ${game.lotteScore}:${game.opponentScore}"
                 shortTitle to (game?.inningLabel ?: "")
             }
             LiveDisplayMode.FULL -> scoreTitle to summary
@@ -308,7 +310,7 @@ object NotificationHelper {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setColor(COLOR_LOTTE)
+            .setColor(accentFor(game))
             .setColorized(false)
         if (finished) builder.setTimeoutAfter(FINISHED_NOTIFICATION_TIMEOUT_MS)
 
@@ -385,14 +387,14 @@ object NotificationHelper {
                 append(game.inningLabel.ifBlank { game.statusText.ifBlank { game.opponentName } })
                 if (game.stadium.isNotBlank()) append("\n구장  ${game.stadium}")
                 if (game.lotteStartingPitcher.isNotBlank() || game.opponentStartingPitcher.isNotBlank()) {
-                    append("\n선발  롯데 ${game.lotteStartingPitcher.ifBlank { "-" }}")
+                    append("\n선발  ${game.focusName()} ${game.lotteStartingPitcher.ifBlank { "-" }}")
                     append("  ·  ${game.opponentName} ${game.opponentStartingPitcher.ifBlank { "-" }}")
                 }
             }
         }
         return buildString {
             append(game.inningLabel)
-            if (game.isLotteBatting) append("  ·  롯데 공격") else append("  ·  상대 공격")
+            if (game.isLotteBatting) append("  ·  ${game.focusName()} 공격") else append("  ·  상대 공격")
             append("\n루상  ${basesLabel(game)}")
             append("\n투수  ${game.currentPitcherName.ifBlank { "-" }}")
             if (game.currentPitcherPitchCount > 0) append(" (${game.currentPitcherPitchCount}구)")
@@ -434,15 +436,16 @@ object NotificationHelper {
 
     private fun cardSides(game: LotteGameInfo): CardSides {
         val oppCode = game.opponentCode.ifBlank { teamNameToCode(game.opponentName) }
-        val lotteLogo = game.lotteLogoUrl.ifBlank { LOTTE_LOGO_URL }
+        val focusCode = game.focusTeamCode.ifBlank { LOTTE_TEAM_CODE }
+        val lotteLogo = game.lotteLogoUrl.ifBlank { teamLogoUrl(focusCode) }
         val oppLogo = game.opponentLogoUrl.ifBlank { teamLogoUrl(oppCode) }
         return CardSides(
-            awayName = if (game.isHome) game.opponentName else "롯데",
-            homeName = if (game.isHome) "롯데" else game.opponentName,
+            awayName = if (game.isHome) game.opponentName else game.focusName(),
+            homeName = if (game.isHome) game.focusName() else game.opponentName,
             awayScore = if (game.isHome) game.opponentScore else game.lotteScore,
             homeScore = if (game.isHome) game.lotteScore else game.opponentScore,
-            awayCode = if (game.isHome) oppCode else LOTTE_TEAM_CODE,
-            homeCode = if (game.isHome) LOTTE_TEAM_CODE else oppCode,
+            awayCode = if (game.isHome) oppCode else focusCode,
+            homeCode = if (game.isHome) focusCode else oppCode,
             awayLogoUrl = if (game.isHome) oppLogo else lotteLogo,
             homeLogoUrl = if (game.isHome) lotteLogo else oppLogo,
         )

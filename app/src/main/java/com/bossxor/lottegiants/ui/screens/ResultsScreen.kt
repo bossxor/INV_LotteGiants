@@ -114,6 +114,7 @@ fun ResultsScreen(
     onSelectResultsTeam: (String) -> Unit = {},
     seasonGames: List<MiniGame> = emptyList(),
     seasonLoading: Boolean = false,
+    myTeamCode: String = LOTTE_TEAM_CODE,
 ) {
     var mode by remember { mutableIntStateOf(0) } // 0 list, 1 calendar
     val today = remember { kboToday() }
@@ -258,8 +259,9 @@ fun ResultsScreen(
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                val visibleGames = remember(games) { games.sortedWith(teamFirstComparator(LOTTE_TEAM_CODE)) }
-                val lotteGames = visibleGames.filter { it.involvesTeam(LOTTE_TEAM_CODE) }
+                val focus = myTeamCode.ifBlank { LOTTE_TEAM_CODE }
+                val visibleGames = remember(games, focus) { games.sortedWith(teamFirstComparator(focus)) }
+                val lotteGames = visibleGames.filter { it.involvesTeam(focus) }
                 val swipeModifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
@@ -288,7 +290,7 @@ fun ResultsScreen(
                         ) {
                             if (lotteGames.size >= 2) {
                                 item {
-                                    Text("더블헤더 · 롯데 ${lotteGames.size}경기", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text("더블헤더 · ${teamCodeToName(focus)} ${lotteGames.size}경기", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                 }
                             }
                             items(visibleGames, key = { it.gameId }) { g ->
@@ -296,7 +298,7 @@ fun ResultsScreen(
                                 if (lotteGames.size >= 2 && dhIndex >= 0) {
                                     Text("${dhIndex + 1}경기", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                 }
-                                ResultGameCard(g, focusTeamCode = LOTTE_TEAM_CODE, onOpen = { onOpenGame(g.gameId) })
+                                ResultGameCard(g, focusTeamCode = focus, onOpen = { onOpenGame(g.gameId) })
                             }
                             item { Spacer(Modifier.height(16.dp)) }
                         }
