@@ -63,7 +63,7 @@ object WinProb {
             Src(ruta, 2),
             Src(estimated, 1),
         ).filter { it.points.isNotEmpty() }
-        return candidates.maxWith(
+        return candidates.maxWithOrNull(
             compareBy<Src> { it.points.size }.thenBy { it.priority },
         )?.points ?: emptyList()
     }

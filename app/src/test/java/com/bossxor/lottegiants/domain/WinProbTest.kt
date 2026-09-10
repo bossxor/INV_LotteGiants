@@ -92,4 +92,9 @@ class WinProbTest {
         val picked = WinProb.pickSeries(naver, ruta, emptyList())
         assertEquals(2, picked.size)
     }
+
+    @Test
+    fun pickSeriesEmptyCandidatesReturnsEmpty() {
+        assertTrue(WinProb.pickSeries(emptyList(), emptyList(), emptyList()).isEmpty())
+    }
 }
