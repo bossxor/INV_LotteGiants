@@ -427,13 +427,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 refreshViewingGame(it)
             }
             .onFailure { e ->
-                // 자동 폴링·캐시가 있으면 배너를 띄우지 않는다. 닫아도 10초마다 다시 뜨던 원인.
-                if (!force || _snapshot.value != null) {
-                    if (!force) return@onFailure
-                    _refreshError.value = null
+                // 캐시가 있으면 자동 폴링 실패는 숨긴다. 스냅샷이 비면 스피너만 돌지 않게 안내한다.
+                if (_snapshot.value == null) {
+                    _refreshError.value = e.message ?: "경기를 불러오지 못했습니다."
                     return@onFailure
                 }
-                _refreshError.value = e.message ?: "경기를 불러오지 못했습니다."
+                if (!force) return@onFailure
+                _refreshError.value = null
             }
     }
 

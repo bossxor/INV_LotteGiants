@@ -218,6 +218,7 @@ fun LiveScreen(
                                 isRefreshing = isRefreshing,
                                 onRefresh = onRefresh,
                                 onOpenGame = onOpenGame,
+                                myTeamCode = myTeam,
                             )
                         }
                     } else if (showHero) {
@@ -400,6 +401,7 @@ fun LiveScreen(
                             isRefreshing = isRefreshing,
                             onRefresh = onRefresh,
                             onOpenGame = onOpenGame,
+                            myTeamCode = myTeam,
                         )
                     } else {
                     Row(
@@ -425,6 +427,12 @@ fun LiveScreen(
                             .verticalScroll(rememberScrollState())
                             .padding(bottom = 16.dp),
                     ) {
+                        val loadError = error ?: refreshError
+                        if (snapshot == null && loadError != null) {
+                            Spacer(Modifier.height(8.dp))
+                            EmptyRetry(message = loadError, onRetry = onRefresh)
+                            Spacer(Modifier.height(12.dp))
+                        }
                         Spacer(Modifier.height(4.dp))
                         QuickLinks(
                             onHistory = { onOpenTeamHistory(focusTeam) },
@@ -494,8 +502,8 @@ private fun ScoreTicker(
                 add(
                     MiniGame(
                         gameId = g.gameId,
-                        homeName = if (g.isHome) "롯데" else g.opponentName,
-                        awayName = if (g.isHome) g.opponentName else "롯데",
+                        homeName = if (g.isHome) g.focusName() else g.opponentName,
+                        awayName = if (g.isHome) g.opponentName else g.focusName(),
                         homeScore = if (g.isHome) g.lotteScore else g.opponentScore,
                         awayScore = if (g.isHome) g.opponentScore else g.lotteScore,
                         status = g.status,
@@ -505,8 +513,8 @@ private fun ScoreTicker(
                         resumeTime = g.resumeTime,
                         homeLogoUrl = if (g.isHome) g.lotteLogoUrl.ifBlank { teamLogoUrl(g.focusTeamCode) } else g.opponentLogoUrl,
                         awayLogoUrl = if (g.isHome) g.opponentLogoUrl else g.lotteLogoUrl.ifBlank { teamLogoUrl(g.focusTeamCode) },
-                        homeTeamCode = if (g.isHome) "LT" else g.opponentCode,
-                        awayTeamCode = if (g.isHome) g.opponentCode else "LT",
+                        homeTeamCode = if (g.isHome) g.focusTeamCode.ifBlank { LOTTE_TEAM_CODE } else g.opponentCode,
+                        awayTeamCode = if (g.isHome) g.opponentCode else g.focusTeamCode.ifBlank { LOTTE_TEAM_CODE },
                     )
                 )
             }
@@ -2139,6 +2147,7 @@ private fun OffDayHero(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onOpenGame: (String) -> Unit,
+    myTeamCode: String = LOTTE_TEAM_CODE,
 ) {
     val dark = isAppDark()
     val onHero = heroOnColor()
@@ -2159,7 +2168,7 @@ private fun OffDayHero(
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "SAJIK",
+                stadiumWatermark(myTeamCode),
                 color = muted,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,

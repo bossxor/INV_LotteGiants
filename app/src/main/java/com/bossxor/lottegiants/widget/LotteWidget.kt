@@ -332,7 +332,10 @@ private fun CompactBefore(
     val awayLogo = if (g.isHome) oppLogo else lotteLogo
     val homeLogo = if (g.isHome) lotteLogo else oppLogo
     CompactFrame {
-        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            GlanceModifier.fillMaxWidth().padding(end = 28.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             LogoWithRank(awayLogo, awayRank(g, snap), size = 48, rankSize = 11, modifier = GlanceModifier.defaultWeight())
             Text("VS", style = TextStyle(color = muted, fontSize = 13.sp, fontWeight = FontWeight.Bold))
             LogoWithRank(homeLogo, homeRank(g, snap), size = 48, rankSize = 11, modifier = GlanceModifier.defaultWeight())
@@ -383,15 +386,15 @@ private fun LogoWithRank(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Image(logo, contentDescription = null, modifier = GlanceModifier.size(size.dp))
         if (rank > 0) {
+            Spacer(GlanceModifier.height(2.dp))
             Text(
                 "${rank}위",
                 style = TextStyle(color = gold, fontSize = rankSize.sp, fontWeight = FontWeight.Bold),
                 maxLines = 1,
             )
-            Spacer(GlanceModifier.height(2.dp))
         }
-        Image(logo, contentDescription = null, modifier = GlanceModifier.size(size.dp))
     }
 }
 
@@ -407,7 +410,10 @@ private fun CompactScoreboard(
 ) {
     val white = ColorProvider(Color.White, Color.White)
     val muted = ColorProvider(Muted, Muted)
-    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        GlanceModifier.fillMaxWidth().padding(end = 28.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Column(
             modifier = GlanceModifier.defaultWeight(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -517,7 +523,10 @@ private fun LiveWide(
         }
     }
     Spacer(GlanceModifier.height(4.dp))
-    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        GlanceModifier.fillMaxWidth().padding(end = 36.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         TeamSide(
             if (g.isHome) oppLogo else lotteLogo,
             if (g.isHome) g.opponentName else g.focusName(),
@@ -630,13 +639,16 @@ private fun BeforeWide(
         style = TextStyle(color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold),
     )
     Spacer(GlanceModifier.height(4.dp))
-    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        GlanceModifier.fillMaxWidth().padding(end = 36.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Image(lotteLogo, contentDescription = "lotte", modifier = GlanceModifier.size(28.dp))
             val lr = g.lotteRank.takeIf { it > 0 } ?: snap?.lotteSeasonRank ?: 0
             if (lr > 0) {
                 Text("${lr}위", style = TextStyle(color = gold, fontSize = 9.sp, fontWeight = FontWeight.Bold), maxLines = 1)
             }
-            Image(lotteLogo, contentDescription = "lotte", modifier = GlanceModifier.size(28.dp))
         }
         Spacer(GlanceModifier.width(6.dp))
         Text(g.focusName(), style = TextStyle(color = white, fontSize = 13.sp, fontWeight = FontWeight.Bold))
@@ -646,10 +658,10 @@ private fun BeforeWide(
         Text(g.opponentName, style = TextStyle(color = white, fontSize = 13.sp, fontWeight = FontWeight.Bold))
         Spacer(GlanceModifier.width(6.dp))
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Image(oppLogo, contentDescription = "opp", modifier = GlanceModifier.size(28.dp))
             if (g.opponentRank > 0) {
                 Text("${g.opponentRank}위", style = TextStyle(color = gold, fontSize = 9.sp, fontWeight = FontWeight.Bold), maxLines = 1)
             }
-            Image(oppLogo, contentDescription = "opp", modifier = GlanceModifier.size(28.dp))
         }
     }
     Spacer(GlanceModifier.height(4.dp))
@@ -718,10 +730,10 @@ private fun TeamSide(logo: ImageProvider, name: String, score: Int, rank: Int = 
     val white = ColorProvider(Color.White, Color.White)
     val gold = ColorProvider(Gold, Gold)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Image(logo, contentDescription = name, modifier = GlanceModifier.size(26.dp))
         if (rank > 0) {
             Text("${rank}위", style = TextStyle(color = gold, fontSize = 9.sp, fontWeight = FontWeight.Bold), maxLines = 1)
         }
-        Image(logo, contentDescription = name, modifier = GlanceModifier.size(26.dp))
         Text(name, style = TextStyle(color = white, fontSize = 11.sp), maxLines = 1)
         Text("$score", style = TextStyle(color = white, fontSize = 22.sp, fontWeight = FontWeight.Bold))
     }

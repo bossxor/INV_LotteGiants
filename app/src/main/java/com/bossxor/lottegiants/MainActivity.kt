@@ -285,7 +285,7 @@ class MainActivity : ComponentActivity() {
                     error = error,
                     refreshError = refreshError,
                     onDismissRefreshError = vm::clearRefreshError,
-                    loading = snapshot == null && error == null,
+                    loading = snapshot == null && error == null && refreshError == null,
                     dayGames = dayGames,
                     dayGamesLoading = dayGamesLoading,
                     selectedDate = selectedDate,
