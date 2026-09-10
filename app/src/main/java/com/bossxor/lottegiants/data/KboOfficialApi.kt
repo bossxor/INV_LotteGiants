@@ -144,7 +144,7 @@ data class KboOfficialGame(
     @SerialName("CANCEL_SC_ID") @Serializable(with = KboIntSerializer::class) val cancelScId: Int = 0,
     @SerialName("CANCEL_SC_NM") val cancelScNm: String = "",
     @SerialName("GAME_INN_NO") @Serializable(with = KboIntSerializer::class) val inning: Int = 0,
-    @SerialName("GAME_TB_SC") val topBottom: String = "",
+    @SerialName("GAME_TB_SC") @Serializable(with = KboStringSerializer::class) val topBottom: String = "",
     @SerialName("T_SCORE_CN") @Serializable(with = KboIntSerializer::class) val awayScore: Int = 0,
     @SerialName("B_SCORE_CN") @Serializable(with = KboIntSerializer::class) val homeScore: Int = 0,
     @SerialName("STRIKE_CN") @Serializable(with = KboIntSerializer::class) val strike: Int = 0,
@@ -394,6 +394,26 @@ data class KboBoxScoreResponse(
  * KBO는 같은 필드를 `4`, `"4"`, `null`, `false` 로 섞어 보낸다. 기본 Int 시리얼라이저는
  * 이 중 하나만 어긋나도 예외를 던져 하루치 일정 전체가 날아가므로, 어떤 스칼라든 정수로 해석한다.
  */
+object KboStringSerializer : KSerializer<String> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("KboString", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): String {
+        val json = decoder as? JsonDecoder
+            ?: return runCatching { decoder.decodeString() }.getOrDefault("")
+        val el = json.decodeJsonElement()
+        if (el is JsonNull) return ""
+        val primitive = el as? JsonPrimitive ?: return ""
+        if (primitive.isString) return primitive.content
+        val raw = primitive.content.trim()
+        return if (raw.isEmpty() || raw.equals("null", ignoreCase = true)) "" else raw
+    }
+
+    override fun serialize(encoder: Encoder, value: String) {
+        encoder.encodeString(value)
+    }
+}
+
 object KboIntSerializer : KSerializer<Int> {
     override val descriptor: SerialDescriptor =
         PrimitiveSerialDescriptor("KboInt", PrimitiveKind.INT)

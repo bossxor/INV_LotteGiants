@@ -63,12 +63,14 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonObject
+import android.util.Log
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.coroutines.cancellation.CancellationException
 
 class GiantsRepository private constructor(context: Context) {
 
@@ -144,10 +146,16 @@ class GiantsRepository private constructor(context: Context) {
                     snapshotFailCount = 0
                     snapshotCooldownUntil = 0L
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                Log.e(TAG, "refreshSnapshot failed", e)
                 snapshotFailCount += 1
                 snapshotCooldownUntil = System.currentTimeMillis() + snapshotBackoffMs(snapshotFailCount)
-                lockedStale ?: throw e
+                lockedStale ?: emptyFocusSnapshot().also {
+                    memorySnapshot = it
+                    memorySnapshotAt = System.currentTimeMillis()
+                }
             }
         }
     }
@@ -194,8 +202,21 @@ class GiantsRepository private constructor(context: Context) {
         return null
     }
 
+    private suspend fun emptyFocusSnapshot(): LiveSnapshot = LiveSnapshot(
+        updatedAtMillis = System.currentTimeMillis(),
+        myTeamCode = runCatching { store.myTeamCode() }.getOrDefault(LOTTE_TEAM_CODE),
+    )
+
+    private suspend fun safeEnrich(
+        base: LotteGameInfo,
+        seasonGames: List<KboOfficialGame>,
+        kbo: KboOfficialGame? = null,
+    ): LotteGameInfo = runCatching { enrichGameSummary(base, seasonGames, kbo) }
+        .onFailure { Log.e(TAG, "enrichGameSummary ${base.gameId}", it) }
+        .getOrDefault(base)
+
     private suspend fun fetchFreshSnapshot(): LiveSnapshot {
-        val focus = store.myTeamCode()
+        val focus = runCatching { store.myTeamCode() }.getOrDefault(LOTTE_TEAM_CODE)
         val today = kboToday()
         val fmt = DateTimeFormatter.ISO_LOCAL_DATE
         val todayStr = today.format(fmt)
@@ -206,7 +227,7 @@ class GiantsRepository private constructor(context: Context) {
         val (kboToday, kboYesterday, kboRange) = coroutineScope {
             val a = async { fetchKboGames(today) }
             val b = async { fetchKboGames(today.minusDays(1)) }
-            val c = async { kboSeasonWindow(today) }
+            val c = async { runCatching { kboSeasonWindow(today) }.getOrDefault(emptyList()) }
             Triple(a.await(), b.await(), c.await())
         }
         val reuseSideCards = rangeWasCached &&
@@ -290,7 +311,7 @@ class GiantsRepository private constructor(context: Context) {
             lotteInfo = if (skipSummary) {
                 lotteInfo.copy(preview = prev?.lotteGame?.preview)
             } else {
-                enrichGameSummary(lotteInfo, kboRange, kboLotte)
+                safeEnrich(lotteInfo, kboRange, kboLotte)
             }
         }
 
@@ -318,7 +339,7 @@ class GiantsRepository private constructor(context: Context) {
                     }.getOrNull()?.let { relay ->
                         info = mergeRelay(info, relay)
                     }
-                    enrichGameSummary(info, kboRange, kbo)
+                    safeEnrich(info, kboRange, kbo)
                 }
             } ?: run {
                 val nextDto = runCatching {
@@ -334,7 +355,7 @@ class GiantsRepository private constructor(context: Context) {
                         ?.let { fetchKboGames(it) }
                         ?.firstOrNull { it.involvesTeam(focus) && it.naverGameId() == dto.gameId }
                     val base = kboNext?.toLotteBase(focus) ?: dto.toLotteBase(focusTeamCode = focus)
-                    enrichGameSummary(base, kboRange, kboNext)
+                    safeEnrich(base, kboRange, kboNext)
                 }
             }
         }
@@ -378,7 +399,7 @@ class GiantsRepository private constructor(context: Context) {
                 .take(5)
                 .map { kbo ->
                     val base = enrichFromKboDetail(kbo.toLotteBase(focus), kbo)
-                    enrichGameSummary(base, kboRange, kbo)
+                    safeEnrich(base, kboRange, kbo)
                 }
         }
         val lastLotte = recentLotte.firstOrNull()
@@ -473,7 +494,8 @@ class GiantsRepository private constructor(context: Context) {
             widgetRaceLine = widgetRaceLine(rank, rem, starter, countdown),
             myTeamCode = focus,
         )
-        store.saveSnapshot(snapshot)
+        runCatching { store.saveSnapshot(snapshot) }
+            .onFailure { Log.e(TAG, "saveSnapshot", it) }
         return snapshot
     }
 
@@ -667,7 +689,9 @@ class GiantsRepository private constructor(context: Context) {
             )
         }.getOrNull() ?: return base
 
-        val board = KboTableParser.parseInningBoard(sb.table2, sb.table3, sb.maxInning)
+        val board = runCatching {
+            KboTableParser.parseInningBoard(sb.table2, sb.table3, sb.maxInning)
+        }.getOrNull() ?: return base
         val isHome = base.isHome
 
         var result = base.copy(
@@ -1531,8 +1555,13 @@ class GiantsRepository private constructor(context: Context) {
         )
     }
 
-    private fun GameDto.involvesTeam(code: String) =
-        homeTeamCode.equals(code, true) || awayTeamCode.equals(code, true)
+    private fun GameDto.involvesTeam(code: String): Boolean {
+        val c = code.trim()
+        if (c.isBlank()) return false
+        val name = teamCodeToName(c)
+        return homeTeamCode.equals(c, true) || awayTeamCode.equals(c, true) ||
+            (name.isNotBlank() && (homeTeamName.contains(name) || awayTeamName.contains(name)))
+    }
 
     private fun pickKboLotte(
         games: List<KboOfficialGame>,
@@ -2158,6 +2187,7 @@ class GiantsRepository private constructor(context: Context) {
         private const val SUMMARY_TTL_MS = 5 * 60_000L
         private const val SNAPSHOT_FRESH_MS = 8_000L
         private const val RUTA_TTL_MS = 25_000L
+        private const val TAG = "GiantsRepo"
 
         @Volatile
         private var instance: GiantsRepository? = null

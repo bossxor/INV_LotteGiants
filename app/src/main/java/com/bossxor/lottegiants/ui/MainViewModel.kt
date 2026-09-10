@@ -30,8 +30,10 @@ import com.bossxor.lottegiants.domain.teamHomeStadiumName
 import com.bossxor.lottegiants.domain.teamKeuboSlug
 import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.widget.WidgetUpdater
+import android.util.Log
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -427,7 +429,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 refreshViewingGame(it)
             }
             .onFailure { e ->
-                // 캐시가 있으면 자동 폴링 실패는 숨긴다. 스냅샷이 비면 스피너만 돌지 않게 안내한다.
+                if (e is CancellationException) throw e
+                Log.e("LiveVM", "refreshOnce", e)
                 if (_snapshot.value == null) {
                     _refreshError.value = e.message ?: "경기를 불러오지 못했습니다."
                     return@onFailure
