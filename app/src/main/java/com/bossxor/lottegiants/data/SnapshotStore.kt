@@ -34,7 +34,8 @@ class SnapshotStore(private val context: Context) {
         prefs[KEY_SNAPSHOT]?.let { runCatching { json.decodeFromString<LiveSnapshot>(it) }.getOrNull() }
     }
 
-    suspend fun loadSnapshot(): LiveSnapshot? = snapshotFlow.first()
+    suspend fun loadSnapshot(): LiveSnapshot? =
+        runCatching { snapshotFlow.first() }.getOrNull()
 
     suspend fun saveSnapshot(snapshot: LiveSnapshot) {
         context.dataStore.edit { prefs ->
@@ -302,7 +303,7 @@ class SnapshotStore(private val context: Context) {
     }
 
     suspend fun preferredLiveGameId(): String =
-        context.dataStore.data.first()[KEY_PREFERRED_LIVE].orEmpty()
+        runCatching { context.dataStore.data.first()[KEY_PREFERRED_LIVE].orEmpty() }.getOrDefault("")
 
     suspend fun setPreferredLiveGameId(gameId: String) {
         context.dataStore.edit { prefs ->
@@ -391,7 +392,8 @@ class SnapshotStore(private val context: Context) {
         normalizeTeamCode(it[KEY_MY_TEAM].orEmpty().ifBlank { LOTTE_TEAM_CODE })
     }
 
-    suspend fun myTeamCode(): String = myTeamCodeFlow.first()
+    suspend fun myTeamCode(): String =
+        runCatching { myTeamCodeFlow.first() }.getOrDefault(LOTTE_TEAM_CODE)
 
     suspend fun setMyTeamCode(code: String) {
         context.dataStore.edit { it[KEY_MY_TEAM] = normalizeTeamCode(code) }

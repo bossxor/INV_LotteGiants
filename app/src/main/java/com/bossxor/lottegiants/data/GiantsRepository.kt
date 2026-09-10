@@ -152,7 +152,10 @@ class GiantsRepository private constructor(context: Context) {
                 Log.e(TAG, "refreshSnapshot failed", e)
                 snapshotFailCount += 1
                 snapshotCooldownUntil = System.currentTimeMillis() + snapshotBackoffMs(snapshotFailCount)
-                lockedStale ?: emptyFocusSnapshot().also {
+                val fallback = lockedStale
+                    ?: runCatching { fetchTodayOnlySnapshot() }.getOrNull()
+                    ?: emptyFocusSnapshot()
+                fallback.also {
                     memorySnapshot = it
                     memorySnapshotAt = System.currentTimeMillis()
                 }
@@ -161,7 +164,7 @@ class GiantsRepository private constructor(context: Context) {
     }
 
     private suspend fun lastKnownSnapshot(): LiveSnapshot? =
-        memorySnapshot ?: store.loadSnapshot()
+        memorySnapshot ?: runCatching { store.loadSnapshot() }.getOrNull()
 
     private fun snapshotBackoffMs(fails: Int): Long = when {
         fails <= 1 -> 15_000L
@@ -200,6 +203,22 @@ class GiantsRepository private constructor(context: Context) {
             }
         }
         return null
+    }
+
+    /** 전체 스냅샷이 깨져도 오늘 내 팀 경기는 보여 준다. */
+    private suspend fun fetchTodayOnlySnapshot(): LiveSnapshot {
+        val focus = runCatching { store.myTeamCode() }.getOrDefault(LOTTE_TEAM_CODE)
+        val today = kboToday()
+        val games = fetchKboGames(today)
+        val kbo = pickKboLotte(games, null, focus)
+        val lotte = kbo?.toLotteBase(focus)?.takeIf { it.belongsToKboToday() }
+        return LiveSnapshot(
+            updatedAtMillis = System.currentTimeMillis(),
+            lotteGame = lotte,
+            otherGames = kboToMiniGames(today, games.filter { !it.involvesTeam(focus) }),
+            todayLotteGames = kboToMiniGames(today, games.filter { it.involvesTeam(focus) }),
+            myTeamCode = focus,
+        )
     }
 
     private suspend fun emptyFocusSnapshot(): LiveSnapshot = LiveSnapshot(
