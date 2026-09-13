@@ -63,32 +63,50 @@ class ScoreAlertsTest {
     }
 
     @Test
-    fun scoringChanceShowsWhoHowAndNamedRunners() {
+    fun scoringChanceShowsOccupiedBasesAndNamedRunners() {
         val alert = formatScoringChanceAlert(
             loaded = false,
-            who = "전준우",
-            how = "좌전 2루타",
             runners = "2루 전준우",
             batterNow = "윤동희",
             inningLabel = "5회말",
             outs = 1,
+            on1 = false,
+            on2 = true,
+            on3 = false,
         )
-        assertEquals("전준우 좌전 2루타, 득점권 · 타석 윤동희", alert.title)
+        assertEquals("주자 2루 · 타석 윤동희", alert.title)
         assertEquals("2루 전준우 · 타석 윤동희 · 5회말 1아웃", alert.text)
+    }
+
+    @Test
+    fun scoringChanceOneAndThree() {
+        val alert = formatScoringChanceAlert(
+            loaded = false,
+            runners = "3루 전준우 · 1루 황성빈",
+            batterNow = "윤동희",
+            inningLabel = "6회초",
+            outs = 2,
+            on1 = true,
+            on2 = false,
+            on3 = true,
+        )
+        assertEquals("주자 1,3루 · 타석 윤동희", alert.title)
+        assertEquals("3루 전준우 · 1루 황성빈 · 타석 윤동희 · 6회초 2아웃", alert.text)
     }
 
     @Test
     fun basesLoadedChanceTitle() {
         val alert = formatScoringChanceAlert(
             loaded = true,
-            who = "황성빈",
-            how = "볼넷",
             runners = "3루 전준우 · 2루 윤동희 · 1루 황성빈",
             batterNow = "고승민",
             inningLabel = "6회말",
             outs = 0,
+            on1 = true,
+            on2 = true,
+            on3 = true,
         )
-        assertEquals("황성빈 볼넷, 만루 · 타석 고승민", alert.title)
+        assertEquals("만루 · 타석 고승민", alert.title)
         assertEquals("3루 전준우 · 2루 윤동희 · 1루 황성빈 · 타석 고승민 · 6회말 0아웃", alert.text)
     }
 

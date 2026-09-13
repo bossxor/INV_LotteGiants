@@ -1273,6 +1273,74 @@ class GiantsRepository private constructor(context: Context) {
         )
     }
 
+    /**
+     * 팀별 1군 등번호 일람. 캐시와 같으면 네트워크 결과만 버리고 캐시를 유지한다.
+     * @return Pair(목록, 캐시에서 갱신됐는지)
+     */
+    suspend fun fetchTeamJerseyRoster(
+        teamCode: String = LOTTE_TEAM_CODE,
+        force: Boolean = false,
+    ): List<EntryPlayer> {
+        val code = teamCode.ifBlank { LOTTE_TEAM_CODE }
+        val season = kboToday().year
+        val cached = store.jerseyRoster(code, season)
+        if (!force && cached.isNotEmpty()) {
+            // 백그라운드 비교는 ViewModel에서 force=false로 한 번 더 호출
+        }
+        val remote = runCatching {
+            val html = KboRegisterAllParser.fetchHtml()
+            KboRegisterAllParser.parseTeamPlayers(html, code)
+        }.getOrDefault(emptyList())
+        if (remote.isEmpty()) {
+            if (cached.isNotEmpty()) return cached
+            // 폴백: Keubo 리더보드 (등번호는 비울 수 있음)
+            return leadersAsJerseyFallback(code)
+        }
+        val codeByName = runCatching {
+            val batters = fetchLeaders(false).filter { it.matchesTeam(code) }
+            val pitchers = fetchLeaders(true).filter { it.matchesTeam(code) }
+            (batters + pitchers).associate { it.name to it.playerCode }
+        }.getOrDefault(emptyMap())
+        val enriched = remote.map { p ->
+            val pc = p.playerCode.ifBlank { codeByName[p.name].orEmpty() }
+            if (pc == p.playerCode) p else p.copy(playerCode = pc)
+        }
+        if (jerseyFingerprint(enriched) == jerseyFingerprint(cached)) {
+            return cached.ifEmpty { enriched }
+        }
+        store.setJerseyRoster(code, season, enriched)
+        return enriched
+    }
+
+    private fun jerseyFingerprint(list: List<EntryPlayer>): String =
+        list.sortedWith(
+            compareBy({ it.backNumber.toIntOrNull() ?: Int.MAX_VALUE }, { it.name }),
+        ).joinToString(";") {
+            "${it.backNumber}|${it.name}|${it.position}|${it.playerCode}"
+        }
+
+    private suspend fun leadersAsJerseyFallback(teamCode: String): List<EntryPlayer> {
+        val batters = runCatching { fetchLeaders(false).filter { it.matchesTeam(teamCode) } }
+            .getOrDefault(emptyList())
+        val pitchers = runCatching { fetchLeaders(true).filter { it.matchesTeam(teamCode) } }
+            .getOrDefault(emptyList())
+        return (pitchers.map {
+            EntryPlayer(
+                name = it.name,
+                playerCode = it.playerCode,
+                position = "투수",
+                isPitcher = true,
+            )
+        } + batters.map {
+            EntryPlayer(
+                name = it.name,
+                playerCode = it.playerCode,
+                position = "타자",
+                isPitcher = false,
+            )
+        }).sortedBy { it.name }
+    }
+
     /** 오늘부터 최대 lookback일 전까지 공시가 있는 가장 최근 날짜 */
     suspend fun findLatestEntryDate(lookback: Int = 21, teamCode: String = LOTTE_TEAM_CODE): LocalDate {
         val today = LocalDate.now()

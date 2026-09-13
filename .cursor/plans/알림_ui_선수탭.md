@@ -4,25 +4,25 @@ overview: 득점권·투수교체 알림 문구, 라이브 알림 이름 잘림(
 todos:
   - id: scoring-chance
     content: 득점권 알림 메인/상세 포맷 변경(가운데 점, 이닝·아웃 유지) + 테스트
-    status: pending
+    status: completed
   - id: live-notif-names
     content: 라이브 알림 BSO를 세로로 두고 B/S/O 좌측 시작점을 맞춰 투수·타자 이름 공간 확보
-    status: pending
+    status: completed
   - id: pitcher-change-team
     content: 투수 교체 알림에 팀명 - 이름
-    status: pending
+    status: completed
   - id: results-inning-back
     content: 결과 탭 전체 LIVE 이닝(내 팀·타팀) 표시 + 타팀 경기 뒤로가기 복원
-    status: pending
+    status: completed
   - id: roster-none-alert
     content: 당일 등말소 없을 때 라인업 알림 시점에 변화 없음 1회
-    status: pending
+    status: completed
   - id: players-tab
     content: 선수 탭(즐겨찾기 + 등번호 일람) 추가, 로컬 저장 후 차이만 갱신, 설정에서 즐겨찾기 제거
-    status: pending
+    status: completed
   - id: version-ship
     content: 2.0.8 버전, 작업일지·README 최신화, 단위테스트 통과 후 커밋·푸시, adb 설치
-    status: pending
+    status: in_progress
 isProject: false
 ---
 

@@ -801,7 +801,13 @@ private fun ResultGameCard(
                     }
                     when {
                         g.isSuspended -> StatusPill(g.suspendLabel, LotteGold)
-                        g.status == GameStatus.LIVE -> StatusPill("LIVE", LotteRed)
+                        g.status == GameStatus.LIVE -> {
+                            val inn = g.statusText.trim().takeIf { it.contains("회") }
+                            StatusPill(
+                                if (inn != null) "LIVE · $inn" else "LIVE",
+                                LotteRed,
+                            )
+                        }
                         canceled -> StatusPill(
                             g.cancelLabel,
                             MaterialTheme.colorScheme.onSurfaceVariant,

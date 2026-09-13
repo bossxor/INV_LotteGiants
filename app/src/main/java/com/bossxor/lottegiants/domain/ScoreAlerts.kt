@@ -167,30 +167,46 @@ fun runnersLabel(first: String?, second: String?, third: String?): String =
         first?.takeIf { it.isNotBlank() }?.let { "1루 $it" },
     ).joinToString(" · ")
 
+/** 점유한 루만 `1,2,3` 오름차순 + `루`. 예: `1,3루`, `2루` */
+fun occupiedBasesLabel(on1: Boolean, on2: Boolean, on3: Boolean): String {
+    val bases = buildList {
+        if (on1) add(1)
+        if (on2) add(2)
+        if (on3) add(3)
+    }
+    if (bases.isEmpty()) return ""
+    return bases.joinToString(",") + "루"
+}
+
 fun formatScoringChanceAlert(
     loaded: Boolean,
-    who: String?,
-    how: String?,
     runners: String,
     batterNow: String,
     inningLabel: String,
     outs: Int,
+    on1: Boolean = false,
+    on2: Boolean = false,
+    on3: Boolean = false,
+    /** @deprecated who/how는 메인에서 쓰지 않는다. 호환용으로만 남김 */
+    who: String? = null,
+    how: String? = null,
 ): ChanceAlert {
-    val chance = if (loaded) "만루" else "득점권"
-    val whoPart = who?.trim().orEmpty()
-    val howPart = how?.trim().orEmpty()
     val atBat = batterNow.trim()
-    val play = when {
-        whoPart.isNotBlank() && howPart.isNotBlank() -> "$whoPart $howPart, $chance"
-        howPart.isNotBlank() -> "$howPart, $chance"
-        whoPart.isNotBlank() -> "$whoPart, $chance"
-        loaded -> "만루 찬스"
-        else -> "득점권 찬스"
+    val atBatPart = atBat.takeIf { it.isNotBlank() }?.let { "타석 $it" }
+    val title = if (loaded) {
+        listOfNotNull("만루", atBatPart).joinToString(" · ")
+    } else {
+        val bases = occupiedBasesLabel(on1, on2, on3).ifBlank {
+            // on* 미전달 시 runners에서 루만 추려 폴백
+            listOf(3, 2, 1).filter { n -> runners.contains("${n}루") }.sorted()
+                .takeIf { it.isNotEmpty() }?.joinToString(",")?.plus("루").orEmpty()
+        }
+        val runnerPart = if (bases.isNotBlank()) "주자 $bases" else "득점권"
+        listOfNotNull(runnerPart, atBatPart).joinToString(" · ")
     }
-    val title = if (atBat.isNotBlank()) "$play · 타석 $atBat" else play
     val text = listOfNotNull(
         runners.takeIf { it.isNotBlank() },
-        atBat.takeIf { it.isNotBlank() }?.let { "타석 $it" },
+        atBatPart,
         "$inningLabel ${outCountLabel(outs)}",
     ).joinToString(" · ")
     return ChanceAlert(title, text)

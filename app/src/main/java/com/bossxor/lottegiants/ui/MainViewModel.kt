@@ -23,6 +23,7 @@ import com.bossxor.lottegiants.domain.ThemeMode
 import com.bossxor.lottegiants.domain.belongsToKboToday
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.focusName
+import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.domain.involvesTeam
 import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.playerPhotoUrl
@@ -147,6 +148,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _seasonLoading = MutableStateFlow(false)
     val seasonLoading: StateFlow<Boolean> = _seasonLoading.asStateFlow()
 
+    private val _jerseyPlayers = MutableStateFlow<List<com.bossxor.lottegiants.domain.EntryPlayer>>(emptyList())
+    val jerseyPlayers: StateFlow<List<com.bossxor.lottegiants.domain.EntryPlayer>> = _jerseyPlayers.asStateFlow()
+
+    private val _jerseyLoading = MutableStateFlow(false)
+    val jerseyLoading: StateFlow<Boolean> = _jerseyLoading.asStateFlow()
+
+    private val _playersTeamCode = MutableStateFlow("")
+    val playersTeamCode: StateFlow<String> = _playersTeamCode.asStateFlow()
+
     private val _overlayTeamCode = MutableStateFlow(LOTTE_TEAM_CODE)
     val overlayTeamCode: StateFlow<String> = _overlayTeamCode.asStateFlow()
 
@@ -206,6 +216,58 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun ensureResultsTab() {
         if (_dayGames.value.isEmpty()) loadGamesForDate(_selectedDate.value)
         if (_monthGames.value.isEmpty()) loadMonthGames(_calendarMonth.value)
+    }
+
+    fun ensurePlayersTab() {
+        val code = _playersTeamCode.value.ifBlank { currentTeamCode() }
+        if (_jerseyPlayers.value.isEmpty() || _playersTeamCode.value != code) {
+            loadJerseyRoster(code, force = false)
+        } else {
+            loadJerseyRoster(code, force = false, backgroundOnly = true)
+        }
+    }
+
+    fun setPlayersTeam(code: String) {
+        val next = code.trim().uppercase()
+        if (_playersTeamCode.value == next && _jerseyPlayers.value.isNotEmpty()) {
+            loadJerseyRoster(next, force = false, backgroundOnly = true)
+            return
+        }
+        _playersTeamCode.value = next
+        loadJerseyRoster(next, force = false)
+    }
+
+    fun refreshJerseyRoster() {
+        loadJerseyRoster(_playersTeamCode.value.ifBlank { currentTeamCode() }, force = true)
+    }
+
+    private fun loadJerseyRoster(
+        teamCode: String,
+        force: Boolean,
+        backgroundOnly: Boolean = false,
+    ) {
+        val code = teamCode.ifBlank { currentTeamCode() }
+        viewModelScope.launch {
+            if (!backgroundOnly) {
+                _jerseyLoading.value = true
+                val season = kboToday().year
+                val cached = runCatching { repo.store.jerseyRoster(code, season) }.getOrDefault(emptyList())
+                if (cached.isNotEmpty()) {
+                    _playersTeamCode.value = code
+                    _jerseyPlayers.value = cached
+                }
+            }
+            try {
+                val list = runCatching { repo.fetchTeamJerseyRoster(code, force = force) }
+                    .getOrDefault(emptyList())
+                if (list.isNotEmpty()) {
+                    _playersTeamCode.value = code
+                    _jerseyPlayers.value = list
+                }
+            } finally {
+                if (!backgroundOnly) _jerseyLoading.value = false
+            }
+        }
     }
 
     fun ensureLeaders() {
@@ -735,7 +797,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             homeScore = if (isHome) lotteScore else opponentScore,
             awayScore = if (isHome) opponentScore else lotteScore,
             status = status,
-            statusText = if (status == GameStatus.CANCELED) cancelLabel else statusText,
+            statusText = when {
+                status == GameStatus.CANCELED -> cancelLabel
+                status == GameStatus.LIVE -> inningLabel.ifBlank { statusText }
+                else -> statusText
+            },
             cancelReason = cancelReason,
             stadium = stadium,
             startTime = startTime,
@@ -753,19 +819,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    private fun MiniGame.mergeLive(live: MiniGame): MiniGame = copy(
-        homeScore = live.homeScore,
-        awayScore = live.awayScore,
-        status = live.status,
-        statusText = live.statusText,
-        cancelReason = live.cancelReason.ifBlank { cancelReason },
-        homeStarter = live.homeStarter.ifBlank { homeStarter },
-        awayStarter = live.awayStarter.ifBlank { awayStarter },
-        winPitcherName = live.winPitcherName.ifBlank { winPitcherName },
-        losePitcherName = live.losePitcherName.ifBlank { losePitcherName },
-        broadChannel = live.broadChannel.ifBlank { broadChannel },
-        doubleHeaderNo = if (live.doubleHeaderNo > 0) live.doubleHeaderNo else doubleHeaderNo,
-    )
+    private fun MiniGame.mergeLive(live: MiniGame): MiniGame {
+        val mergedStatusText = when {
+            live.status == GameStatus.LIVE && live.statusText.contains("회") -> live.statusText
+            live.status == GameStatus.LIVE && statusText.contains("회") -> statusText
+            live.statusText.isNotBlank() && live.statusText != "진행 중" -> live.statusText
+            else -> statusText
+        }
+        return copy(
+            homeScore = live.homeScore,
+            awayScore = live.awayScore,
+            status = live.status,
+            statusText = mergedStatusText,
+            cancelReason = live.cancelReason.ifBlank { cancelReason },
+            homeStarter = live.homeStarter.ifBlank { homeStarter },
+            awayStarter = live.awayStarter.ifBlank { awayStarter },
+            winPitcherName = live.winPitcherName.ifBlank { winPitcherName },
+            losePitcherName = live.losePitcherName.ifBlank { losePitcherName },
+            broadChannel = live.broadChannel.ifBlank { broadChannel },
+            doubleHeaderNo = if (live.doubleHeaderNo > 0) live.doubleHeaderNo else doubleHeaderNo,
+            isSuspended = live.isSuspended,
+            resumeTime = live.resumeTime.ifBlank { resumeTime },
+        )
+    }
 
     private fun currentTeamCode(): String =
         myTeamCode.value.ifBlank { _snapshot.value?.myTeamCode.orEmpty().ifBlank { LOTTE_TEAM_CODE } }

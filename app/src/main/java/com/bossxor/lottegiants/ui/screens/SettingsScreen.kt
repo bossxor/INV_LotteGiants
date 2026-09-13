@@ -83,7 +83,6 @@ import com.bossxor.lottegiants.live.NotificationHelper
 import com.bossxor.lottegiants.widget.WidgetUpdater
 import com.bossxor.lottegiants.ui.LoseRed
 import com.bossxor.lottegiants.ui.LotteRed
-import com.bossxor.lottegiants.ui.components.PlayerAvatar
 import com.bossxor.lottegiants.ui.components.ScreenTitle
 import com.bossxor.lottegiants.ui.components.SectionCard
 import com.bossxor.lottegiants.ui.components.TeamLogo
@@ -95,9 +94,6 @@ import kotlinx.coroutines.withContext
 fun SettingsScreen(
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
-    favoritePlayers: List<com.bossxor.lottegiants.domain.FavoritePlayer> = emptyList(),
-    onRemoveFavorite: (String) -> Unit = {},
-    onOpenPlayerSearch: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val store = GiantsRepository.get(context).store
@@ -254,71 +250,6 @@ fun SettingsScreen(
                             onThemeModeChange(ThemeMode.SYSTEM)
                         },
                     )
-                }
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-        Text("즐겨찾기 선수", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text(
-            "타이틀·라인업·상세에서 ☆로 추가할 수 있습니다.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 12.sp,
-        )
-        Spacer(Modifier.height(8.dp))
-        Button(
-            onClick = onOpenPlayerSearch,
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("선수 검색해서 즐겨찾기", fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(8.dp))
-        SectionCard {
-            if (favoritePlayers.isEmpty()) {
-                Text("등록된 즐겨찾기 선수가 없습니다.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-            } else {
-                favoritePlayers.forEachIndexed { i, fav ->
-                    Row(
-                        Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        PlayerAvatar(
-                            playerCode = fav.code,
-                            name = fav.name.ifBlank { fav.code },
-                            size = 40.dp,
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                fav.name.ifBlank { fav.code },
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 15.sp,
-                            )
-                            if (fav.team.isNotBlank()) {
-                                Text(fav.team, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                        Text(
-                            "삭제",
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { onRemoveFavorite(fav.code) }
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            color = LoseRed,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                        )
-                    }
-                    if (i < favoritePlayers.lastIndex) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
-                        )
-                    }
                 }
             }
         }

@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
@@ -84,6 +85,7 @@ import com.bossxor.lottegiants.ui.screens.EntryBoardScreen
 import com.bossxor.lottegiants.ui.screens.LeadersScreen
 import com.bossxor.lottegiants.ui.screens.LiveScreen
 import com.bossxor.lottegiants.ui.screens.PlayerDetailSheet
+import com.bossxor.lottegiants.ui.screens.PlayersScreen
 import com.bossxor.lottegiants.ui.screens.ResultsScreen
 import com.bossxor.lottegiants.ui.screens.SettingsScreen
 import com.bossxor.lottegiants.ui.screens.StandingsScreen
@@ -153,6 +155,9 @@ class MainActivity : ComponentActivity() {
                 val resultsTeamCode by vm.resultsTeamCode.collectAsState()
                 val seasonGames by vm.seasonGames.collectAsState()
                 val seasonLoading by vm.seasonLoading.collectAsState()
+                val jerseyPlayers by vm.jerseyPlayers.collectAsState()
+                val jerseyLoading by vm.jerseyLoading.collectAsState()
+                val playersTeamCode by vm.playersTeamCode.collectAsState()
                 val overlayTeamCode by vm.overlayTeamCode.collectAsState()
                 val overlayTeamCard by vm.overlayTeamCard.collectAsState()
                 val scope = rememberCoroutineScope()
@@ -337,6 +342,12 @@ class MainActivity : ComponentActivity() {
                     onNeedSeasonGames = vm::ensureSeasonGames,
                     onNeedStandingsTab = vm::ensureStandingsTab,
                     onNeedResultsTab = vm::ensureResultsTab,
+                    onNeedPlayersTab = vm::ensurePlayersTab,
+                    jerseyPlayers = jerseyPlayers,
+                    jerseyLoading = jerseyLoading,
+                    playersTeamCode = playersTeamCode,
+                    onSelectPlayersTeam = vm::setPlayersTeam,
+                    onRefreshJersey = vm::refreshJerseyRoster,
                     overlayTeamCode = overlayTeamCode,
                     overlayTeamCard = overlayTeamCard,
                     onOpenTeamHistory = vm::openTeamHistory,
@@ -414,8 +425,9 @@ class MainActivity : ComponentActivity() {
 
         fun tabFromIntent(value: String?): Int = when (value?.lowercase()) {
             "results", "result", "1" -> 1
-            "standings", "standing", "2" -> 2
-            "settings", "3" -> 3
+            "players", "player" -> 2
+            "standings", "standing", "2" -> 3
+            "settings", "3" -> 4
             else -> 0
         }
 
@@ -486,6 +498,12 @@ private fun AppScaffold(
     onNeedSeasonGames: () -> Unit,
     onNeedStandingsTab: () -> Unit,
     onNeedResultsTab: () -> Unit,
+    onNeedPlayersTab: () -> Unit,
+    jerseyPlayers: List<com.bossxor.lottegiants.domain.EntryPlayer>,
+    jerseyLoading: Boolean,
+    playersTeamCode: String,
+    onSelectPlayersTeam: (String) -> Unit,
+    onRefreshJersey: () -> Unit,
     overlayTeamCode: String,
     overlayTeamCard: LotteTeamCard?,
     onOpenTeamHistory: (String) -> Unit,
@@ -497,6 +515,7 @@ private fun AppScaffold(
     val scope = rememberCoroutineScope()
     val store = remember { GiantsRepository.get(context).store }
     var tab by remember { mutableIntStateOf(initialTab) }
+    var returnTab by remember { mutableIntStateOf(-1) }
     var overlay by remember { mutableStateOf(if (openEntry) Overlay.EntryBoard else Overlay.None) }
     var showPlayerSheet by remember { mutableStateOf(false) }
     var lastBackAt by remember { mutableLongStateOf(0L) }
@@ -511,7 +530,8 @@ private fun AppScaffold(
         tab = initialTab
         when (initialTab) {
             1 -> onNeedResultsTab()
-            2 -> onNeedStandingsTab()
+            2 -> onNeedPlayersTab()
+            3 -> onNeedStandingsTab()
         }
     }
     LaunchedEffect(openEntryNonce) {
@@ -534,7 +554,13 @@ private fun AppScaffold(
                 onClearPlayer()
             }
             overlay != Overlay.None -> overlay = Overlay.None
-            viewingGame != null -> onBackToLotte()
+            viewingGame != null -> {
+                onBackToLotte()
+                if (returnTab >= 0) {
+                    tab = returnTab
+                    returnTab = -1
+                }
+            }
             tab != 0 -> tab = 0
             else -> {
                 val now = System.currentTimeMillis()
@@ -582,11 +608,15 @@ private fun AppScaffold(
                 CompactBottomBar(
                     selectedTab = tab,
                     onSelectTab = { index ->
-                        if (index == 0) onBackToLotte()
+                        if (index == 0) {
+                            returnTab = -1
+                            onBackToLotte()
+                        }
                         tab = index
                         when (index) {
                             1 -> onNeedResultsTab()
-                            2 -> onNeedStandingsTab()
+                            2 -> onNeedPlayersTab()
+                            3 -> onNeedStandingsTab()
                         }
                     },
                 )
@@ -695,7 +725,13 @@ private fun AppScaffold(
                         viewingGame = viewingGame,
                         viewingLoading = viewingLoading,
                         onOpenGame = onOpenGame,
-                        onBackToLotte = onBackToLotte,
+                        onBackToLotte = {
+                            onBackToLotte()
+                            if (returnTab >= 0) {
+                                tab = returnTab
+                                returnTab = -1
+                            }
+                        },
                         onNeedFullRelay = onNeedFullRelay,
                         initialDetailTab = openDetailTab,
                         focusNonce = openEntryNonce,
@@ -711,6 +747,7 @@ private fun AppScaffold(
                         onRefresh = onRefreshDayGames,
                         refreshing = isRefreshing,
                         onOpenGame = { id ->
+                            returnTab = 1
                             tab = 0
                             overlay = Overlay.None
                             onOpenGame(id)
@@ -721,7 +758,48 @@ private fun AppScaffold(
                         seasonGames = seasonGames,
                         seasonLoading = seasonLoading,
                     )
-                    2 -> StandingsScreen(
+                    2 -> PlayersScreen(
+                        favoritePlayers = favoritePlayers,
+                        jerseyPlayers = jerseyPlayers,
+                        playersTeamCode = playersTeamCode,
+                        myTeamCode = myTeamCode,
+                        loading = jerseyLoading,
+                        refreshing = isRefreshing && jerseyLoading,
+                        onSelectTeam = onSelectPlayersTeam,
+                        onRefresh = onRefreshJersey,
+                        onAppear = onNeedPlayersTab,
+                        onRemoveFavorite = onRemoveFavorite,
+                        onOpenPlayerSearch = {
+                            onOpenLeadersForTeam(myTeamCode)
+                            overlay = Overlay.Leaders
+                        },
+                        onFavoriteClick = { fav ->
+                            showPlayerSheet = true
+                            onPlayerClick(
+                                LineupSlot(
+                                    batOrder = 0,
+                                    name = fav.name,
+                                    position = "",
+                                    playerCode = fav.code,
+                                ),
+                            )
+                        },
+                        onJerseyClick = { p ->
+                            showPlayerSheet = true
+                            onPlayerClick(
+                                LineupSlot(
+                                    batOrder = 0,
+                                    name = p.name,
+                                    position = p.position,
+                                    playerCode = p.playerCode,
+                                    backNumber = p.backNumber,
+                                    hitType = p.hitType,
+                                    isPitcher = p.isPitcher || p.position.contains("투수"),
+                                ),
+                            )
+                        },
+                    )
+                    3 -> StandingsScreen(
                         standings = standings,
                         teamCard = teamCard,
                         batterLeaders = batterLeaders,
@@ -744,15 +822,9 @@ private fun AppScaffold(
                             onLeaderPlayerClick(p)
                         },
                     )
-                    3 -> SettingsScreen(
+                    4 -> SettingsScreen(
                         themeMode = themeMode,
                         onThemeModeChange = onThemeModeChange,
-                        favoritePlayers = favoritePlayers,
-                        onRemoveFavorite = onRemoveFavorite,
-                        onOpenPlayerSearch = {
-                            onOpenLeadersForTeam(myTeamCode)
-                            overlay = Overlay.Leaders
-                        },
                     )
                 }
             }
@@ -783,6 +855,7 @@ private fun CompactBottomBar(selectedTab: Int, onSelectTab: (Int) -> Unit) {
     val tabs = listOf(
         BottomTab("라이브", Icons.Default.Home),
         BottomTab("결과", Icons.AutoMirrored.Filled.List),
+        BottomTab("선수", Icons.Default.Person),
         BottomTab("순위", Icons.Default.Star),
         BottomTab("설정", Icons.Default.Settings),
     )

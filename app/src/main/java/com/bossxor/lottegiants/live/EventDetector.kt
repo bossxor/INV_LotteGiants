@@ -10,6 +10,7 @@ import com.bossxor.lottegiants.domain.PitcherLine
 import com.bossxor.lottegiants.domain.RosterMove
 import com.bossxor.lottegiants.domain.atBatForChance
 import com.bossxor.lottegiants.domain.basesKey
+import com.bossxor.lottegiants.domain.belongsToKboToday
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.describePlayHow
 import com.bossxor.lottegiants.domain.focusName
@@ -208,9 +209,15 @@ class EventDetector(private val store: SnapshotStore) {
                 )
             }
             if (isBullpenPitcherEntry(game, newPitcherCode)) {
+                val teamName = when {
+                    game.lottePitchers.any { it.playerCode == newPitcherCode } -> game.focusName()
+                    game.opponentPitchers.any { it.playerCode == newPitcherCode } -> game.opponentName
+                    !game.isLotteBatting -> game.focusName()
+                    else -> game.opponentName
+                }
                 maybeNotify(
                     context, NotificationType.PITCHER_CHANGE, 2401,
-                    "투수 교체", "$pitcherName 등판",
+                    "투수 교체", "$teamName - $pitcherName",
                     gameId = game.gameId, detailTab = "relay",
                 )
             }
@@ -264,7 +271,6 @@ class EventDetector(private val store: SnapshotStore) {
                 val wasLoaded = was1 && was2 && was3
                 val nowLoaded = game.onBase1 && game.onBase2 && game.onBase3
                 val play = pickAdvanceRelay(newTexts)
-                val how = describePlayHow(play?.text.orEmpty())
                 val who = pickPlayerName(
                     play?.text.orEmpty(),
                     play?.batterTitle.orEmpty(),
@@ -278,12 +284,13 @@ class EventDetector(private val store: SnapshotStore) {
                 val atBat = atBatForChance(game.currentBatterName, game.nextBatterName, who)
                 val alert = formatScoringChanceAlert(
                     loaded = nowLoaded,
-                    who = who,
-                    how = how,
                     runners = runners,
                     batterNow = atBat,
                     inningLabel = game.inningLabel,
                     outs = game.out,
+                    on1 = game.onBase1,
+                    on2 = game.onBase2,
+                    on3 = game.onBase3,
                 )
                 when {
                     nowLoaded && !wasLoaded -> maybeNotify(
@@ -425,6 +432,34 @@ class EventDetector(private val store: SnapshotStore) {
         }
         lineupNotifiedState = key
         store.setNotifiedLineupState(key)
+        maybeNotifyRosterNone(context)
+    }
+
+    /**
+     * 당일 등말소 공시가 없을 때 하루 1회.
+     * 라인업 알림과 같은 시점이 기본이고, 경기가 없으면 14시 이후 첫 빈 폴링에서 보낸다.
+     */
+    private suspend fun maybeNotifyRosterNone(context: Context, allowWithoutLineup: Boolean = false) {
+        val today = kboToday().toString()
+        if (store.notifiedRosterNoneDay() == today) return
+        if (store.notifiedRosterKeys().any { it.startsWith("$today:") }) return
+        if (allowWithoutLineup) {
+            // 당일 경기가 있으면 라인업 알림 시점까지 기다린다
+            val snap = store.loadSnapshot()
+            val todayGame = snap?.lotteGame?.takeIf { it.belongsToKboToday() }
+                ?: snap?.nextLotteGame?.takeIf { it.gameDate.take(10) == today }
+            if (todayGame != null &&
+                todayGame.status != GameStatus.CANCELED &&
+                todayGame.status != GameStatus.ENDED
+            ) {
+                return
+            }
+        }
+        maybeNotify(
+            context, NotificationType.ROSTER, ID_ROSTER_DIGEST - 1,
+            "엔트리 등말소", "오늘 등말소 변화 없음",
+        )
+        store.setNotifiedRosterNoneDay(today)
     }
 
     private suspend fun notifyEnded(context: Context, game: LotteGameInfo) {
@@ -467,11 +502,16 @@ class EventDetector(private val store: SnapshotStore) {
      * 여러 명이 한꺼번에 공시되면 알림이 쏟아지지 않게 한 건으로 묶는다.
      */
     suspend fun processRosterMoves(context: Context, moves: List<RosterMove>) {
-        if (moves.isEmpty()) return
+        val today = kboToday().toString()
+        if (moves.isEmpty()) {
+            // 당일 경기가 없어 라인업이 안 뜨면, 14시 이후 첫 빈 폴링에서 1회
+            maybeNotifyRosterNone(context, allowWithoutLineup = true)
+            return
+        }
         val plan = planRosterNotifications(
             moves,
             store.notifiedRosterKeys(),
-            kboToday().toString(),
+            today,
         )
         if (plan.changed) store.setNotifiedRosterKeys(pruneRosterKeys(plan.stored))
         val fresh = plan.fresh

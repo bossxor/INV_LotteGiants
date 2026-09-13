@@ -237,9 +237,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             if (!AlertPollGate.tryBeginRoster()) return
             runCatching {
                 val kboMoves = repo.pollRosterMovesForAlert()
-                if (kboMoves.isNotEmpty()) {
-                    detector.processRosterMoves(context, kboMoves)
-                }
+                detector.processRosterMoves(context, kboMoves)
             }
         }
 

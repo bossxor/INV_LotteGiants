@@ -230,6 +230,51 @@ class SnapshotStore(private val context: Context) {
         context.dataStore.edit { it[KEY_NOTIFIED_ROSTER] = keys }
     }
 
+    /** 당일 「등말소 변화 없음」알림을 이미 보냈는지 (yyyy-MM-dd) */
+    suspend fun notifiedRosterNoneDay(): String =
+        runCatching {
+            context.dataStore.data.map { it[KEY_NOTIFIED_ROSTER_NONE].orEmpty() }.first()
+        }.getOrDefault("")
+
+    suspend fun setNotifiedRosterNoneDay(day: String) {
+        context.dataStore.edit { it[KEY_NOTIFIED_ROSTER_NONE] = day }
+    }
+
+    suspend fun jerseyRoster(teamCode: String, season: Int): List<com.bossxor.lottegiants.domain.EntryPlayer> {
+        val key = jerseyKey(teamCode, season)
+        val raw = runCatching {
+            context.dataStore.data.map { it[key].orEmpty() }.first()
+        }.getOrDefault("")
+        if (raw.isBlank()) return emptyList()
+        return runCatching {
+            json.decodeFromString(
+                ListSerializer(com.bossxor.lottegiants.domain.EntryPlayer.serializer()),
+                raw,
+            )
+        }.getOrDefault(emptyList())
+    }
+
+    suspend fun setJerseyRoster(
+        teamCode: String,
+        season: Int,
+        players: List<com.bossxor.lottegiants.domain.EntryPlayer>,
+    ) {
+        val key = jerseyKey(teamCode, season)
+        context.dataStore.edit { prefs ->
+            if (players.isEmpty()) {
+                prefs.remove(key)
+            } else {
+                prefs[key] = json.encodeToString(
+                    ListSerializer(com.bossxor.lottegiants.domain.EntryPlayer.serializer()),
+                    players,
+                )
+            }
+        }
+    }
+
+    private fun jerseyKey(teamCode: String, season: Int) =
+        stringPreferencesKey("jersey_roster_${teamCode.uppercase()}_$season")
+
     suspend fun lastLiveNotifyKey(): String =
         context.dataStore.data.map { it[KEY_LIVE_NOTIFY] ?: "" }.first()
 
@@ -476,6 +521,7 @@ class SnapshotStore(private val context: Context) {
         private val KEY_NOTIFIED_END = stringPreferencesKey("notified_end_game_id")
         private val KEY_DISMISSED_FINISHED_LIVE = stringPreferencesKey("dismissed_finished_live_game_id")
         private val KEY_NOTIFIED_ROSTER = stringSetPreferencesKey("notified_roster_keys")
+        private val KEY_NOTIFIED_ROSTER_NONE = stringPreferencesKey("notified_roster_none_day")
         private val KEY_LIVE_NOTIFY = stringPreferencesKey("last_live_notify_key")
         private val KEY_NOTIFIED_LINEUP = stringPreferencesKey("notified_lineup_state")
         private val KEY_PENDING_UPDATE_APK = stringPreferencesKey("pending_update_apk")
@@ -510,7 +556,7 @@ enum class NotificationType(val label: String, val description: String) {
     CONCEDING("실점", "상대가 득점할 때 알림"),
     PITCHER_CHANGE("투수 교체", "양 팀 투수 교체 시 알림"),
     HOMERUN("홈런", "홈런이 나오면 알림 (내 팀은 강조)"),
-    SCORING_CHANCE("내 팀 득점권 찬스", "누가 어떤 타구·볼넷·도루로 득점권이 됐는지 알림"),
+    SCORING_CHANCE("내 팀 득점권 찬스", "주자 상황·타석이 바뀌면 알림"),
     LEAD_CHANGE("역전/동점", "리드가 바뀌거나 동점이 되는 순간 알림"),
     INNING_CHANGE("이닝 교대", "매 이닝 종료 시 중간 스코어 알림"),
     EIGHTH_INNING("8회말", "내 팀 경기 8회말 시작 알림"),
