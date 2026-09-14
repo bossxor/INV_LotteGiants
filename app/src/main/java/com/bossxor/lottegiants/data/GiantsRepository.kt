@@ -1283,17 +1283,22 @@ class GiantsRepository private constructor(context: Context) {
     ): List<EntryPlayer> {
         val code = teamCode.ifBlank { LOTTE_TEAM_CODE }
         val season = kboToday().year
-        val cached = store.jerseyRoster(code, season)
-        if (!force && cached.isNotEmpty()) {
-            // 백그라운드 비교는 ViewModel에서 force=false로 한 번 더 호출
+        val cachedRaw = store.jerseyRoster(code, season)
+        // 등번호가 전부 비면 폴백 캐시로 보고 버린다
+        val cached = cachedRaw.takeIf { list ->
+            list.isNotEmpty() && list.any { it.backNumber.isNotBlank() }
+        }.orEmpty()
+        if (cachedRaw.isNotEmpty() && cached.isEmpty()) {
+            store.setJerseyRoster(code, season, emptyList())
         }
         val remote = runCatching {
             val html = KboRegisterAllParser.fetchHtml()
             KboRegisterAllParser.parseTeamPlayers(html, code)
+        }.onFailure { e ->
+            Log.w("GiantsRepo", "jersey roster parse failed: ${e.message}")
         }.getOrDefault(emptyList())
         if (remote.isEmpty()) {
             if (cached.isNotEmpty()) return cached
-            // 폴백: Keubo 리더보드 (등번호는 비울 수 있음)
             return leadersAsJerseyFallback(code)
         }
         val codeByName = runCatching {
@@ -1305,7 +1310,7 @@ class GiantsRepository private constructor(context: Context) {
             val pc = p.playerCode.ifBlank { codeByName[p.name].orEmpty() }
             if (pc == p.playerCode) p else p.copy(playerCode = pc)
         }
-        if (jerseyFingerprint(enriched) == jerseyFingerprint(cached)) {
+        if (!force && jerseyFingerprint(enriched) == jerseyFingerprint(cached)) {
             return cached.ifEmpty { enriched }
         }
         store.setJerseyRoster(code, season, enriched)
