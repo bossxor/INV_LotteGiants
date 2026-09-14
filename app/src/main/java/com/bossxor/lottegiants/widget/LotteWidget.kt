@@ -334,9 +334,13 @@ private fun CompactBefore(
     val homeLogo = if (g.isHome) lotteLogo else oppLogo
     val awayR = awayRank(g, snap)
     val homeR = homeRank(g, snap)
-    CompactFrame {
-        // 새로고침 버튼과 겹치지 않게 상단만 살짝 내리고, 좌우 end 패딩은 쓰지 않아 가운데 정렬 유지
-        Spacer(GlanceModifier.height(22.dp))
+    val footer = widgetFooterLine(snap?.lotteRemainingGames ?: 0)
+    // CenterVertically면 줄이 늘어날 때 하단(잔여)이 잘리므로 Top 정렬
+    Column(
+        modifier = GlanceModifier.fillMaxSize().padding(top = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalAlignment = Alignment.Top,
+    ) {
         Row(
             GlanceModifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -376,33 +380,43 @@ private fun CompactBefore(
                 modifier = GlanceModifier.defaultWeight(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Image(awayLogo, contentDescription = null, modifier = GlanceModifier.size(48.dp))
+                Image(awayLogo, contentDescription = null, modifier = GlanceModifier.size(44.dp))
             }
             Text("VS", style = TextStyle(color = muted, fontSize = 13.sp, fontWeight = FontWeight.Bold))
             Column(
                 modifier = GlanceModifier.defaultWeight(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Image(homeLogo, contentDescription = null, modifier = GlanceModifier.size(48.dp))
+                Image(homeLogo, contentDescription = null, modifier = GlanceModifier.size(44.dp))
             }
         }
-        Spacer(GlanceModifier.height(6.dp))
+        Spacer(GlanceModifier.height(5.dp))
         Text(
             startersAwayVsHome(g),
             style = TextStyle(color = white, fontSize = 11.sp),
             maxLines = 1,
         )
-        Spacer(GlanceModifier.height(6.dp))
+        Spacer(GlanceModifier.height(5.dp))
         val cd = gameCountdownLabel(g.gameDate, g.startTime)
         StatusPill(cd.ifBlank { g.startTime.ifBlank { "예정" } })
-        if (g.stadium.isNotBlank()) {
-            Spacer(GlanceModifier.height(3.dp))
-            Text(g.stadium, style = TextStyle(color = muted, fontSize = 10.sp), maxLines = 1)
-        }
-        val footer = widgetFooterLine(snap?.lotteRemainingGames ?: 0)
-        if (footer.isNotBlank()) {
-            Spacer(GlanceModifier.height(2.dp))
-            Text(footer, style = TextStyle(color = muted, fontSize = 10.sp), maxLines = 1)
+        if (g.stadium.isNotBlank() || footer.isNotBlank()) {
+            Spacer(GlanceModifier.height(4.dp))
+            Row(
+                GlanceModifier.fillMaxWidth().padding(horizontal = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    g.stadium,
+                    style = TextStyle(color = muted, fontSize = 10.sp),
+                    maxLines = 1,
+                    modifier = GlanceModifier.defaultWeight(),
+                )
+                Text(
+                    footer,
+                    style = TextStyle(color = muted, fontSize = 10.sp),
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
