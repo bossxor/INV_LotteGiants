@@ -185,7 +185,8 @@ private fun WidgetRoot(
                 }
             }
             .cornerRadius(22.dp),
-        contentAlignment = Alignment.TopEnd,
+        // 컴팩트는 우상단 순위와 겹치지 않게 새로고침을 우하단에 둔다
+        contentAlignment = if (compact) Alignment.BottomEnd else Alignment.TopEnd,
     ) {
         Column(
             modifier = GlanceModifier
@@ -222,7 +223,7 @@ private fun WidgetRoot(
                 }
                 else -> Text(
                     "경기 없음",
-                    style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 13.sp),
+                    style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 14.sp),
                 )
             }
         }
@@ -232,7 +233,7 @@ private fun WidgetRoot(
         ) {
             Box(
                 modifier = GlanceModifier
-                    .size(36.dp)
+                    .size(if (compact) 32.dp else 36.dp)
                     .cornerRadius(10.dp)
                     .background(
                         ColorProvider(
@@ -251,7 +252,7 @@ private fun WidgetRoot(
                 Image(
                     provider = ImageProvider(R.drawable.ic_widget_refresh),
                     contentDescription = "새로고침",
-                    modifier = GlanceModifier.size(18.dp),
+                    modifier = GlanceModifier.size(if (compact) 16.dp else 18.dp),
                 )
             }
         }
@@ -277,14 +278,14 @@ private fun CompactLive(
             logoSize = 40,
         )
         Spacer(GlanceModifier.height(8.dp))
-        StatusPill(if (g.isSuspended) g.suspendLabel else "LIVE  ${g.inningLabel}")
+        StatusPill(if (g.isSuspended) g.suspendLabel else "LIVE  ${g.inningLabel}", fontSize = 12)
         if (g.stadium.isNotBlank()) {
             Spacer(GlanceModifier.height(3.dp))
-            Text(g.stadium, style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 10.sp), maxLines = 1)
+            Text(g.stadium, style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 12.sp), maxLines = 1)
         }
         val footer = widgetFooterLine(snap?.lotteRemainingGames ?: 0)
         if (footer.isNotBlank()) {
-            Text(footer, style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 10.sp), maxLines = 1)
+            Text(footer, style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 12.sp), maxLines = 1)
         }
     }
 }
@@ -308,12 +309,12 @@ private fun CompactScore(
             logoSize = 40,
         )
         Spacer(GlanceModifier.height(8.dp))
-        StatusPill(label)
+        StatusPill(label, fontSize = 12)
         if (g.stadium.isNotBlank()) {
             Spacer(GlanceModifier.height(3.dp))
             Text(
                 g.stadium,
-                style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 10.sp),
+                style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 12.sp),
                 maxLines = 1,
             )
         }
@@ -335,11 +336,14 @@ private fun CompactBefore(
     val awayR = awayRank(g, snap)
     val homeR = homeRank(g, snap)
     val footer = widgetFooterLine(snap?.lotteRemainingGames ?: 0)
-    // CenterVertically면 줄이 늘어날 때 하단(잔여)이 잘리므로 Top 정렬
+    val placeRemain = listOfNotNull(
+        g.stadium.takeIf { it.isNotBlank() },
+        footer.takeIf { it.isNotBlank() },
+    ).joinToString(" · ")
     Column(
-        modifier = GlanceModifier.fillMaxSize().padding(top = 18.dp),
+        modifier = GlanceModifier.fillMaxSize().padding(bottom = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             GlanceModifier.fillMaxWidth(),
@@ -352,7 +356,7 @@ private fun CompactBefore(
                 if (awayR > 0) {
                     Text(
                         "${awayR}위",
-                        style = TextStyle(color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                        style = TextStyle(color = gold, fontSize = 13.sp, fontWeight = FontWeight.Bold),
                         maxLines = 1,
                     )
                 }
@@ -365,7 +369,7 @@ private fun CompactBefore(
                 if (homeR > 0) {
                     Text(
                         "${homeR}위",
-                        style = TextStyle(color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                        style = TextStyle(color = gold, fontSize = 13.sp, fontWeight = FontWeight.Bold),
                         maxLines = 1,
                     )
                 }
@@ -380,43 +384,32 @@ private fun CompactBefore(
                 modifier = GlanceModifier.defaultWeight(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Image(awayLogo, contentDescription = null, modifier = GlanceModifier.size(44.dp))
+                Image(awayLogo, contentDescription = null, modifier = GlanceModifier.size(48.dp))
             }
-            Text("VS", style = TextStyle(color = muted, fontSize = 13.sp, fontWeight = FontWeight.Bold))
+            Text("VS", style = TextStyle(color = muted, fontSize = 14.sp, fontWeight = FontWeight.Bold))
             Column(
                 modifier = GlanceModifier.defaultWeight(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Image(homeLogo, contentDescription = null, modifier = GlanceModifier.size(44.dp))
+                Image(homeLogo, contentDescription = null, modifier = GlanceModifier.size(48.dp))
             }
         }
-        Spacer(GlanceModifier.height(5.dp))
+        Spacer(GlanceModifier.height(6.dp))
         Text(
             startersAwayVsHome(g),
-            style = TextStyle(color = white, fontSize = 11.sp),
+            style = TextStyle(color = white, fontSize = 13.sp),
             maxLines = 1,
         )
-        Spacer(GlanceModifier.height(5.dp))
+        Spacer(GlanceModifier.height(6.dp))
         val cd = gameCountdownLabel(g.gameDate, g.startTime)
-        StatusPill(cd.ifBlank { g.startTime.ifBlank { "예정" } })
-        if (g.stadium.isNotBlank() || footer.isNotBlank()) {
-            Spacer(GlanceModifier.height(4.dp))
-            Row(
-                GlanceModifier.fillMaxWidth().padding(horizontal = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    g.stadium,
-                    style = TextStyle(color = muted, fontSize = 10.sp),
-                    maxLines = 1,
-                    modifier = GlanceModifier.defaultWeight(),
-                )
-                Text(
-                    footer,
-                    style = TextStyle(color = muted, fontSize = 10.sp),
-                    maxLines = 1,
-                )
-            }
+        StatusPill(cd.ifBlank { g.startTime.ifBlank { "예정" } }, fontSize = 13)
+        if (placeRemain.isNotBlank()) {
+            Spacer(GlanceModifier.height(5.dp))
+            Text(
+                placeRemain,
+                style = TextStyle(color = muted, fontSize = 12.sp),
+                maxLines = 1,
+            )
         }
     }
 }
@@ -426,7 +419,8 @@ private fun CompactFrame(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
-        modifier = GlanceModifier.fillMaxSize(),
+        // 우하단 새로고침과 안 겹치게 하단 여백
+        modifier = GlanceModifier.fillMaxSize().padding(bottom = 28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -472,23 +466,23 @@ private fun CompactScoreboard(
     val white = ColorProvider(Color.White, Color.White)
     val muted = ColorProvider(Muted, Muted)
     Row(
-        GlanceModifier.fillMaxWidth().padding(end = 28.dp),
+        GlanceModifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
             modifier = GlanceModifier.defaultWeight(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            LogoWithRank(awayLogo, awayRank, size = logoSize, rankSize = 11, modifier = GlanceModifier)
+            LogoWithRank(awayLogo, awayRank, size = logoSize, rankSize = 12, modifier = GlanceModifier)
             Spacer(GlanceModifier.height(4.dp))
             Text("$awayScore", style = TextStyle(color = white, fontSize = 24.sp, fontWeight = FontWeight.Bold))
         }
-        Text("VS", style = TextStyle(color = muted, fontSize = 11.sp, fontWeight = FontWeight.Bold))
+        Text("VS", style = TextStyle(color = muted, fontSize = 12.sp, fontWeight = FontWeight.Bold))
         Column(
             modifier = GlanceModifier.defaultWeight(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            LogoWithRank(homeLogo, homeRank, size = logoSize, rankSize = 11, modifier = GlanceModifier)
+            LogoWithRank(homeLogo, homeRank, size = logoSize, rankSize = 12, modifier = GlanceModifier)
             Spacer(GlanceModifier.height(4.dp))
             Text("$homeScore", style = TextStyle(color = white, fontSize = 24.sp, fontWeight = FontWeight.Bold))
         }
@@ -496,7 +490,7 @@ private fun CompactScoreboard(
 }
 
 @Composable
-private fun StatusPill(text: String) {
+private fun StatusPill(text: String, fontSize: Int = 12) {
     val pink = ColorProvider(Pink, Pink)
     Row(
         modifier = GlanceModifier
@@ -507,7 +501,7 @@ private fun StatusPill(text: String) {
     ) {
         Text(
             text,
-            style = TextStyle(color = pink, fontSize = 11.sp, fontWeight = FontWeight.Bold),
+            style = TextStyle(color = pink, fontSize = fontSize.sp, fontWeight = FontWeight.Bold),
             maxLines = 1,
         )
     }
