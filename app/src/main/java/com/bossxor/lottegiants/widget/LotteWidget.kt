@@ -329,32 +329,79 @@ private fun CompactBefore(
 ) {
     val white = ColorProvider(Color.White, Color.White)
     val muted = ColorProvider(Muted, Muted)
+    val gold = ColorProvider(Gold, Gold)
     val awayLogo = if (g.isHome) oppLogo else lotteLogo
     val homeLogo = if (g.isHome) lotteLogo else oppLogo
+    val awayR = awayRank(g, snap)
+    val homeR = homeRank(g, snap)
     CompactFrame {
+        // 새로고침 버튼과 겹치지 않게 상단만 살짝 내리고, 좌우 end 패딩은 쓰지 않아 가운데 정렬 유지
+        Spacer(GlanceModifier.height(22.dp))
         Row(
-            GlanceModifier.fillMaxWidth().padding(end = 28.dp),
+            GlanceModifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            LogoWithRank(awayLogo, awayRank(g, snap), size = 48, rankSize = 11, modifier = GlanceModifier.defaultWeight())
-            Text("VS", style = TextStyle(color = muted, fontSize = 13.sp, fontWeight = FontWeight.Bold))
-            LogoWithRank(homeLogo, homeRank(g, snap), size = 48, rankSize = 11, modifier = GlanceModifier.defaultWeight())
+            Column(
+                modifier = GlanceModifier.defaultWeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (awayR > 0) {
+                    Text(
+                        "${awayR}위",
+                        style = TextStyle(color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                        maxLines = 1,
+                    )
+                }
+            }
+            Spacer(GlanceModifier.width(28.dp))
+            Column(
+                modifier = GlanceModifier.defaultWeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (homeR > 0) {
+                    Text(
+                        "${homeR}위",
+                        style = TextStyle(color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                        maxLines = 1,
+                    )
+                }
+            }
         }
-        Spacer(GlanceModifier.height(8.dp))
+        Spacer(GlanceModifier.height(4.dp))
+        Row(
+            GlanceModifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(
+                modifier = GlanceModifier.defaultWeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Image(awayLogo, contentDescription = null, modifier = GlanceModifier.size(48.dp))
+            }
+            Text("VS", style = TextStyle(color = muted, fontSize = 13.sp, fontWeight = FontWeight.Bold))
+            Column(
+                modifier = GlanceModifier.defaultWeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Image(homeLogo, contentDescription = null, modifier = GlanceModifier.size(48.dp))
+            }
+        }
+        Spacer(GlanceModifier.height(6.dp))
+        Text(
+            startersAwayVsHome(g),
+            style = TextStyle(color = white, fontSize = 11.sp),
+            maxLines = 1,
+        )
+        Spacer(GlanceModifier.height(6.dp))
         val cd = gameCountdownLabel(g.gameDate, g.startTime)
         StatusPill(cd.ifBlank { g.startTime.ifBlank { "예정" } })
         if (g.stadium.isNotBlank()) {
             Spacer(GlanceModifier.height(3.dp))
             Text(g.stadium, style = TextStyle(color = muted, fontSize = 10.sp), maxLines = 1)
         }
-        Spacer(GlanceModifier.height(4.dp))
-        Text(
-            startersAwayVsHome(g),
-            style = TextStyle(color = white, fontSize = 11.sp),
-            maxLines = 1,
-        )
         val footer = widgetFooterLine(snap?.lotteRemainingGames ?: 0)
         if (footer.isNotBlank()) {
+            Spacer(GlanceModifier.height(2.dp))
             Text(footer, style = TextStyle(color = muted, fontSize = 10.sp), maxLines = 1)
         }
     }
