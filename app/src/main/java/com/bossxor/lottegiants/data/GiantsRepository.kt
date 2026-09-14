@@ -58,10 +58,12 @@ import com.bossxor.lottegiants.domain.snapshotStaleForKboDay
 import com.bossxor.lottegiants.domain.normalizedIfCanceled
 import com.bossxor.lottegiants.domain.weatherSummaryKo
 import com.bossxor.lottegiants.domain.toCell
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import android.util.Log
 import java.time.LocalDate
@@ -1275,12 +1277,12 @@ class GiantsRepository private constructor(context: Context) {
 
     /**
      * 팀별 1군 등번호 일람. 캐시와 같으면 네트워크 결과만 버리고 캐시를 유지한다.
-     * @return Pair(목록, 캐시에서 갱신됐는지)
+     * RegisterAll HTML은 OkHttp 동기 호출이라 IO에서 실행해야 한다.
      */
     suspend fun fetchTeamJerseyRoster(
         teamCode: String = LOTTE_TEAM_CODE,
         force: Boolean = false,
-    ): List<EntryPlayer> {
+    ): List<EntryPlayer> = withContext(Dispatchers.IO) {
         val code = teamCode.ifBlank { LOTTE_TEAM_CODE }
         val season = kboToday().year
         val cachedRaw = store.jerseyRoster(code, season)
@@ -1298,8 +1300,8 @@ class GiantsRepository private constructor(context: Context) {
             Log.w("GiantsRepo", "jersey roster parse failed: ${e.message}")
         }.getOrDefault(emptyList())
         if (remote.isEmpty()) {
-            if (cached.isNotEmpty()) return cached
-            return leadersAsJerseyFallback(code)
+            if (cached.isNotEmpty()) return@withContext cached
+            return@withContext leadersAsJerseyFallback(code)
         }
         val codeByName = runCatching {
             val batters = fetchLeaders(false).filter { it.matchesTeam(code) }
@@ -1311,10 +1313,10 @@ class GiantsRepository private constructor(context: Context) {
             if (pc == p.playerCode) p else p.copy(playerCode = pc)
         }
         if (!force && jerseyFingerprint(enriched) == jerseyFingerprint(cached)) {
-            return cached.ifEmpty { enriched }
+            return@withContext cached.ifEmpty { enriched }
         }
         store.setJerseyRoster(code, season, enriched)
-        return enriched
+        enriched
     }
 
     private fun jerseyFingerprint(list: List<EntryPlayer>): String =
