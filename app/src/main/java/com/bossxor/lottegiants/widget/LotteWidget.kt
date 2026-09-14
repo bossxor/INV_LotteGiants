@@ -3,6 +3,7 @@ package com.bossxor.lottegiants.widget
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpSize
@@ -26,7 +27,6 @@ import androidx.glance.appwidget.action.actionSendBroadcast
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
-import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.currentState
 import androidx.glance.state.GlanceStateDefinition
@@ -68,6 +68,7 @@ import com.bossxor.lottegiants.domain.belongsToKboToday
 import com.bossxor.lottegiants.domain.gameCountdownLabel
 import com.bossxor.lottegiants.domain.widgetFooterLine
 import com.bossxor.lottegiants.live.GameSchedulerWorker
+import kotlinx.coroutines.withTimeoutOrNull
 
 private val Red = Color(0xFFC8102E)
 private val Pink = Color(0xFFFF6B7A)
@@ -89,72 +90,113 @@ class LotteWidget : GlanceAppWidget() {
     )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val repo = GiantsRepository.get(context)
-        val refreshingNow = runCatching {
-            getAppWidgetState(context, PreferencesGlanceStateDefinition, id)[widgetRefreshingKey] == true
-        }.getOrDefault(false)
-        val current = repo.store.loadSnapshot()
-        val snap = current
-        val opacityPct = repo.store.widgetOpacity()
-        val showOppLogo = repo.store.widgetShowOppLogo()
-        val game = snap?.lotteGame?.takeIf { it.belongsToKboToday() } ?: snap?.nextLotteGame
-        val myCode = game?.focusTeamCode?.ifBlank { snap?.myTeamCode }.orEmpty()
-            .ifBlank { snap?.myTeamCode.orEmpty() }.ifBlank { LOTTE_TEAM_CODE }
-        val lotteLogo = WidgetAssets.logoProvider(
-            context,
-            myCode,
-            game?.lotteLogoUrl?.ifBlank { teamLogoUrl(myCode) } ?: teamLogoUrl(myCode),
-        )
-        val oppLogo = if (showOppLogo && game != null) {
-            val oppCode = game.opponentCode.ifBlank { teamNameToCode(game.opponentName) }
-            WidgetAssets.logoProvider(
-                context,
-                oppCode,
-                game.opponentLogoUrl.ifBlank { teamLogoUrl(oppCode) },
-                game.opponentName,
-            )
-        } else {
-            ImageProvider(
-                android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888),
-            )
-        }
-        val pitcherPhoto = if (game != null && game.status == GameStatus.LIVE) {
-            WidgetAssets.playerProvider(
-                context,
-                game.currentPitcherCode,
-                playerPhotoUrl(game.currentPitcherCode),
-            )
-        } else {
-            ImageProvider(R.drawable.ic_notification)
-        }
-        val batterCode = game?.let { g ->
-            (g.lotteLineup + g.opponentLineup + g.lotteBenchBatters + g.opponentBenchBatters)
-                .firstOrNull { it.name == g.currentBatterName }?.playerCode.orEmpty()
-        }.orEmpty()
-        val batterPhoto = if (game != null && game.status == GameStatus.LIVE && batterCode.isNotBlank()) {
-            WidgetAssets.playerProvider(context, batterCode, playerPhotoUrl(batterCode))
-        } else {
-            ImageProvider(R.drawable.ic_notification)
-        }
-        val openIntent = Intent(context, MainActivity::class.java)
+        val openFallback = Intent(context, MainActivity::class.java)
             .putExtra(MainActivity.EXTRA_OPEN_TAB, "live")
-            .putExtra(MainActivity.EXTRA_GAME_ID, (snap?.lotteGame?.takeIf { it.belongsToKboToday() } ?: snap?.nextLotteGame)?.gameId.orEmpty())
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        provideContent {
-            val refreshing = currentState<Preferences>()[widgetRefreshingKey] == true
-            GlanceTheme {
-                WidgetRoot(
-                    snap,
-                    lotteLogo,
-                    oppLogo,
-                    pitcherPhoto,
-                    batterPhoto,
-                    openIntent,
-                    opacityPct,
-                    refreshing,
+        try {
+            val repo = GiantsRepository.get(context)
+            val current = repo.store.loadSnapshot()
+            val snap = current
+            val opacityPct = repo.store.widgetOpacity()
+            val showOppLogo = repo.store.widgetShowOppLogo()
+            val game = snap?.lotteGame?.takeIf { it.belongsToKboToday() } ?: snap?.nextLotteGame
+            val myCode = game?.focusTeamCode?.ifBlank { snap?.myTeamCode }.orEmpty()
+                .ifBlank { snap?.myTeamCode.orEmpty() }.ifBlank { LOTTE_TEAM_CODE }
+            // 로고 다운로드가 Glance 제한 시간을 넘기면 initialLayout(경기 로딩 중)에 고착된다.
+            val lotteLogo = withTimeoutOrNull(12_000L) {
+                WidgetAssets.logoProvider(
+                    context,
+                    myCode,
+                    game?.lotteLogoUrl?.ifBlank { teamLogoUrl(myCode) } ?: teamLogoUrl(myCode),
+                )
+            } ?: ImageProvider(R.drawable.ic_notification)
+            val oppLogo = if (showOppLogo && game != null) {
+                val oppCode = game.opponentCode.ifBlank { teamNameToCode(game.opponentName) }
+                withTimeoutOrNull(12_000L) {
+                    WidgetAssets.logoProvider(
+                        context,
+                        oppCode,
+                        game.opponentLogoUrl.ifBlank { teamLogoUrl(oppCode) },
+                        game.opponentName,
+                    )
+                } ?: ImageProvider(R.drawable.ic_notification)
+            } else {
+                ImageProvider(
+                    android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888),
                 )
             }
+            val pitcherPhoto = if (game != null && game.status == GameStatus.LIVE) {
+                withTimeoutOrNull(8_000L) {
+                    WidgetAssets.playerProvider(
+                        context,
+                        game.currentPitcherCode,
+                        playerPhotoUrl(game.currentPitcherCode),
+                    )
+                } ?: ImageProvider(R.drawable.ic_notification)
+            } else {
+                ImageProvider(R.drawable.ic_notification)
+            }
+            val batterCode = game?.let { g ->
+                (g.lotteLineup + g.opponentLineup + g.lotteBenchBatters + g.opponentBenchBatters)
+                    .firstOrNull { it.name == g.currentBatterName }?.playerCode.orEmpty()
+            }.orEmpty()
+            val batterPhoto = if (game != null && game.status == GameStatus.LIVE && batterCode.isNotBlank()) {
+                withTimeoutOrNull(8_000L) {
+                    WidgetAssets.playerProvider(context, batterCode, playerPhotoUrl(batterCode))
+                } ?: ImageProvider(R.drawable.ic_notification)
+            } else {
+                ImageProvider(R.drawable.ic_notification)
+            }
+            val openIntent = Intent(context, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_OPEN_TAB, "live")
+                .putExtra(
+                    MainActivity.EXTRA_GAME_ID,
+                    (snap?.lotteGame?.takeIf { it.belongsToKboToday() } ?: snap?.nextLotteGame)?.gameId.orEmpty(),
+                )
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            provideContent {
+                val refreshing = currentState<Preferences>()[widgetRefreshingKey] == true
+                GlanceTheme {
+                    WidgetRoot(
+                        snap,
+                        lotteLogo,
+                        oppLogo,
+                        pitcherPhoto,
+                        batterPhoto,
+                        openIntent,
+                        opacityPct,
+                        refreshing,
+                    )
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "provideGlance failed", t)
+            provideContent {
+                GlanceTheme {
+                    Box(
+                        modifier = GlanceModifier
+                            .fillMaxSize()
+                            .background(ImageProvider(R.drawable.widget_card_bg))
+                            .cornerRadius(22.dp)
+                            .clickable(actionStartActivity(openFallback)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            "탭하여 새로고침",
+                            style = TextStyle(
+                                color = ColorProvider(Color.White, Color.White),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                            ),
+                        )
+                    }
+                }
+            }
         }
+    }
+
+    companion object {
+        private const val TAG = "LotteWidget"
     }
 }
 
@@ -185,8 +227,6 @@ private fun WidgetRoot(
                 }
             }
             .cornerRadius(22.dp),
-        // 컴팩트는 우상단 순위와 겹치지 않게 새로고침을 우하단에 둔다
-        contentAlignment = if (compact) Alignment.BottomEnd else Alignment.TopEnd,
     ) {
         Column(
             modifier = GlanceModifier
@@ -227,33 +267,39 @@ private fun WidgetRoot(
                 )
             }
         }
+        // 본문과 분리한 오버레이 — 외곽 Box에 BottomEnd를 주면 Glance가 initialLayout에 고착될 수 있음
         Box(
-            modifier = GlanceModifier.padding(6.dp),
-            contentAlignment = Alignment.Center,
+            modifier = GlanceModifier.fillMaxSize(),
+            contentAlignment = if (compact) Alignment.BottomEnd else Alignment.TopEnd,
         ) {
             Box(
-                modifier = GlanceModifier
-                    .size(if (compact) 32.dp else 36.dp)
-                    .cornerRadius(10.dp)
-                    .background(
-                        ColorProvider(
-                            if (refreshing) Gold else Color(0x66000000),
-                            if (refreshing) Gold else Color(0x66000000),
-                        ),
-                    )
-                    .clickable(
-                        actionSendBroadcast(
-                            LotteWidgetReceiver.ACTION_REFRESH,
-                            ComponentName(appContext, LotteWidgetReceiver::class.java),
-                        ),
-                    ),
+                modifier = GlanceModifier.padding(6.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Image(
-                    provider = ImageProvider(R.drawable.ic_widget_refresh),
-                    contentDescription = "새로고침",
-                    modifier = GlanceModifier.size(if (compact) 16.dp else 18.dp),
-                )
+                Box(
+                    modifier = GlanceModifier
+                        .size(if (compact) 32.dp else 36.dp)
+                        .cornerRadius(10.dp)
+                        .background(
+                            ColorProvider(
+                                if (refreshing) Gold else Color(0x66000000),
+                                if (refreshing) Gold else Color(0x66000000),
+                            ),
+                        )
+                        .clickable(
+                            actionSendBroadcast(
+                                LotteWidgetReceiver.ACTION_REFRESH,
+                                ComponentName(appContext, LotteWidgetReceiver::class.java),
+                            ),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Image(
+                        provider = ImageProvider(R.drawable.ic_widget_refresh),
+                        contentDescription = "새로고침",
+                        modifier = GlanceModifier.size(if (compact) 16.dp else 18.dp),
+                    )
+                }
             }
         }
     }
@@ -353,26 +399,22 @@ private fun CompactBefore(
                 modifier = GlanceModifier.defaultWeight(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                if (awayR > 0) {
-                    Text(
-                        "${awayR}위",
-                        style = TextStyle(color = gold, fontSize = 13.sp, fontWeight = FontWeight.Bold),
-                        maxLines = 1,
-                    )
-                }
+                Text(
+                    if (awayR > 0) "${awayR}위" else " ",
+                    style = TextStyle(color = gold, fontSize = 13.sp, fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                )
             }
             Spacer(GlanceModifier.width(28.dp))
             Column(
                 modifier = GlanceModifier.defaultWeight(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                if (homeR > 0) {
-                    Text(
-                        "${homeR}위",
-                        style = TextStyle(color = gold, fontSize = 13.sp, fontWeight = FontWeight.Bold),
-                        maxLines = 1,
-                    )
-                }
+                Text(
+                    if (homeR > 0) "${homeR}위" else " ",
+                    style = TextStyle(color = gold, fontSize = 13.sp, fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                )
             }
         }
         Spacer(GlanceModifier.height(4.dp))
