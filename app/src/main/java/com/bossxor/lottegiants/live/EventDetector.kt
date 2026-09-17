@@ -34,7 +34,9 @@ import com.bossxor.lottegiants.domain.planRosterNotifications
 import com.bossxor.lottegiants.domain.rosterNotifyKey
 import com.bossxor.lottegiants.domain.raceChangeAlert
 import com.bossxor.lottegiants.domain.racePulse
+import com.bossxor.lottegiants.domain.shouldSendRosterNoneAlert
 import java.time.LocalTime
+import java.time.ZonedDateTime
 
 private const val LINEUP_STAGE_FLAG = "flag"
 private const val LINEUP_STAGE_FULL = "full"
@@ -281,7 +283,19 @@ class EventDetector(private val store: SnapshotStore) {
                     second = if (game.onBase2) lineupNameByOrder(game.lotteLineup, game.runnerOn2Order) else null,
                     third = if (game.onBase3) lineupNameByOrder(game.lotteLineup, game.runnerOn3Order) else null,
                 )
-                val atBat = atBatForChance(game.currentBatterName, game.nextBatterName, who)
+                val atBat = atBatForChance(
+                    currentBatter = game.currentBatterName,
+                    nextBatter = game.nextBatterName,
+                    playMaker = who,
+                    runnerNames = listOfNotNull(
+                        if (game.onBase1) lineupNameByOrder(game.lotteLineup, game.runnerOn1Order) else null,
+                        if (game.onBase2) lineupNameByOrder(game.lotteLineup, game.runnerOn2Order) else null,
+                        if (game.onBase3) lineupNameByOrder(game.lotteLineup, game.runnerOn3Order) else null,
+                    ),
+                    playText = play?.text.orEmpty(),
+                    currentBatterOrder = game.currentBatterOrder,
+                    runnerOn1Order = game.runnerOn1Order,
+                )
                 val alert = formatScoringChanceAlert(
                     loaded = nowLoaded,
                     runners = runners,
@@ -441,19 +455,27 @@ class EventDetector(private val store: SnapshotStore) {
      */
     private suspend fun maybeNotifyRosterNone(context: Context, allowWithoutLineup: Boolean = false) {
         val today = kboToday().toString()
-        if (store.notifiedRosterNoneDay() == today) return
-        if (store.notifiedRosterKeys().any { it.startsWith("$today:") }) return
-        if (allowWithoutLineup) {
-            // 당일 경기가 있으면 라인업 알림 시점까지 기다린다
-            val snap = store.loadSnapshot()
-            val todayGame = snap?.lotteGame?.takeIf { it.belongsToKboToday() }
-                ?: snap?.nextLotteGame?.takeIf { it.gameDate.take(10) == today }
-            if (todayGame != null &&
-                todayGame.status != GameStatus.CANCELED &&
-                todayGame.status != GameStatus.ENDED
-            ) {
-                return
-            }
+        val snap = store.loadSnapshot()
+        val todayGame = snap?.lotteGame?.takeIf { it.belongsToKboToday() }
+            ?: snap?.nextLotteGame?.takeIf { it.gameDate.take(10) == today }
+        val gameActive = todayGame != null &&
+            todayGame.status != GameStatus.CANCELED &&
+            todayGame.status != GameStatus.ENDED
+        val lineupKey = store.notifiedLineupState()
+        val lineupDoneForToday = todayGame != null && (
+            lineupKey == "${todayGame.gameId}:$LINEUP_STAGE_FLAG" ||
+                lineupKey == "${todayGame.gameId}:$LINEUP_STAGE_FULL"
+            )
+        val waitForLineup = allowWithoutLineup && gameActive && !lineupDoneForToday
+        if (!shouldSendRosterNoneAlert(
+                nowHour = ZonedDateTime.now(KBO_ZONE).hour,
+                today = today,
+                notifiedNoneDay = store.notifiedRosterNoneDay(),
+                hasTodayRosterNotifyKey = store.notifiedRosterKeys().any { it.startsWith("$today:") },
+                waitForLineup = waitForLineup,
+            )
+        ) {
+            return
         }
         maybeNotify(
             context, NotificationType.ROSTER, ID_ROSTER_DIGEST - 1,

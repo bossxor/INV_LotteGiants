@@ -118,6 +118,53 @@ class ScoreAlertsTest {
     }
 
     @Test
+    fun atBatUsesNextWhenWalkTextStaleBatter() {
+        assertEquals(
+            "나승엽",
+            atBatForChance(
+                currentBatter = "전민재",
+                nextBatter = "나승엽",
+                playMaker = null,
+                playText = "전민재 : 볼넷으로 출루",
+            ),
+        )
+    }
+
+    @Test
+    fun atBatKeepsCurrentOnSteal() {
+        assertEquals(
+            "전민재",
+            atBatForChance(
+                currentBatter = "전민재",
+                nextBatter = "나승엽",
+                playMaker = "고승민",
+                playText = "2루주자 고승민 도루 성공",
+            ),
+        )
+    }
+
+    @Test
+    fun atBatUsesNextWhenBatterAlreadyOnBase() {
+        assertEquals(
+            "나승엽",
+            atBatForChance(
+                currentBatter = "전민재",
+                nextBatter = "나승엽",
+                runnerNames = listOf("레이예스", "고승민", "전민재"),
+            ),
+        )
+        assertEquals(
+            "나승엽",
+            atBatForChance(
+                currentBatter = "전민재",
+                nextBatter = "나승엽",
+                currentBatterOrder = 6,
+                runnerOn1Order = 6,
+            ),
+        )
+    }
+
+    @Test
     fun describePlayHowKeepsDirection() {
         assertEquals("좌전 2루타", describePlayHow("전준우 : 좌전 2루타"))
         assertEquals("볼넷", describePlayHow("황성빈 볼넷으로 출루"))

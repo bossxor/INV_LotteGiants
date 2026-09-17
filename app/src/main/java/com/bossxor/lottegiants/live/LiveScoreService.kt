@@ -22,6 +22,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import android.util.Log
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * 경기 **중** 5초 간격으로 폴링해 위젯·알림·이벤트를 갱신한다.
@@ -42,6 +44,16 @@ class LiveScoreService : Service() {
             ignoreLeadWindow = true
         }
         NotificationHelper.createChannels(this)
+        // 스냅샷·RemoteViews보다 먼저 FGS를 올려 타임아웃 강제종료를 막는다
+        if (!foregroundStarted) {
+            ServiceCompat.startForeground(
+                this,
+                NotificationHelper.LIVE_NOTIFICATION_ID,
+                NotificationHelper.buildLiveBootstrapNotification(this),
+                if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
+            )
+            foregroundStarted = true
+        }
         val repo = GiantsRepository.get(this)
         val enabled = runBlocking { repo.store.isLiveScoreEnabled() }
         if (!enabled) {
@@ -73,17 +85,10 @@ class LiveScoreService : Service() {
             snap?.winProbSeries.orEmpty(),
         )
         val notifyKey = NotificationHelper.liveNotificationKey(game, mode)
-        if (foregroundStarted && pollJob?.isActive == true) {
+        if (pollJob?.isActive == true) {
             NotificationHelper.notifyLive(this, notification, notifyKey)
             return START_STICKY
         }
-        ServiceCompat.startForeground(
-            this,
-            NotificationHelper.LIVE_NOTIFICATION_ID,
-            notification,
-            if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
-        )
-        foregroundStarted = true
         NotificationHelper.notifyLive(this, notification, notifyKey, force = true)
         if (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED) {
             detachFinished(notification, game)
@@ -98,65 +103,74 @@ class LiveScoreService : Service() {
         pollJob = scope.launch {
             val repo = GiantsRepository.get(this@LiveScoreService)
             while (isActive) {
-                if (!repo.store.isLiveScoreEnabled()) {
-                    stopSelf()
-                    break
-                }
-                val mode = repo.store.liveDisplayMode()
-                val lead = repo.store.liveLeadMinutes()
-                val snap = runCatching { repo.refreshSnapshot(force = false) }.getOrNull()
-                    ?: repo.store.loadSnapshot()
-                if (snap == null) {
-                    delay(8_000L)
-                    continue
-                }
-                val game = liveGame(snap, lead)
-                val live = NotificationHelper.buildLiveNotification(
-                    this@LiveScoreService,
-                    game,
-                    mode,
-                    snap?.winProbSeries.orEmpty(),
-                )
-                val notifyKey = NotificationHelper.liveNotificationKey(game, mode)
-                if (game?.status != GameStatus.LIVE || !shouldShowLive(game, lead)) {
-                    val pinned = repo.store.isLiveNotificationPinned()
-                    if (pinned) {
-                        NotificationHelper.notifyLive(this@LiveScoreService, live, notifyKey)
-                        ServiceCompat.stopForeground(
-                            this@LiveScoreService,
-                            ServiceCompat.STOP_FOREGROUND_DETACH,
-                        )
-                        foregroundStarted = false
-                    }
-                    stopSelf()
-                    break
-                }
-                if (game.status == GameStatus.LIVE) {
-                    repo.store.clearDismissedFinishedLiveGameId()
-                }
-                NotificationHelper.notifyLive(this@LiveScoreService, live, notifyKey)
-                WidgetUpdater.updateAll(this@LiveScoreService)
-                detector.process(this@LiveScoreService, game)
-                if (game.status == GameStatus.ENDED) {
-                    val st = runCatching { repo.fetchStandings() }.getOrDefault(emptyList())
-                    detector.processRace(
-                        this@LiveScoreService,
-                        st,
-                        com.bossxor.lottegiants.domain.raceRelevantGames(snap),
-                    )
-                }
-
-                when (game.status) {
-                    GameStatus.LIVE -> delay(5_000L)
-                    GameStatus.ENDED, GameStatus.CANCELED -> {
-                        delay(3_000L)
-                        detachFinished(live, game)
-                        break
-                    }
-                    else -> {
+                try {
+                    if (!repo.store.isLiveScoreEnabled()) {
                         stopSelf()
                         break
                     }
+                    val mode = repo.store.liveDisplayMode()
+                    val lead = repo.store.liveLeadMinutes()
+                    val snap = runCatching { repo.refreshSnapshot(force = false) }.getOrNull()
+                        ?: repo.store.loadSnapshot()
+                    if (snap == null) {
+                        delay(8_000L)
+                        continue
+                    }
+                    val game = liveGame(snap, lead)
+                    val live = NotificationHelper.buildLiveNotification(
+                        this@LiveScoreService,
+                        game,
+                        mode,
+                        snap?.winProbSeries.orEmpty(),
+                    )
+                    val notifyKey = NotificationHelper.liveNotificationKey(game, mode)
+                    if (game?.status != GameStatus.LIVE || !shouldShowLive(game, lead)) {
+                        val pinned = repo.store.isLiveNotificationPinned()
+                        if (pinned) {
+                            NotificationHelper.notifyLive(this@LiveScoreService, live, notifyKey)
+                            ServiceCompat.stopForeground(
+                                this@LiveScoreService,
+                                ServiceCompat.STOP_FOREGROUND_DETACH,
+                            )
+                            foregroundStarted = false
+                        }
+                        stopSelf()
+                        break
+                    }
+                    if (game.status == GameStatus.LIVE) {
+                        repo.store.clearDismissedFinishedLiveGameId()
+                    }
+                    NotificationHelper.notifyLive(this@LiveScoreService, live, notifyKey)
+                    WidgetUpdater.updateAll(this@LiveScoreService)
+                    runCatching { detector.process(this@LiveScoreService, game) }
+                    if (game.status == GameStatus.ENDED) {
+                        val st = runCatching { repo.fetchStandings() }.getOrDefault(emptyList())
+                        runCatching {
+                            detector.processRace(
+                                this@LiveScoreService,
+                                st,
+                                com.bossxor.lottegiants.domain.raceRelevantGames(snap),
+                            )
+                        }
+                    }
+
+                    when (game.status) {
+                        GameStatus.LIVE -> delay(5_000L)
+                        GameStatus.ENDED, GameStatus.CANCELED -> {
+                            delay(3_000L)
+                            detachFinished(live, game)
+                            break
+                        }
+                        else -> {
+                            stopSelf()
+                            break
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (t: Throwable) {
+                    Log.e(TAG, "live poll failed", t)
+                    delay(8_000L)
                 }
             }
         }
@@ -213,28 +227,32 @@ class LiveScoreService : Service() {
     }
 
     companion object {
+        private const val TAG = "LiveScoreService"
         private const val EXTRA_FORCE_SHOW = "force_show"
 
         /** LIVE일 때만 FGS를 켠다. 경기 전은 알림만 갱신한다. */
         fun start(context: Context, forceShow: Boolean = false) {
             val app = context.applicationContext
-            val repo = GiantsRepository.get(app)
-            val snap = runBlocking { repo.store.loadSnapshot() }
-            val lead = runBlocking { repo.store.liveLeadMinutes() }
-            val pinned = runBlocking { repo.store.isLiveNotificationPinned() }
-            val game = NotificationHelper.liveNotificationGame(
-                snap,
-                allowUpcoming = true,
-                leadMinutes = lead,
-                ignoreLeadWindow = forceShow || pinned,
-            )
-            if (game?.status != GameStatus.LIVE) {
-                runBlocking { NotificationHelper.refreshLiveNotificationIfNeeded(app) }
-                return
-            }
             val i = Intent(app, LiveScoreService::class.java)
             if (forceShow) i.putExtra(EXTRA_FORCE_SHOW, true)
-            app.startForegroundService(i)
+            val isLive = runCatching {
+                val repo = GiantsRepository.get(app)
+                val snap = runBlocking { repo.store.loadSnapshot() }
+                val lead = runBlocking { repo.store.liveLeadMinutes() }
+                val pinned = runBlocking { repo.store.isLiveNotificationPinned() }
+                val game = NotificationHelper.liveNotificationGame(
+                    snap,
+                    allowUpcoming = true,
+                    leadMinutes = lead,
+                    ignoreLeadWindow = forceShow || pinned,
+                )
+                game?.status == GameStatus.LIVE
+            }.getOrElse { true }
+            if (!isLive) {
+                runCatching { runBlocking { NotificationHelper.refreshLiveNotificationIfNeeded(app) } }
+                return
+            }
+            runCatching { app.startForegroundService(i) }
         }
 
         fun stop(context: Context) {

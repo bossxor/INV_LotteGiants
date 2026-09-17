@@ -66,7 +66,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         val myTeam = snap.myTeamCode.ifBlank { repo.store.myTeamCode() }
         val hasLive = todayGames.any { it.status == GameStatus.LIVE } || game?.status == GameStatus.LIVE
         if (hasLive) {
-            LiveScoreService.start(applicationContext)
+            runCatching { LiveScoreService.start(applicationContext) }
         }
         val befores = todayGames.filter { it.status == GameStatus.BEFORE && !it.isCanceledGame() }
         if (befores.isNotEmpty()) {

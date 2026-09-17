@@ -212,14 +212,37 @@ fun formatScoringChanceAlert(
     return ChanceAlert(title, text)
 }
 
-/** 방금 출루한 선수가 아직 currentBatter로 남아 있으면 다음 타자를 쓴다. */
-fun atBatForChance(currentBatter: String, nextBatter: String, playMaker: String?): String {
+/** 타석 결과로 주자가 늘었는지. 도루·폭투처럼 타자가 그대로인 진루는 뺀다. */
+fun looksLikePlateAppearanceAdvance(text: String): Boolean {
+    val t = text.trim()
+    if (t.isBlank()) return false
+    if (t.contains("도루") || t.contains("폭투") || t.contains("패스트볼") || t.contains("보크")) return false
+    return ADVANCE_KEYS.any { t.contains(it) }
+}
+
+/**
+ * 방금 출루한 선수가 아직 currentBatter로 남아 있으면 다음 타자를 쓴다.
+ * KBO/중계가 타석을 늦게 넘기는 경우가 있어 주자·타순·타석결과로도 보정한다.
+ */
+fun atBatForChance(
+    currentBatter: String,
+    nextBatter: String,
+    playMaker: String? = null,
+    runnerNames: List<String> = emptyList(),
+    playText: String = "",
+    currentBatterOrder: Int = 0,
+    runnerOn1Order: Int = 0,
+): String {
     val cur = currentBatter.trim()
     val nxt = nextBatter.trim()
     val maker = playMaker?.trim().orEmpty()
-    if (cur.isNotBlank() && cur != maker) return cur
-    if (nxt.isNotBlank()) return nxt
-    return cur
+    fun preferNext() = nxt.ifBlank { cur }
+    if (cur.isNotBlank() && runnerNames.any { it == cur }) return preferNext()
+    if (cur.isNotBlank() && cur == maker) return preferNext()
+    if (currentBatterOrder > 0 && runnerOn1Order == currentBatterOrder && nxt.isNotBlank()) return nxt
+    if (looksLikePlateAppearanceAdvance(playText) && nxt.isNotBlank()) return nxt
+    if (cur.isNotBlank()) return cur
+    return nxt
 }
 
 fun scoringBody(playText: String, who: String?, how: String?, inningLabel: String): String {

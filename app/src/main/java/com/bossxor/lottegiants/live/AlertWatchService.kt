@@ -34,10 +34,6 @@ class AlertWatchService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!runBlocking { shouldRun() }) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
         NotificationHelper.createChannels(this)
         ServiceCompat.startForeground(
             this,
@@ -45,25 +41,36 @@ class AlertWatchService : Service() {
             NotificationHelper.buildAlertWatchNotification(this),
             if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
         )
+        if (!runBlocking { shouldRun() }) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (pollJob?.isActive == true) return START_STICKY
         pollJob = scope.launch {
             var failStreak = 0
             while (isActive) {
-                if (!runBlocking { shouldRun() }) {
-                    stopSelf()
-                    break
+                try {
+                    if (!runBlocking { shouldRun() }) {
+                        stopSelf()
+                        break
+                    }
+                    val repo = GiantsRepository.get(this@AlertWatchService)
+                    val detector = EventDetector(repo.store)
+                    val ok = runCatching {
+                        GameSchedulerWorker.pollRosterAlerts(this@AlertWatchService, detector, repo)
+                        GameSchedulerWorker.pollLineupAlert(this@AlertWatchService, detector, repo)
+                    }.isSuccess
+                    failStreak = if (ok) 0 else (failStreak + 1).coerceAtMost(4)
+                    val snap = runCatching { repo.store.loadSnapshot() }.getOrNull()
+                    val game = snap?.lotteGame ?: snap?.nextLotteGame
+                    val start = game?.let { parseKboStartMillis(it.gameDate, it.startTime) }
+                    delay(AlertWatchGate.pollIntervalMs(System.currentTimeMillis(), start) + failStreak * 10_000L)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (_: Throwable) {
+                    failStreak = (failStreak + 1).coerceAtMost(4)
+                    delay(AlertWatchGate.ROSTER_POLL_MS + failStreak * 10_000L)
                 }
-                val repo = GiantsRepository.get(this@AlertWatchService)
-                val detector = EventDetector(repo.store)
-                val ok = runCatching {
-                    GameSchedulerWorker.pollRosterAlerts(this@AlertWatchService, detector, repo)
-                    GameSchedulerWorker.pollLineupAlert(this@AlertWatchService, detector, repo)
-                }.isSuccess
-                failStreak = if (ok) 0 else (failStreak + 1).coerceAtMost(4)
-                val snap = runCatching { repo.store.loadSnapshot() }.getOrNull()
-                val game = snap?.lotteGame ?: snap?.nextLotteGame
-                val start = game?.let { parseKboStartMillis(it.gameDate, it.startTime) }
-                delay(AlertWatchGate.pollIntervalMs(System.currentTimeMillis(), start) + failStreak * 10_000L)
             }
         }
         return START_STICKY
@@ -111,14 +118,18 @@ class AlertWatchService : Service() {
 
         fun startIfNeeded(context: Context) {
             val app = context.applicationContext
-            val go = runBlocking { shouldRun(app) }
+            val go = runCatching { runBlocking { shouldRun(app) } }.getOrDefault(false)
             if (!go) {
                 stop(app)
                 return
             }
             if (running) return
             running = true
-            app.startForegroundService(Intent(app, AlertWatchService::class.java))
+            runCatching {
+                app.startForegroundService(Intent(app, AlertWatchService::class.java))
+            }.onFailure {
+                running = false
+            }
         }
 
         fun stop(context: Context) {

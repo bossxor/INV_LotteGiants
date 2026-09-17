@@ -74,4 +74,39 @@ class RosterAlertTest {
         assertEquals(1, plan.fresh.size)
         assertEquals("손호영", plan.fresh.single().playerName)
     }
+
+    @Test
+    fun rosterNoneSkippedAtFiveAmRollover() {
+        org.junit.Assert.assertFalse(
+            shouldSendRosterNoneAlert(
+                nowHour = 5,
+                today = "2026-09-16",
+                notifiedNoneDay = "2026-09-15",
+                hasTodayRosterNotifyKey = false,
+                waitForLineup = false,
+            ),
+        )
+    }
+
+    @Test
+    fun rosterNoneAllowedAfterTwoPm() {
+        org.junit.Assert.assertTrue(
+            shouldSendRosterNoneAlert(
+                nowHour = 14,
+                today = "2026-09-16",
+                notifiedNoneDay = "2026-09-15",
+                hasTodayRosterNotifyKey = false,
+                waitForLineup = false,
+            ),
+        )
+        org.junit.Assert.assertFalse(
+            shouldSendRosterNoneAlert(
+                nowHour = 14,
+                today = "2026-09-16",
+                notifiedNoneDay = "2026-09-15",
+                hasTodayRosterNotifyKey = false,
+                waitForLineup = true,
+            ),
+        )
+    }
 }

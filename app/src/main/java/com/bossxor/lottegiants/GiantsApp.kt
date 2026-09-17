@@ -11,6 +11,7 @@ import com.bossxor.lottegiants.domain.IMAGE_USER_AGENT
 import com.bossxor.lottegiants.domain.imageRefererForHost
 import com.bossxor.lottegiants.domain.shouldPostLiveNotification
 import com.bossxor.lottegiants.live.AlertBootstrap
+import com.bossxor.lottegiants.live.CrashGuard
 import com.bossxor.lottegiants.live.EventDetector
 import com.bossxor.lottegiants.live.GameSchedulerWorker
 import com.bossxor.lottegiants.live.NotificationHelper
@@ -27,23 +28,24 @@ class GiantsApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        CrashGuard.install(this)
         NotificationHelper.createChannels(this)
+        // 스냅샷/엔트리 조회가 실패해도 알람은 먼저 걸어 둔다
+        runCatching { GameSchedulerWorker.enqueue(this) }
+        runCatching { GameSchedulerWorker.scheduleKboDayRollover(this) }
         AlertBootstrap.runAsync(this)
         UpdateChecker.prefetch(this)
         scope.launch {
+            val repo = GiantsRepository.get(this@GiantsApp)
+            runCatching { repo.store.migrateToScorecardModeIfNeeded() }
+            val snap = runCatching { repo.refreshSnapshot(force = false) }.getOrNull()
+            runCatching { WidgetUpdater.updateAll(this@GiantsApp) }
+            val detector = EventDetector(repo.store)
+            runCatching { detector.process(this@GiantsApp, snap?.lotteGame) }
             runCatching {
-                val repo = GiantsRepository.get(this@GiantsApp)
-                repo.store.migrateToScorecardModeIfNeeded()
-                val snap = repo.refreshSnapshot(force = false)
-                WidgetUpdater.updateAll(this@GiantsApp)
-                GameSchedulerWorker.enqueue(this@GiantsApp)
-                GameSchedulerWorker.scheduleKboDayRollover(this@GiantsApp)
-                val detector = EventDetector(repo.store)
-                detector.process(this@GiantsApp, snap.lotteGame)
-                // 워커·알람을 기다리지 않고 앱을 열자마자 새 공시를 알린다
-                runCatching {
-                    detector.processRosterMoves(this@GiantsApp, repo.pollRosterMovesForAlert())
-                }
+                detector.processRosterMoves(this@GiantsApp, repo.pollRosterMovesForAlert())
+            }
+            runCatching {
                 if (repo.store.isLiveScoreEnabled()) {
                     val lead = repo.store.liveLeadMinutes()
                     val game = NotificationHelper.liveNotificationGame(

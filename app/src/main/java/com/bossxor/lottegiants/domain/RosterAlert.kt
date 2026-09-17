@@ -1,5 +1,23 @@
 package com.bossxor.lottegiants.domain
 
+/** 「등말소 변화 없음」은 감시가 켜지는 14시 이후에만. 오전 5시 날짜 넘김에는 보내지 않는다. */
+const val ROSTER_NONE_START_HOUR = 14
+const val ROSTER_NONE_END_HOUR = 23
+
+fun shouldSendRosterNoneAlert(
+    nowHour: Int,
+    today: String,
+    notifiedNoneDay: String,
+    hasTodayRosterNotifyKey: Boolean,
+    waitForLineup: Boolean,
+): Boolean {
+    if (notifiedNoneDay == today) return false
+    if (hasTodayRosterNotifyKey) return false
+    if (nowHour !in ROSTER_NONE_START_HOUR until ROSTER_NONE_END_HOUR) return false
+    if (waitForLineup) return false
+    return true
+}
+
 /** 등말소 알림 키. 선수코드는 조회마다 비어 있을 수 있어 넣지 않는다. */
 fun rosterNotifyKey(move: RosterMove): String =
     "${move.moveDate}:${move.moveType}:${move.playerName}"

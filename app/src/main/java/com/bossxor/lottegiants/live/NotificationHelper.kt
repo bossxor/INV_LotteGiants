@@ -169,6 +169,20 @@ object NotificationHelper {
             .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .build()
+
+    /** RemoteViews 없이 바로 FGS를 올리기 위한 자리 표시. */
+    fun buildLiveBootstrapNotification(context: Context): Notification =
+        NotificationCompat.Builder(context, CHANNEL_LIVE_CARD)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("집관 라이브")
+            .setContentText("스코어 갱신 중")
+            .setOngoing(true)
+            .setSilent(true)
+            .setShowWhen(false)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
 
     /**
