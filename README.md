@@ -9,6 +9,7 @@
 | **버전** | `2.0.15` (`versionCode` **2015**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
+| **대시보드** | [프로젝트 모음](https://bossxor.netlify.app/) |
 
 > 집·회사에서 이어서 작업할 때는 **[작업일지.md](작업일지.md)** 를 본다. 최신이 위. 작업이 끝나면 그 파일을 고치고 push.
 
