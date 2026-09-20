@@ -222,7 +222,10 @@ fun looksLikePlateAppearanceAdvance(text: String): Boolean {
 
 /**
  * 방금 출루한 선수가 아직 currentBatter로 남아 있으면 다음 타자를 쓴다.
- * KBO/중계가 타석을 늦게 넘기는 경우가 있어 주자·타순·타석결과로도 보정한다.
+ * KBO/중계가 타석을 늦게 넘기는 경우만 보정한다.
+ *
+ * 주의: 출루 중계문이 있어도 API가 이미 다음 타자로 넘어갔으면 current를 유지한다.
+ * (볼넷 직후 current=장두성·next=전민재인데 중계문에 "볼넷"이 있다고 next로 밀리던 버그)
  */
 fun atBatForChance(
     currentBatter: String,
@@ -237,10 +240,16 @@ fun atBatForChance(
     val nxt = nextBatter.trim()
     val maker = playMaker?.trim().orEmpty()
     fun preferNext() = nxt.ifBlank { cur }
+    // API가 아직 출루한 타자를 타석에 남겨 둔 경우
     if (cur.isNotBlank() && runnerNames.any { it == cur }) return preferNext()
     if (cur.isNotBlank() && cur == maker) return preferNext()
     if (currentBatterOrder > 0 && runnerOn1Order == currentBatterOrder && nxt.isNotBlank()) return nxt
-    if (looksLikePlateAppearanceAdvance(playText) && nxt.isNotBlank()) return nxt
+    // 타석 결과 중계에 **현재 타자 이름**이 출루 주체로 남아 있을 때만 next로
+    if (looksLikePlateAppearanceAdvance(playText) && nxt.isNotBlank() && cur.isNotBlank() &&
+        playText.contains(cur)
+    ) {
+        return preferNext()
+    }
     if (cur.isNotBlank()) return cur
     return nxt
 }

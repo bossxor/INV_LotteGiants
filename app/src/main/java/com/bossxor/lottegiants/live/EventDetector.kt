@@ -279,19 +279,20 @@ class EventDetector(private val store: SnapshotStore) {
                     lotteRosterNames(game),
                 )
                 val runners = runnersLabel(
-                    first = if (game.onBase1) lineupNameByOrder(game.lotteLineup, game.runnerOn1Order) else null,
-                    second = if (game.onBase2) lineupNameByOrder(game.lotteLineup, game.runnerOn2Order) else null,
-                    third = if (game.onBase3) lineupNameByOrder(game.lotteLineup, game.runnerOn3Order) else null,
+                    first = runnerName(game, game.onBase1, game.runnerOn1Order),
+                    second = runnerName(game, game.onBase2, game.runnerOn2Order),
+                    third = runnerName(game, game.onBase3, game.runnerOn3Order),
+                )
+                val runnerNames = listOfNotNull(
+                    runnerName(game, game.onBase1, game.runnerOn1Order),
+                    runnerName(game, game.onBase2, game.runnerOn2Order),
+                    runnerName(game, game.onBase3, game.runnerOn3Order),
                 )
                 val atBat = atBatForChance(
                     currentBatter = game.currentBatterName,
                     nextBatter = game.nextBatterName,
                     playMaker = who,
-                    runnerNames = listOfNotNull(
-                        if (game.onBase1) lineupNameByOrder(game.lotteLineup, game.runnerOn1Order) else null,
-                        if (game.onBase2) lineupNameByOrder(game.lotteLineup, game.runnerOn2Order) else null,
-                        if (game.onBase3) lineupNameByOrder(game.lotteLineup, game.runnerOn3Order) else null,
-                    ),
+                    runnerNames = runnerNames,
                     playText = play?.text.orEmpty(),
                     currentBatterOrder = game.currentBatterOrder,
                     runnerOn1Order = game.runnerOn1Order,
@@ -637,7 +638,18 @@ class EventDetector(private val store: SnapshotStore) {
 
     private fun lineupNameByOrder(lineup: List<com.bossxor.lottegiants.domain.LineupSlot>, order: Int): String? {
         if (order <= 0) return null
-        return lineup.firstOrNull { it.batOrder == order }?.name?.takeIf { it.isNotBlank() }
+        // 대타·대주자가 있으면 교체 선수를 우선 (같은 타순)
+        val atOrder = lineup.filter { it.batOrder == order && it.name.isNotBlank() }
+        if (atOrder.isEmpty()) return null
+        return (atOrder.lastOrNull { it.isSubstitute } ?: atOrder.first()).name
+    }
+
+    /** 공격 팀 라인업에서 타순으로 주자 이름. 벤치(대타)까지 본다. */
+    private fun runnerName(game: LotteGameInfo, onBase: Boolean, order: Int): String? {
+        if (!onBase) return null
+        lineupNameByOrder(game.lotteLineup + game.lotteBenchBatters, order)?.let { return it }
+        // 타순이 비어 있으면 이름을 못 붙인다 (만루 표시는 onBase bool로 유지)
+        return null
     }
 
     private fun isLotteHomerun(game: LotteGameInfo, text: String): Boolean {

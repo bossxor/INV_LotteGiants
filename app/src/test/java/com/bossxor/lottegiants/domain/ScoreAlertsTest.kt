@@ -131,6 +131,21 @@ class ScoreAlertsTest {
     }
 
     @Test
+    fun atBatKeepsCurrentWhenApiAlreadyAdvanced() {
+        // 볼넷 중계는 남아 있어도 API 타석이 이미 다음이면 밀지 않는다
+        assertEquals(
+            "장두성",
+            atBatForChance(
+                currentBatter = "장두성",
+                nextBatter = "전민재",
+                playMaker = "나승엽",
+                playText = "나승엽 : 볼넷으로 출루",
+                runnerNames = listOf("레이예스", "고승민", "나승엽"),
+            ),
+        )
+    }
+
+    @Test
     fun atBatKeepsCurrentOnSteal() {
         assertEquals(
             "전민재",

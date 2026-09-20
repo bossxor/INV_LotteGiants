@@ -2201,6 +2201,22 @@ class GiantsRepository private constructor(context: Context) {
             onBase1 = liveSituation && mergeRunner(state?.base1, base.onBase1, state == null),
             onBase2 = liveSituation && mergeRunner(state?.base2, base.onBase2, state == null),
             onBase3 = liveSituation && mergeRunner(state?.base3, base.onBase3, state == null),
+            // 네이버 baseN은 선수코드일 수 있다. 타순을 맞추지 않으면 득점권 알림에서 루 이름이 빠진다.
+            runnerOn1Order = if (liveSituation) {
+                runnerOrderFromRelay(state?.base1, battingOrder, names, base.runnerOn1Order)
+            } else {
+                0
+            },
+            runnerOn2Order = if (liveSituation) {
+                runnerOrderFromRelay(state?.base2, battingOrder, names, base.runnerOn2Order)
+            } else {
+                0
+            },
+            runnerOn3Order = if (liveSituation) {
+                runnerOrderFromRelay(state?.base3, battingOrder, names, base.runnerOn3Order)
+            } else {
+                0
+            },
             currentPitcherName = names[pitcherCode]
                 ?: listOf(lottePitchers, opponentPitchers).flatten()
                     .firstOrNull { it.playerCode == pitcherCode }?.name
@@ -2277,6 +2293,31 @@ class GiantsRepository private constructor(context: Context) {
         if (noRelayState) return kboValue
         val raw = relayRaw ?: return kboValue
         return runnerOccupied(raw)
+    }
+
+    /**
+     * 중계 base 필드(선수코드/`1`/`Y`)에서 타순을 찾는다.
+     * 코드로 찾으면 그걸 쓰고, `"1"`처럼 점유만 알리거나 필드가 비면 KBO 타순을 유지한다.
+     */
+    private fun runnerOrderFromRelay(
+        relayRaw: String?,
+        battingOrder: Map<Int, LineupBatterDto>,
+        names: Map<String, String>,
+        kboOrder: Int,
+    ): Int {
+        val raw = relayRaw?.trim().orEmpty()
+        if (raw.isEmpty()) return kboOrder.takeIf { it > 0 } ?: 0
+        if (!runnerOccupied(raw)) return 0
+        // 점유 플래그만 온 경우 (선수코드 아님)
+        if (raw.length <= 2 && raw.all { it.isDigit() || it.equals('y', true) || it.equals('t', true) }) {
+            return kboOrder.takeIf { it > 0 } ?: 0
+        }
+        battingOrder.entries.firstOrNull { it.value.pcode == raw }?.key?.let { return it }
+        val byName = names[raw]?.takeIf { it.isNotBlank() }
+        if (byName != null) {
+            battingOrder.entries.firstOrNull { it.value.name == byName }?.key?.let { return it }
+        }
+        return kboOrder.takeIf { it > 0 } ?: 0
     }
 
     private fun hotColdCellsFor(game: LotteGameInfo?): List<com.bossxor.lottegiants.domain.HotColdCell> {
