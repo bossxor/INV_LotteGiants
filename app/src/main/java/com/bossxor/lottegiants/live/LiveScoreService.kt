@@ -21,7 +21,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import android.util.Log
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -239,33 +238,35 @@ class LiveScoreService : Service() {
         private const val TAG = "LiveScoreService"
         private const val EXTRA_FORCE_SHOW = "force_show"
 
-        /** LIVE일 때만 FGS를 켠다. 경기 전은 알림만 갱신한다. */
+        /** LIVE일 때만 FGS를 켠다. 경기 전은 알림만 갱신한다. 호출 스레드는 막지 않는다. */
         fun start(context: Context, forceShow: Boolean = false) {
             val app = context.applicationContext
             val i = Intent(app, LiveScoreService::class.java)
             if (forceShow) i.putExtra(EXTRA_FORCE_SHOW, true)
-            val isLive = runCatching {
-                val repo = GiantsRepository.get(app)
-                val snap = runBlocking { repo.store.loadSnapshot() }
-                val lead = runBlocking { repo.store.liveLeadMinutes() }
-                val pinned = runBlocking { repo.store.isLiveNotificationPinned() }
-                val game = NotificationHelper.liveNotificationGame(
-                    snap,
-                    allowUpcoming = true,
-                    leadMinutes = lead,
-                    ignoreLeadWindow = forceShow || pinned,
-                )
-                game?.status == GameStatus.LIVE
-            }.getOrElse {
-                // 스냅샷 판별 실패 시 FGS를 억지로 켜면 타임아웃·깜빡임만 난다. 알림만 갱신.
-                Log.w(TAG, "live check failed; skip FGS", it)
-                false
+            CoroutineScope(Dispatchers.IO).launch {
+                val isLive = runCatching {
+                    val repo = GiantsRepository.get(app)
+                    val snap = repo.store.loadSnapshot()
+                    val lead = repo.store.liveLeadMinutes()
+                    val pinned = repo.store.isLiveNotificationPinned()
+                    val game = NotificationHelper.liveNotificationGame(
+                        snap,
+                        allowUpcoming = true,
+                        leadMinutes = lead,
+                        ignoreLeadWindow = forceShow || pinned,
+                    )
+                    game?.status == GameStatus.LIVE
+                }.getOrElse {
+                    // 스냅샷 판별 실패 시 FGS를 억지로 켜면 타임아웃·깜빡임만 난다. 알림만 갱신.
+                    Log.w(TAG, "live check failed; skip FGS", it)
+                    false
+                }
+                if (!isLive) {
+                    runCatching { NotificationHelper.refreshLiveNotificationIfNeeded(app) }
+                    return@launch
+                }
+                runCatching { app.startForegroundService(i) }
             }
-            if (!isLive) {
-                runCatching { runBlocking { NotificationHelper.refreshLiveNotificationIfNeeded(app) } }
-                return
-            }
-            runCatching { app.startForegroundService(i) }
         }
 
         fun stop(context: Context) {

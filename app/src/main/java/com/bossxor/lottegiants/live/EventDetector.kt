@@ -690,6 +690,7 @@ class EventDetector(private val store: SnapshotStore) {
     private suspend fun seed(game: LotteGameInfo) {
         val cursor = store.liveEventCursor()
         val parts = cursor.split('|')
+        // gameId|seq|ls|os|bases|pitcher|favBatter|status|chanceBatter|seenPitchersComma
         val sameGame = parts.size >= 8 && parts[0] == game.gameId
         if (sameGame) {
             lastSeqno = parts[1].toIntOrNull() ?: (game.recentTexts.maxOfOrNull { it.seqno } ?: -1)
@@ -699,6 +700,15 @@ class EventDetector(private val store: SnapshotStore) {
             lastPitcherCode = parts[5]
             lastFavoriteBatterCode = parts[6]
             lastStatus = runCatching { GameStatus.valueOf(parts[7]) }.getOrNull() ?: game.status
+            lastChanceBatter = parts.getOrNull(8).orEmpty().ifBlank { game.currentBatterName.trim() }
+            seenPitcherCodes = parts.getOrNull(9).orEmpty()
+                .split(',')
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .toMutableSet()
+            if (seenPitcherCodes.isEmpty() && game.currentPitcherCode.isNotBlank()) {
+                seenPitcherCodes.add(game.currentPitcherCode)
+            }
         } else {
             lastSeqno = game.recentTexts.maxOfOrNull { it.seqno } ?: -1
             lastPitcherCode = game.currentPitcherCode
@@ -707,14 +717,18 @@ class EventDetector(private val store: SnapshotStore) {
             lastBasesKey = basesKey(game.onBase1, game.onBase2, game.onBase3)
             lastFavoriteBatterCode = (game.lotteLineup + game.opponentLineup + game.lotteBenchBatters + game.opponentBenchBatters)
                 .firstOrNull { it.name == game.currentBatterName }?.playerCode.orEmpty()
+            lastChanceBatter = game.currentBatterName.trim()
+            // 전체 불펜 풀을 넣으면 재시작 후 즐겨찾기 등판을 놓친다. 현재 투수만.
+            seenPitcherCodes = if (game.currentPitcherCode.isNotBlank()) {
+                mutableSetOf(game.currentPitcherCode)
+            } else {
+                mutableSetOf()
+            }
         }
         lastInning = game.inning
         lastTop = game.isTopInning
         eighthNotifiedFor = store.notifiedEighthKey()
         extraNotifiedFor = store.notifiedExtraKey()
-        seenPitcherCodes = (game.lottePitchers + game.opponentPitchers)
-            .map { it.playerCode }.filter { it.isNotBlank() }.toMutableSet()
-        lastChanceBatter = game.currentBatterName.trim()
     }
 
     private suspend fun persistCursor(game: LotteGameInfo) {
@@ -727,6 +741,8 @@ class EventDetector(private val store: SnapshotStore) {
             lastPitcherCode,
             lastFavoriteBatterCode,
             (lastStatus ?: game.status).name,
+            lastChanceBatter,
+            seenPitcherCodes.filter { it.isNotBlank() }.sorted().joinToString(","),
         ).joinToString("|")
         store.setLiveEventCursor(raw)
     }
@@ -738,6 +754,11 @@ class EventDetector(private val store: SnapshotStore) {
 
     private suspend fun maybeNotifyGameStart(context: Context, game: LotteGameInfo) {
         if (store.notifiedGameStartId() == game.gameId) return
+        // 중계 복구로 2회 이상에서 LIVE를 보면 시작 알림은 생략하고 키만 남긴다.
+        if (game.inning >= 2) {
+            store.setNotifiedGameStartId(game.gameId)
+            return
+        }
         val dh = dhSuffix(game.doubleHeaderNo)
         maybeNotify(
             context, NotificationType.GAME_START, 2001,

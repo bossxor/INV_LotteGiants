@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.19` (`versionCode` **2019**) |
+| **버전** | `2.0.20` (`versionCode` **2020**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.netlify.app/) |
@@ -237,8 +237,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.18` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2018` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.20` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2020` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -279,6 +279,7 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.20** | FGS `start()` 비동기화, mid-game GAME_START 억제, 커서에 득점권·seenPitchers, 위젯 DH·홀드, 스냅샷 캐시 4초 |
 | **2.0.18** | 8회말·연장 재알림 방지, 득점권 주자 코드 매칭, 빈 서명 업데이트 거부, 우천 라벨 오탐 완화 |
 | **2.0.17** | 크래시 후 감시 즉시 재기동, FGS 오기동 완화, DataStore 읽기 안전화, CI unit test, 설정 진단·서명 체크리스트 |
 | **2.0.16** | 득점권 타석 밀림·만루 3루 이름 누락 수정 |

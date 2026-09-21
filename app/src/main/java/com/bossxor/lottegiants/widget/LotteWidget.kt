@@ -79,23 +79,36 @@ private val Green = Color(0xFF2EA35C)
 private val widgetRefreshingKey = booleanPreferencesKey("widget_refreshing")
 private const val ENDED_HOLD_MS = 4L * 60L * 60L * 1000L
 
-/** 오늘 ENDED 결과를 다음 경기보다 우선. 종료 시각이 있으면 4시간 유지. */
+/** 오늘 LIVE/BEFORE 우선. ENDED는 홀드 창만. 홀드 지나면 DH 다음(BEFORE) 선호. */
 private fun pickWidgetGame(
     snap: LiveSnapshot?,
     endedHoldId: String = "",
     endedHoldAt: Long = 0L,
     now: Long = System.currentTimeMillis(),
 ): LotteGameInfo? {
+    fun withinEndedHold(gameId: String): Boolean {
+        if (endedHoldAt <= 0L) return true
+        if (endedHoldId.isNotBlank() && endedHoldId != gameId) return true
+        return now - endedHoldAt < ENDED_HOLD_MS
+    }
+
     val today = snap?.lotteGame?.takeIf { it.belongsToKboToday() }
-    if (today != null) return today
-    val endedToday = sequenceOf(snap?.lastLotteGame)
+    if (today != null) {
+        when (today.status) {
+            GameStatus.LIVE, GameStatus.BEFORE -> return today
+            GameStatus.ENDED -> if (withinEndedHold(today.gameId)) return today
+            GameStatus.CANCELED -> return today
+        }
+    }
+    val next = snap?.nextLotteGame
+    if (next != null && next.status == GameStatus.BEFORE) return next
+
+    val endedToday = sequenceOf(today, snap?.lastLotteGame)
         .plus(snap?.recentLotteGames.orEmpty().asSequence())
         .filterNotNull()
         .firstOrNull { it.status == GameStatus.ENDED && it.belongsToKboToday() }
         ?: return null
-    if (endedHoldAt <= 0L) return endedToday
-    if (endedHoldId.isNotBlank() && endedHoldId != endedToday.gameId) return endedToday
-    if (now - endedHoldAt < ENDED_HOLD_MS) return endedToday
+    if (withinEndedHold(endedToday.gameId)) return endedToday
     return null
 }
 
@@ -273,7 +286,7 @@ private fun WidgetRoot(
                     else LiveWide(game, snap, lotteLogo, oppLogo, pitcherPhoto, batterPhoto, highlightActive)
                 }
                 game != null && game.status == GameStatus.ENDED -> {
-                    if (compact) CompactScore(game, "종료", lotteLogo, oppLogo)
+                    if (compact) CompactScore(game, "종료${dhSuffix(game.doubleHeaderNo)}", lotteLogo, oppLogo)
                     else EndedWide(game, lotteLogo, oppLogo, snap)
                 }
                 game != null && game.status == GameStatus.CANCELED -> {
@@ -827,7 +840,7 @@ private fun EndedWide(
     val white = ColorProvider(Color.White, Color.White)
     val muted = ColorProvider(Muted, Muted)
     val red = ColorProvider(Red, Red)
-    Text("종료", style = TextStyle(color = muted, fontSize = 11.sp))
+    Text("종료${dhSuffix(g.doubleHeaderNo)}", style = TextStyle(color = muted, fontSize = 11.sp))
     Spacer(GlanceModifier.height(4.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
         Image(lotteLogo, contentDescription = null, modifier = GlanceModifier.size(24.dp))

@@ -123,7 +123,7 @@ class GiantsRepository private constructor(context: Context) {
      * KBO 공식 일정을 1차 소스로 오늘·어제·최근 21일·향후 14일을 읽고,
      * 네이버 문자중계로 라인업·투구 위치 등 KBO에 없는 항목만 보완한다.
      *
-     * [force]가 아니면 방금 받은 스냅샷(8초 이내)을 재사용한다.
+     * [force]가 아니면 방금 받은 스냅샷(4초 이내)을 재사용한다.
      * 앱·서비스·위젯이 동시에 호출해도 네트워크는 한 번만 탄다.
      * 연속 실패 시 잠시 쉬고, 마지막 성공 스냅샷을 돌려 알림·위젯이 멈추지 않게 한다.
      */
@@ -2337,7 +2337,7 @@ class GiantsRepository private constructor(context: Context) {
         private const val KBO_RANGE_TTL_MS = 10 * 60_000L
         private const val WEATHER_TTL_MS = 15 * 60_000L
         private const val SUMMARY_TTL_MS = 5 * 60_000L
-        private const val SNAPSHOT_FRESH_MS = 5_000L
+        private const val SNAPSHOT_FRESH_MS = 4_000L
         private const val RUTA_TTL_MS = 25_000L
         private const val TAG = "GiantsRepo"
 
