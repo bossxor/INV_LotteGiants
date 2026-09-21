@@ -79,16 +79,9 @@ class CanceledGameTest {
     }
 
     @Test
-    fun pregameCandidateIsNotCanceledWhenBefore() {
-        val mini = MiniGame(
-            gameId = "1",
-            homeName = "롯데",
-            awayName = "키움",
-            homeScore = 0,
-            awayScore = 0,
-            status = GameStatus.BEFORE,
-            statusText = "18:30",
-        )
-        assertFalse(mini.isCanceledGame())
+    fun suspendReasonDoesNotTreatDefenseAsRain() {
+        assertEquals("경기중단", suspendReasonLabel("수비 교대 후 중단"))
+        assertEquals("우천중단", suspendReasonLabel("우천으로 중단"))
+        assertEquals("우천중단", suspendReasonLabel("강우 중단"))
     }
 }

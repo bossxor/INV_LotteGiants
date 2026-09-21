@@ -243,12 +243,14 @@ class EventDetector(private val store: SnapshotStore) {
         if (game.inning == 8 && !game.isTopInning &&
             eighthNotifiedFor != "${game.gameId}-8b"
         ) {
+            val key = "${game.gameId}-8b"
             maybeNotify(
                 context, NotificationType.EIGHTH_INNING, 2510,
                 "8회말!", "${game.focusName()} ${game.lotteScore}:${game.opponentScore} · ${game.opponentName}",
                 gameId = game.gameId,
             )
-            eighthNotifiedFor = "${game.gameId}-8b"
+            eighthNotifiedFor = key
+            store.setNotifiedEighthKey(key)
         }
 
         // 연장
@@ -259,12 +261,16 @@ class EventDetector(private val store: SnapshotStore) {
                 gameId = game.gameId,
             )
             extraNotifiedFor = game.gameId
+            store.setNotifiedExtraKey(game.gameId)
         }
 
         lastInning = game.inning
         lastTop = game.isTopInning
 
-        if (game.isLotteBatting) {
+        if (game.isSuspended) {
+            // 중단 중 루 플래그 깜빡임으로 득점권 알림이 나가지 않게, 키만 맞춰 둔다.
+            lastBasesKey = basesKey(game.onBase1, game.onBase2, game.onBase3)
+        } else if (game.isLotteBatting) {
             val key = basesKey(game.onBase1, game.onBase2, game.onBase3)
             if (key != lastBasesKey) {
                 val (was1, was2, was3) = parseBasesKey(lastBasesKey)
@@ -279,14 +285,14 @@ class EventDetector(private val store: SnapshotStore) {
                     lotteRosterNames(game),
                 )
                 val runners = runnersLabel(
-                    first = runnerName(game, game.onBase1, game.runnerOn1Order),
-                    second = runnerName(game, game.onBase2, game.runnerOn2Order),
-                    third = runnerName(game, game.onBase3, game.runnerOn3Order),
+                    first = runnerName(game, game.onBase1, game.runnerOn1Order, game.runnerOn1Code),
+                    second = runnerName(game, game.onBase2, game.runnerOn2Order, game.runnerOn2Code),
+                    third = runnerName(game, game.onBase3, game.runnerOn3Order, game.runnerOn3Code),
                 )
                 val runnerNames = listOfNotNull(
-                    runnerName(game, game.onBase1, game.runnerOn1Order),
-                    runnerName(game, game.onBase2, game.runnerOn2Order),
-                    runnerName(game, game.onBase3, game.runnerOn3Order),
+                    runnerName(game, game.onBase1, game.runnerOn1Order, game.runnerOn1Code),
+                    runnerName(game, game.onBase2, game.runnerOn2Order, game.runnerOn2Code),
+                    runnerName(game, game.onBase3, game.runnerOn3Order, game.runnerOn3Code),
                 )
                 val atBat = atBatForChance(
                     currentBatter = game.currentBatterName,
@@ -613,7 +619,7 @@ class EventDetector(private val store: SnapshotStore) {
         initialized = false
     }
 
-    private fun seed(game: LotteGameInfo) {
+    private suspend fun seed(game: LotteGameInfo) {
         lastSeqno = game.recentTexts.maxOfOrNull { it.seqno } ?: -1
         lastPitcherCode = game.currentPitcherCode
         seedScores(game)
@@ -621,6 +627,8 @@ class EventDetector(private val store: SnapshotStore) {
         lastTop = game.isTopInning
         lastStatus = game.status
         lastBasesKey = basesKey(game.onBase1, game.onBase2, game.onBase3)
+        eighthNotifiedFor = store.notifiedEighthKey()
+        extraNotifiedFor = store.notifiedExtraKey()
         lastFavoriteBatterCode = (game.lotteLineup + game.opponentLineup + game.lotteBenchBatters + game.opponentBenchBatters)
             .firstOrNull { it.name == game.currentBatterName }?.playerCode.orEmpty()
     }
@@ -638,21 +646,35 @@ class EventDetector(private val store: SnapshotStore) {
 
     private fun lineupNameByOrder(lineup: List<com.bossxor.lottegiants.domain.LineupSlot>, order: Int): String? {
         if (order <= 0) return null
-        // 대타·대주자가 있으면 교체 선수를 우선 (같은 타순)
         val atOrder = lineup.filter { it.batOrder == order && it.name.isNotBlank() }
         if (atOrder.isEmpty()) return null
-        return (atOrder.lastOrNull { it.isSubstitute } ?: atOrder.first()).name
+        // 주자는 선발·출루 선수가 맞고, 같은 타순 대타(타석)를 우선하면 이름이 바뀐다.
+        return (atOrder.firstOrNull { !it.isSubstitute } ?: atOrder.last()).name
     }
 
-    /** 공격 팀 라인업에서 타순으로 주자 이름. 벤치(대타)까지 본다. */
-    private fun runnerName(game: LotteGameInfo, onBase: Boolean, order: Int): String? {
+    private fun lineupNameByCode(
+        lineup: List<com.bossxor.lottegiants.domain.LineupSlot>,
+        code: String,
+    ): String? {
+        if (code.isBlank()) return null
+        return lineup.firstOrNull { it.playerCode == code && it.name.isNotBlank() }?.name
+    }
+
+    /** 공격 팀 라인업에서 주자 이름. 선수코드 우선, 없으면 타순(선발 우선). */
+    private fun runnerName(
+        game: LotteGameInfo,
+        onBase: Boolean,
+        order: Int,
+        playerCode: String = "",
+    ): String? {
         if (!onBase) return null
-        lineupNameByOrder(game.lotteLineup + game.lotteBenchBatters, order)?.let { return it }
-        // 타순이 비면 중계 텍스트·라인업에서 이름을 못 붙인다. 루 bool은 유지.
-        if (order <= 0) {
+        val pool = game.lotteLineup + game.lotteBenchBatters
+        lineupNameByCode(pool, playerCode)?.let { return it }
+        lineupNameByOrder(pool, order)?.let { return it }
+        if (order <= 0 && playerCode.isBlank()) {
             android.util.Log.w(
                 "EventDetector",
-                "runner on base without bat order (game=${game.gameId})",
+                "runner on base without code/order (game=${game.gameId})",
             )
         }
         return null

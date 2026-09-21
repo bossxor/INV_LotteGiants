@@ -179,12 +179,14 @@ data class KboOfficialGame(
         val inProgress = gameState == 2 || gameState == 5
         if (!inProgress) return false
         if (blob.contains("취소") || blob.contains("순연") || blob.contains("노게임")) return false
-        if (cancelScId >= 1) return true
+        // cancelScId만으로 중단 처리하지 않는다. 진행 중 우천취소가 LIVE로 남는 오탐을 막는다.
         return blob.contains("우천") ||
             blob.contains("강우") ||
             blob.contains("서스펜") ||
             blob.contains("중단") ||
-            blob.contains("그라운드")
+            blob.contains("그라운드") ||
+            blob.contains("조명") ||
+            blob.contains("정전")
     }
 
     /** GAME_STATE_SC: 1 예정 / 2·5 진행 / 3 종료 / 4 취소. 우천중단은 4가 아니라 진행 중 멈춤. */

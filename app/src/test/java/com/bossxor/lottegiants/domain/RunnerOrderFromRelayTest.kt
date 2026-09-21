@@ -51,4 +51,12 @@ class RunnerOrderFromRelayTest {
         assertEquals(1, runnerOrderFromRelay("9999", batting, names, 1))
         assertEquals(0, runnerOrderFromRelay("9999", batting, names, 0))
     }
+
+    @Test
+    fun playerCodeFromRelayIgnoresOccupancyFlags() {
+        assertEquals("", runnerPlayerCodeFromRelay("1"))
+        assertEquals("", runnerPlayerCodeFromRelay("Y"))
+        assertEquals("", runnerPlayerCodeFromRelay("0"))
+        assertEquals("1002", runnerPlayerCodeFromRelay("1002"))
+    }
 }

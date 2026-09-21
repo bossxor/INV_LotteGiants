@@ -313,6 +313,16 @@ fun runnerOccupied(raw: String?): Boolean {
     }
 }
 
+/** 중계 base가 선수코드일 때만 반환. `"1"`/`Y` 같은 점유 플래그는 빈 문자열. */
+fun runnerPlayerCodeFromRelay(relayRaw: String?): String {
+    val raw = relayRaw?.trim().orEmpty()
+    if (raw.isEmpty() || !runnerOccupied(raw)) return ""
+    if (raw.length <= 2 && raw.all { it.isDigit() || it.equals('y', true) || it.equals('t', true) }) {
+        return ""
+    }
+    return raw
+}
+
 /**
  * 중계 base 필드(선수코드/`1`/`Y`)에서 타순을 찾는다.
  * 코드로 찾으면 그걸 쓰고, `"1"`처럼 점유만 알리거나 필드가 비면 [kboOrder]를 유지한다.
@@ -674,6 +684,10 @@ data class LotteGameInfo(
     val runnerOn1Order: Int = 0,
     val runnerOn2Order: Int = 0,
     val runnerOn3Order: Int = 0,
+    /** 중계 base 필드 선수코드 (점유 플래그만이면 빈 문자열) */
+    val runnerOn1Code: String = "",
+    val runnerOn2Code: String = "",
+    val runnerOn3Code: String = "",
     val crowdCount: String = "",
     val gameDuration: String = "",
     /** 포스트시즌·특수경기 라벨 (GAME_SC_NM) */
@@ -1138,17 +1152,14 @@ fun parseResumeClock(raw: String?): String {
 fun suspendReasonLabel(raw: String?): String {
     val t = raw.orEmpty()
     return when {
-        t.contains("우천") || t.contains("강우") || t.contains("비") -> "우천중단"
+        t.contains("우천") || t.contains("강우") || t.contains("우비") -> "우천중단"
         t.contains("조명") -> "조명중단"
         t.contains("정전") -> "정전중단"
         t.contains("그라운드") || t.contains("구장") -> "그라운드 중단"
         t.contains("기타") -> "기타중단"
         t.contains("서스펜") || t.contains("suspend", ignoreCase = true) -> "경기중단"
-        t.contains("중단") -> {
-            val stripped = t.replace(Regex("""[\s·\-_/():（）\[\]]+"""), "")
-                .replace("경기", "")
-            if (stripped.length <= 8 && stripped.contains("중단")) stripped else "경기중단"
-        }
+        // 수비 교대 등 사유 미분류 중단은 우천으로 오인하지 않고 통일 라벨 사용
+        t.contains("중단") -> "경기중단"
         else -> "경기중단"
     }
 }

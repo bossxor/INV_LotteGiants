@@ -429,7 +429,7 @@ object UpdateChecker {
             @Suppress("DEPRECATION")
             archive.signatures?.map { it.toCharsString() }.orEmpty()
         }
-        if (installedSigs.isEmpty() || archiveSigs.isEmpty()) return true
+        if (installedSigs.isEmpty() || archiveSigs.isEmpty()) return false
         return installedSigs.any { it in archiveSigs }
     }
 

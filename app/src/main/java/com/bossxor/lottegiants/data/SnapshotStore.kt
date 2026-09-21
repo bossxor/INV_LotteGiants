@@ -311,6 +311,22 @@ class SnapshotStore(private val context: Context) {
         context.dataStore.edit { it[KEY_NOTIFIED_END] = gameId }
     }
 
+    /** 8회말 알림 중복 방지 키 (`$gameId-8b`) */
+    suspend fun notifiedEighthKey(): String =
+        safeFirst(context.dataStore.data.map { it[KEY_NOTIFIED_EIGHTH].orEmpty() }, "")
+
+    suspend fun setNotifiedEighthKey(key: String) {
+        context.dataStore.edit { it[KEY_NOTIFIED_EIGHTH] = key }
+    }
+
+    /** 연장 알림 중복 방지 (gameId) */
+    suspend fun notifiedExtraKey(): String =
+        safeFirst(context.dataStore.data.map { it[KEY_NOTIFIED_EXTRA].orEmpty() }, "")
+
+    suspend fun setNotifiedExtraKey(key: String) {
+        context.dataStore.edit { it[KEY_NOTIFIED_EXTRA] = key }
+    }
+
     /**
      * 사용자가 종료·취소 스코어 알림을 스와이프로 지운 경기.
      * 같은 경기는 다시 올리지 않는다(다시 표시·새 LIVE만 예외).
@@ -522,6 +538,8 @@ class SnapshotStore(private val context: Context) {
         private val KEY_BANNER_DAY = stringPreferencesKey("perm_banner_dismissed_day")
         private val KEY_NOTIFIED_CANCEL = stringPreferencesKey("notified_cancel_game_id")
         private val KEY_NOTIFIED_END = stringPreferencesKey("notified_end_game_id")
+        private val KEY_NOTIFIED_EIGHTH = stringPreferencesKey("notified_eighth_key")
+        private val KEY_NOTIFIED_EXTRA = stringPreferencesKey("notified_extra_key")
         private val KEY_DISMISSED_FINISHED_LIVE = stringPreferencesKey("dismissed_finished_live_game_id")
         private val KEY_NOTIFIED_ROSTER = stringSetPreferencesKey("notified_roster_keys")
         private val KEY_NOTIFIED_ROSTER_NONE = stringPreferencesKey("notified_roster_none_day")
@@ -549,6 +567,8 @@ class SnapshotStore(private val context: Context) {
             "dismissed_finished_live_game_id",
             "notified_cancel_game_id",
             "notified_end_game_id",
+            "notified_eighth_key",
+            "notified_extra_key",
             "last_race_fingerprint",
         )
     }

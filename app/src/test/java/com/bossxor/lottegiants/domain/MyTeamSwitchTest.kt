@@ -94,7 +94,9 @@ class MyTeamSwitchTest {
         assertTrue(keys.contains("live_snapshot"))
         assertTrue(keys.contains("last_race_fingerprint"))
         assertTrue(keys.contains("preferred_live_game_id"))
-        assertEquals(9, keys.size)
+        assertTrue(keys.contains("notified_eighth_key"))
+        assertTrue(keys.contains("notified_extra_key"))
+        assertEquals(11, keys.size)
     }
 
     @Test

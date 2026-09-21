@@ -39,6 +39,7 @@ import com.bossxor.lottegiants.domain.isPitcherPosition
 import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.runnerOccupied
 import com.bossxor.lottegiants.domain.runnerOrderFromRelay
+import com.bossxor.lottegiants.domain.runnerPlayerCodeFromRelay
 import com.bossxor.lottegiants.domain.resolveStadiumCoord
 import com.bossxor.lottegiants.domain.teamCodeToName
 import com.bossxor.lottegiants.domain.teamHomeStadiumName
@@ -2233,6 +2234,9 @@ class GiantsRepository private constructor(context: Context) {
             } else {
                 0
             },
+            runnerOn1Code = if (liveSituation) runnerPlayerCodeFromRelay(state?.base1) else "",
+            runnerOn2Code = if (liveSituation) runnerPlayerCodeFromRelay(state?.base2) else "",
+            runnerOn3Code = if (liveSituation) runnerPlayerCodeFromRelay(state?.base3) else "",
             currentPitcherName = names[pitcherCode]
                 ?: listOf(lottePitchers, opponentPitchers).flatten()
                     .firstOrNull { it.playerCode == pitcherCode }?.name
