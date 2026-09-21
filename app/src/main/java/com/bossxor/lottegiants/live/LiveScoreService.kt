@@ -54,47 +54,50 @@ class LiveScoreService : Service() {
             )
             foregroundStarted = true
         }
-        val repo = GiantsRepository.get(this)
-        val enabled = runBlocking { repo.store.isLiveScoreEnabled() }
-        if (!enabled) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        val snap = runBlocking { repo.store.loadSnapshot() }
-        val mode = runBlocking { repo.store.liveDisplayMode() }
-        val lead = runBlocking { repo.store.liveLeadMinutes() }
-        val game = liveGame(snap, lead)
-
-        // LIVE가 아니면 FGS를 쓰지 않는다. startForegroundService 타임아웃·깜빡임 방지.
-        if (game?.status != GameStatus.LIVE) {
-            if (shouldShowLive(game, lead)) {
-                runBlocking { NotificationHelper.refreshLiveNotificationIfNeeded(applicationContext) }
+        // DataStore await는 메인 스레드 runBlocking 금지 — IO에서 검사 후 LIVE가 아니면 stopSelf
+        scope.launch {
+            val repo = GiantsRepository.get(this@LiveScoreService)
+            val enabled = repo.store.isLiveScoreEnabled()
+            if (!enabled) {
+                stopSelf()
+                return@launch
             }
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        if (!shouldShowLive(game, lead)) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
+            val snap = repo.store.loadSnapshot()
+            val mode = repo.store.liveDisplayMode()
+            val lead = repo.store.liveLeadMinutes()
+            val game = liveGame(snap, lead)
 
-        val notification = NotificationHelper.buildLiveNotification(
-            this,
-            game,
-            mode,
-            snap?.winProbSeries.orEmpty(),
-        )
-        val notifyKey = NotificationHelper.liveNotificationKey(game, mode)
-        if (pollJob?.isActive == true) {
-            NotificationHelper.notifyLive(this, notification, notifyKey)
-            return START_STICKY
+            // LIVE가 아니면 FGS를 쓰지 않는다. startForegroundService 타임아웃·깜빡임 방지.
+            if (game?.status != GameStatus.LIVE) {
+                if (shouldShowLive(game, lead)) {
+                    NotificationHelper.refreshLiveNotificationIfNeeded(applicationContext)
+                }
+                stopSelf()
+                return@launch
+            }
+            if (!shouldShowLive(game, lead)) {
+                stopSelf()
+                return@launch
+            }
+
+            val notification = NotificationHelper.buildLiveNotification(
+                this@LiveScoreService,
+                game,
+                mode,
+                snap?.winProbSeries.orEmpty(),
+            )
+            val notifyKey = NotificationHelper.liveNotificationKey(game, mode)
+            if (pollJob?.isActive == true) {
+                NotificationHelper.notifyLive(this@LiveScoreService, notification, notifyKey)
+                return@launch
+            }
+            NotificationHelper.notifyLive(this@LiveScoreService, notification, notifyKey, force = true)
+            if (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED) {
+                detachFinished(notification, game)
+                return@launch
+            }
+            startPolling()
         }
-        NotificationHelper.notifyLive(this, notification, notifyKey, force = true)
-        if (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED) {
-            detachFinished(notification, game)
-            return START_NOT_STICKY
-        }
-        startPolling()
         return START_STICKY
     }
 
@@ -155,7 +158,7 @@ class LiveScoreService : Service() {
                     }
 
                     when (game.status) {
-                        GameStatus.LIVE -> delay(5_000L)
+                        GameStatus.LIVE -> delay(if (game.isSuspended) 20_000L else 5_000L)
                         GameStatus.ENDED, GameStatus.CANCELED -> {
                             delay(3_000L)
                             detachFinished(live, game)
@@ -184,25 +187,21 @@ class LiveScoreService : Service() {
             ignoreLeadWindow = ignoreLeadWindow,
         )
 
-    private fun shouldShowLive(game: LotteGameInfo?, lead: Int): Boolean {
+    private suspend fun shouldShowLive(game: LotteGameInfo?, lead: Int): Boolean {
         if (ignoreLeadWindow) return true
-        val pinned = runBlocking {
-            GiantsRepository.get(this@LiveScoreService).store.isLiveNotificationPinned()
-        }
+        val pinned = GiantsRepository.get(this).store.isLiveNotificationPinned()
         if (pinned) return true
         return shouldPostLiveNotification(game, lead)
     }
 
-    private fun detachFinished(
+    private suspend fun detachFinished(
         notification: android.app.Notification,
         game: LotteGameInfo?,
     ) {
         val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
         // 종료 직후 사용자가 먼저 지웠으면 3초 뒤 다시 올리지 않는다.
         if (game != null) {
-            val dismissed = runBlocking {
-                GiantsRepository.get(this@LiveScoreService).store.dismissedFinishedLiveGameId()
-            }
+            val dismissed = GiantsRepository.get(this).store.dismissedFinishedLiveGameId()
             if (dismissed.isNotBlank() &&
                 dismissed == NotificationHelper.finishedLiveKey(game)
             ) {

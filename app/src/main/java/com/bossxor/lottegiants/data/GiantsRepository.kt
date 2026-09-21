@@ -2337,7 +2337,7 @@ class GiantsRepository private constructor(context: Context) {
         private const val KBO_RANGE_TTL_MS = 10 * 60_000L
         private const val WEATHER_TTL_MS = 15 * 60_000L
         private const val SUMMARY_TTL_MS = 5 * 60_000L
-        private const val SNAPSHOT_FRESH_MS = 8_000L
+        private const val SNAPSHOT_FRESH_MS = 5_000L
         private const val RUTA_TTL_MS = 25_000L
         private const val TAG = "GiantsRepo"
 

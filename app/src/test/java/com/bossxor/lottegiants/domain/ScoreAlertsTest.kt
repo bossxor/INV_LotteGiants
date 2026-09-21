@@ -160,8 +160,9 @@ class ScoreAlertsTest {
 
     @Test
     fun atBatUsesNextWhenBatterAlreadyOnBase() {
+        // 주자에만 있으면 밀지 않음 — maker 또는 타석 중계가 맞을 때
         assertEquals(
-            "나승엽",
+            "전민재",
             atBatForChance(
                 currentBatter = "전민재",
                 nextBatter = "나승엽",
@@ -173,8 +174,42 @@ class ScoreAlertsTest {
             atBatForChance(
                 currentBatter = "전민재",
                 nextBatter = "나승엽",
+                playMaker = "전민재",
+                runnerNames = listOf("레이예스", "고승민", "전민재"),
+            ),
+        )
+        assertEquals(
+            "나승엽",
+            atBatForChance(
+                currentBatter = "전민재",
+                nextBatter = "나승엽",
+                runnerNames = listOf("레이예스", "고승민", "전민재"),
+                playText = "전민재 : 볼넷으로 출루",
+            ),
+        )
+        assertEquals(
+            "나승엽",
+            atBatForChance(
+                currentBatter = "전민재",
+                nextBatter = "나승엽",
                 currentBatterOrder = 6,
                 runnerOn1Order = 6,
+            ),
+        )
+    }
+
+    @Test
+    fun atBatKeepsCurrentWhenOrderMatchesButMakerIsOtherRunner() {
+        assertEquals(
+            "전민재",
+            atBatForChance(
+                currentBatter = "전민재",
+                nextBatter = "나승엽",
+                playMaker = "고승민",
+                currentBatterOrder = 6,
+                runnerOn1Order = 6,
+                runnerNames = listOf("고승민"),
+                playText = "2루주자 고승민 도루 성공",
             ),
         )
     }

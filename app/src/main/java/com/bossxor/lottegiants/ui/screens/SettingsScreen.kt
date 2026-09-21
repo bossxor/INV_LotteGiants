@@ -306,6 +306,66 @@ fun SettingsScreen(
                         onCheckedChange = { on -> scope.launch { store.setAlertVibrate(on) } },
                     )
                 }
+                Spacer(Modifier.height(12.dp))
+                val chanceAtBat by store.chanceAtBatChangeFlow.collectAsState(initial = true)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("득점권 타석이 바뀌면 알림", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "주자 상황이 같아도 타자가 바뀌면 득점권 알림",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = chanceAtBat,
+                        onCheckedChange = { on -> scope.launch { store.setChanceAtBatChange(on) } },
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+
+        val alertHistory by store.alertHistoryFlow.collectAsState(initial = emptyList())
+        val todayStart = remember {
+            java.time.ZonedDateTime.now(com.bossxor.lottegiants.domain.KBO_ZONE)
+                .toLocalDate().atStartOfDay(com.bossxor.lottegiants.domain.KBO_ZONE)
+                .toInstant().toEpochMilli()
+        }
+        val todayAlerts = remember(alertHistory, todayStart) {
+            alertHistory.filter { it.millis >= todayStart }
+        }
+        Text("오늘 알림", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        SectionCard {
+            if (todayAlerts.isEmpty()) {
+                Text(
+                    "오늘 보낸 알림이 없습니다",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                todayAlerts.forEachIndexed { i, item ->
+                    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                        Text(item.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        if (item.text.isNotBlank()) {
+                            Text(
+                                item.text,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 3,
+                            )
+                        }
+                    }
+                    if (i < todayAlerts.lastIndex) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(MaterialTheme.colorScheme.outlineVariant),
+                        )
+                    }
+                }
             }
         }
         Spacer(Modifier.height(8.dp))

@@ -286,6 +286,7 @@ object NotificationHelper {
         val headerLine = if (game != null && game.status == GameStatus.LIVE && !game.isSuspended) {
             buildString {
                 append(game.inningLabel)
+                append(com.bossxor.lottegiants.domain.dhSuffix(game.doubleHeaderNo))
                 append(if (game.isLotteBatting) " · ${game.focusName()} 공격" else " · 상대 공격")
             }
         } else {

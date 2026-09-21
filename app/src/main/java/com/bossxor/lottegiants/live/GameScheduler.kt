@@ -239,6 +239,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
                 val kboMoves = repo.pollRosterMovesForAlert()
                 detector.processRosterMoves(context, kboMoves)
             }
+            runCatching { AlertBootstrap.maybeMorningBrief(context, repo) }
         }
 
         fun schedulePregameReminder(

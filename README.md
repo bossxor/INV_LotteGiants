@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.18` (`versionCode` **2018**) |
+| **버전** | `2.0.19` (`versionCode` **2019**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.netlify.app/) |

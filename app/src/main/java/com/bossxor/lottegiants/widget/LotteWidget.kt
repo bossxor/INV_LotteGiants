@@ -65,6 +65,7 @@ import com.bossxor.lottegiants.domain.teamLogoUrl
 import com.bossxor.lottegiants.domain.teamNameToCode
 import com.bossxor.lottegiants.domain.parseKboStartMillis
 import com.bossxor.lottegiants.domain.belongsToKboToday
+import com.bossxor.lottegiants.domain.dhSuffix
 import com.bossxor.lottegiants.domain.gameCountdownLabel
 import com.bossxor.lottegiants.domain.widgetFooterLine
 import com.bossxor.lottegiants.live.GameSchedulerWorker
@@ -76,6 +77,27 @@ private val Gold = Color(0xFFC9A227)
 private val Muted = Color(0xFFAAB4CB)
 private val Green = Color(0xFF2EA35C)
 private val widgetRefreshingKey = booleanPreferencesKey("widget_refreshing")
+private const val ENDED_HOLD_MS = 4L * 60L * 60L * 1000L
+
+/** 오늘 ENDED 결과를 다음 경기보다 우선. 종료 시각이 있으면 4시간 유지. */
+private fun pickWidgetGame(
+    snap: LiveSnapshot?,
+    endedHoldId: String = "",
+    endedHoldAt: Long = 0L,
+    now: Long = System.currentTimeMillis(),
+): LotteGameInfo? {
+    val today = snap?.lotteGame?.takeIf { it.belongsToKboToday() }
+    if (today != null) return today
+    val endedToday = sequenceOf(snap?.lastLotteGame)
+        .plus(snap?.recentLotteGames.orEmpty().asSequence())
+        .filterNotNull()
+        .firstOrNull { it.status == GameStatus.ENDED && it.belongsToKboToday() }
+        ?: return null
+    if (endedHoldAt <= 0L) return endedToday
+    if (endedHoldId.isNotBlank() && endedHoldId != endedToday.gameId) return endedToday
+    if (now - endedHoldAt < ENDED_HOLD_MS) return endedToday
+    return null
+}
 
 class LotteWidget : GlanceAppWidget() {
 
@@ -99,7 +121,9 @@ class LotteWidget : GlanceAppWidget() {
             val snap = current
             val opacityPct = repo.store.widgetOpacity()
             val showOppLogo = repo.store.widgetShowOppLogo()
-            val game = snap?.lotteGame?.takeIf { it.belongsToKboToday() } ?: snap?.nextLotteGame
+            val endedHoldId = repo.store.widgetEndedHoldGameId()
+            val endedHoldAt = repo.store.widgetEndedHoldAt()
+            val game = pickWidgetGame(snap, endedHoldId, endedHoldAt) ?: snap?.nextLotteGame
             val myCode = game?.focusTeamCode?.ifBlank { snap?.myTeamCode }.orEmpty()
                 .ifBlank { snap?.myTeamCode.orEmpty() }.ifBlank { LOTTE_TEAM_CODE }
             // 로고 다운로드가 Glance 제한 시간을 넘기면 initialLayout(경기 로딩 중)에 고착된다.
@@ -151,7 +175,7 @@ class LotteWidget : GlanceAppWidget() {
                 .putExtra(MainActivity.EXTRA_OPEN_TAB, "live")
                 .putExtra(
                     MainActivity.EXTRA_GAME_ID,
-                    (snap?.lotteGame?.takeIf { it.belongsToKboToday() } ?: snap?.nextLotteGame)?.gameId.orEmpty(),
+                    game?.gameId.orEmpty(),
                 )
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             provideContent {
@@ -166,6 +190,8 @@ class LotteWidget : GlanceAppWidget() {
                         openIntent,
                         opacityPct,
                         refreshing,
+                        endedHoldId,
+                        endedHoldAt,
                     )
                 }
             }
@@ -210,6 +236,8 @@ private fun WidgetRoot(
     openIntent: Intent,
     opacityPct: Int = 100,
     refreshing: Boolean = false,
+    endedHoldId: String = "",
+    endedHoldAt: Long = 0L,
 ) {
     val size = LocalSize.current
     val compact = size.width < 180.dp
@@ -236,7 +264,7 @@ private fun WidgetRoot(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalAlignment = Alignment.Top,
         ) {
-            val game = snap?.lotteGame?.takeIf { it.belongsToKboToday() }
+            val game = pickWidgetGame(snap, endedHoldId, endedHoldAt)
             val highlightActive = !snap?.highlightText.isNullOrBlank() &&
                 (snap?.highlightUntilMillis ?: 0L) > System.currentTimeMillis()
             when {
@@ -245,7 +273,7 @@ private fun WidgetRoot(
                     else LiveWide(game, snap, lotteLogo, oppLogo, pitcherPhoto, batterPhoto, highlightActive)
                 }
                 game != null && game.status == GameStatus.ENDED -> {
-                    if (compact) CompactScore(game, "경기종료", lotteLogo, oppLogo)
+                    if (compact) CompactScore(game, "종료", lotteLogo, oppLogo)
                     else EndedWide(game, lotteLogo, oppLogo, snap)
                 }
                 game != null && game.status == GameStatus.CANCELED -> {
@@ -324,7 +352,7 @@ private fun CompactLive(
             logoSize = 40,
         )
         Spacer(GlanceModifier.height(8.dp))
-        StatusPill(if (g.isSuspended) g.suspendLabel else "LIVE  ${g.inningLabel}", fontSize = 12)
+        StatusPill(if (g.isSuspended) g.suspendLabel else "LIVE  ${g.inningLabel}${dhSuffix(g.doubleHeaderNo)}", fontSize = 12)
         if (g.stadium.isNotBlank()) {
             Spacer(GlanceModifier.height(3.dp))
             Text(g.stadium, style = TextStyle(color = ColorProvider(Muted, Muted), fontSize = 12.sp), maxLines = 1)
@@ -444,7 +472,8 @@ private fun CompactBefore(
         )
         Spacer(GlanceModifier.height(6.dp))
         val cd = gameCountdownLabel(g.gameDate, g.startTime)
-        StatusPill(cd.ifBlank { g.startTime.ifBlank { "예정" } }, fontSize = 13)
+        val pill = (cd.ifBlank { g.startTime.ifBlank { "예정" } }) + dhSuffix(g.doubleHeaderNo)
+        StatusPill(pill, fontSize = 13)
         if (placeRemain.isNotBlank()) {
             Spacer(GlanceModifier.height(5.dp))
             Text(
@@ -608,7 +637,7 @@ private fun LiveWide(
         Spacer(GlanceModifier.height(2.dp))
     }
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        StatusPill(if (g.isSuspended) g.suspendLabel else "LIVE  ${g.inningLabel}")
+        StatusPill(if (g.isSuspended) g.suspendLabel else "LIVE  ${g.inningLabel}${dhSuffix(g.doubleHeaderNo)}")
         Spacer(GlanceModifier.width(8.dp))
         Text(
             if (g.isLotteBatting) "${g.focusName()} 공격" else "${g.focusName()} 수비",
@@ -732,7 +761,8 @@ private fun BeforeWide(
     val pregame = isWithinMinutes(g, 30)
     val cd = gameCountdownLabel(g.gameDate, g.startTime)
     Text(
-        if (pregame) "경기 임박" else cd.ifBlank { "다음 경기" },
+        if (pregame) "경기 임박${dhSuffix(g.doubleHeaderNo)}"
+        else (cd.ifBlank { "다음 경기" }) + dhSuffix(g.doubleHeaderNo),
         style = TextStyle(color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold),
     )
     Spacer(GlanceModifier.height(4.dp))
@@ -797,7 +827,7 @@ private fun EndedWide(
     val white = ColorProvider(Color.White, Color.White)
     val muted = ColorProvider(Muted, Muted)
     val red = ColorProvider(Red, Red)
-    Text("경기종료", style = TextStyle(color = muted, fontSize = 11.sp))
+    Text("종료", style = TextStyle(color = muted, fontSize = 11.sp))
     Spacer(GlanceModifier.height(4.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
         Image(lotteLogo, contentDescription = null, modifier = GlanceModifier.size(24.dp))

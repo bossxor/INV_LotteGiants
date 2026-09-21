@@ -452,6 +452,81 @@ class SnapshotStore(private val context: Context) {
         context.dataStore.edit { it[KEY_LAST_RACE] = value }
     }
 
+    suspend fun notifiedGameStartId(): String =
+        safeFirst(context.dataStore.data.map { it[KEY_NOTIFIED_GAME_START].orEmpty() }, "")
+
+    suspend fun setNotifiedGameStartId(gameId: String) {
+        context.dataStore.edit { it[KEY_NOTIFIED_GAME_START] = gameId }
+    }
+
+    /** compact: gameId|seq|ls|os|bases|pitcher|favBatter|status */
+    suspend fun liveEventCursor(): String =
+        safeFirst(context.dataStore.data.map { it[KEY_LIVE_EVENT_CURSOR].orEmpty() }, "")
+
+    suspend fun setLiveEventCursor(raw: String) {
+        context.dataStore.edit { it[KEY_LIVE_EVENT_CURSOR] = raw }
+    }
+
+    val chanceAtBatChangeFlow: Flow<Boolean> = context.dataStore.data.map {
+        it[KEY_CHANCE_AT_BAT_CHANGE] ?: true
+    }
+
+    suspend fun chanceAtBatChange(): Boolean = safeFirst(chanceAtBatChangeFlow, true)
+
+    suspend fun setChanceAtBatChange(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_CHANCE_AT_BAT_CHANGE] = enabled }
+    }
+
+    val alertHistoryFlow: Flow<List<AlertHistoryItem>> = context.dataStore.data.map { prefs ->
+        val raw = prefs[KEY_ALERT_HISTORY].orEmpty()
+        if (raw.isBlank()) emptyList()
+        else runCatching {
+            json.decodeFromString(ListSerializer(AlertHistoryItem.serializer()), raw)
+        }.getOrDefault(emptyList())
+    }
+
+    suspend fun alertHistory(): List<AlertHistoryItem> =
+        safeFirst(alertHistoryFlow, emptyList())
+
+    suspend fun appendAlertHistory(item: AlertHistoryItem) {
+        context.dataStore.edit { prefs ->
+            val cur = prefs[KEY_ALERT_HISTORY].orEmpty().let { raw ->
+                if (raw.isBlank()) emptyList()
+                else runCatching {
+                    json.decodeFromString(ListSerializer(AlertHistoryItem.serializer()), raw)
+                }.getOrDefault(emptyList())
+            }
+            val next = (listOf(item) + cur).take(30)
+            prefs[KEY_ALERT_HISTORY] =
+                json.encodeToString(ListSerializer(AlertHistoryItem.serializer()), next)
+        }
+    }
+
+    suspend fun morningBriefDay(): String =
+        safeFirst(context.dataStore.data.map { it[KEY_MORNING_BRIEF_DAY].orEmpty() }, "")
+
+    suspend fun setMorningBriefDay(day: String) {
+        context.dataStore.edit { it[KEY_MORNING_BRIEF_DAY] = day }
+    }
+
+    suspend fun widgetEndedHoldGameId(): String =
+        safeFirst(context.dataStore.data.map { it[KEY_WIDGET_ENDED_HOLD_ID].orEmpty() }, "")
+
+    suspend fun widgetEndedHoldAt(): Long =
+        safeFirst(
+            context.dataStore.data.map {
+                it[KEY_WIDGET_ENDED_HOLD_AT]?.toLongOrNull() ?: 0L
+            },
+            0L,
+        )
+
+    suspend fun setWidgetEndedHold(gameId: String, atMillis: Long = System.currentTimeMillis()) {
+        context.dataStore.edit {
+            it[KEY_WIDGET_ENDED_HOLD_ID] = gameId
+            it[KEY_WIDGET_ENDED_HOLD_AT] = atMillis.toString()
+        }
+    }
+
     val myTeamCodeFlow: Flow<String> = context.dataStore.data.map {
         normalizeTeamCode(it[KEY_MY_TEAM].orEmpty().ifBlank { LOTTE_TEAM_CODE })
     }
@@ -489,6 +564,7 @@ class SnapshotStore(private val context: Context) {
             quietStartHour = quietStartHour(),
             quietEndHour = quietEndHour(),
             myTeam = myTeamCode(),
+            chanceAtBatChange = chanceAtBatChange(),
         )
     }
 
@@ -515,6 +591,7 @@ class SnapshotStore(private val context: Context) {
             prefs[KEY_QUIET_START] = backup.quietStartHour.coerceIn(0, 23)
             prefs[KEY_QUIET_END] = backup.quietEndHour.coerceIn(0, 23)
             if (backup.myTeam.isNotBlank()) prefs[KEY_MY_TEAM] = normalizeTeamCode(backup.myTeam)
+            prefs[KEY_CHANCE_AT_BAT_CHANGE] = backup.chanceAtBatChange
         }
     }
 
@@ -557,6 +634,13 @@ class SnapshotStore(private val context: Context) {
         private val KEY_WIDGET_OPP_LOGO = booleanPreferencesKey("widget_show_opp_logo")
         private val KEY_LAST_RACE = stringPreferencesKey("last_race_fingerprint")
         private val KEY_MY_TEAM = stringPreferencesKey("my_team_code")
+        private val KEY_NOTIFIED_GAME_START = stringPreferencesKey("notified_game_start_id")
+        private val KEY_LIVE_EVENT_CURSOR = stringPreferencesKey("live_event_cursor")
+        private val KEY_CHANCE_AT_BAT_CHANGE = booleanPreferencesKey("chance_at_bat_change")
+        private val KEY_ALERT_HISTORY = stringPreferencesKey("alert_history")
+        private val KEY_MORNING_BRIEF_DAY = stringPreferencesKey("morning_brief_day")
+        private val KEY_WIDGET_ENDED_HOLD_ID = stringPreferencesKey("widget_ended_hold_game_id")
+        private val KEY_WIDGET_ENDED_HOLD_AT = stringPreferencesKey("widget_ended_hold_at")
 
         val TEAM_SWITCH_CLEAR_KEYS: List<String> = listOf(
             "live_snapshot",
@@ -570,6 +654,11 @@ class SnapshotStore(private val context: Context) {
             "notified_eighth_key",
             "notified_extra_key",
             "last_race_fingerprint",
+            "notified_game_start_id",
+            "live_event_cursor",
+            "morning_brief_day",
+            "widget_ended_hold_game_id",
+            "widget_ended_hold_at",
         )
     }
 }

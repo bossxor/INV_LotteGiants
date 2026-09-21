@@ -240,16 +240,20 @@ fun atBatForChance(
     val nxt = nextBatter.trim()
     val maker = playMaker?.trim().orEmpty()
     fun preferNext() = nxt.ifBlank { cur }
-    // API가 아직 출루한 타자를 타석에 남겨 둔 경우
-    if (cur.isNotBlank() && runnerNames.any { it == cur }) return preferNext()
-    if (cur.isNotBlank() && cur == maker) return preferNext()
-    if (currentBatterOrder > 0 && runnerOn1Order == currentBatterOrder && nxt.isNotBlank()) return nxt
-    // 타석 결과 중계에 **현재 타자 이름**이 출루 주체로 남아 있을 때만 next로
-    if (looksLikePlateAppearanceAdvance(playText) && nxt.isNotBlank() && cur.isNotBlank() &&
-        playText.contains(cur)
-    ) {
-        return preferNext()
+    val curOnBase = cur.isNotBlank() && runnerNames.any { it == cur }
+    val curIsMaker = cur.isNotBlank() && cur == maker
+    val curInPlateText = looksLikePlateAppearanceAdvance(playText) &&
+        cur.isNotBlank() && playText.contains(cur)
+    // 주자에만 있다고 next로 밀지 않는다 — maker 또는 타석 중계가 맞을 때만
+    if (curOnBase && (curIsMaker || curInPlateText)) return preferNext()
+    if (curIsMaker) return preferNext()
+    // 타순 일치: maker 비어있거나 cur, 또는 (주자+타석 중계) / maker==cur
+    if (currentBatterOrder > 0 && runnerOn1Order == currentBatterOrder && nxt.isNotBlank()) {
+        val orderOk = maker.isBlank() || maker == cur ||
+            (curOnBase && curInPlateText) || curIsMaker
+        if (orderOk) return nxt
     }
+    if (curInPlateText && nxt.isNotBlank()) return preferNext()
     if (cur.isNotBlank()) return cur
     return nxt
 }

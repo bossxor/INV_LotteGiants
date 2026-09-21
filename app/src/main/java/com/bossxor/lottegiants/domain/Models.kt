@@ -156,6 +156,9 @@ fun doubleHeaderNoFromGameId(gameId: String): Int {
     return if (n in 1..2) n else 0
 }
 
+/** DH 라벨. 단경기(0)는 빈 문자열. */
+fun dhSuffix(n: Int): String = if (n > 0) " DH$n" else ""
+
 @Serializable
 enum class GameStatus { BEFORE, LIVE, ENDED, CANCELED }
 

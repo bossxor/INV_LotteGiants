@@ -20,4 +20,13 @@ data class UserSettingsBackup(
     val quietStartHour: Int = 23,
     val quietEndHour: Int = 8,
     val myTeam: String = "",
+    val chanceAtBatChange: Boolean = true,
+)
+
+@Serializable
+data class AlertHistoryItem(
+    val millis: Long,
+    val type: String,
+    val title: String,
+    val text: String,
 )

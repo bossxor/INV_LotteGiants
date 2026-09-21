@@ -96,7 +96,9 @@ class MyTeamSwitchTest {
         assertTrue(keys.contains("preferred_live_game_id"))
         assertTrue(keys.contains("notified_eighth_key"))
         assertTrue(keys.contains("notified_extra_key"))
-        assertEquals(11, keys.size)
+        assertTrue(keys.contains("notified_game_start_id"))
+        assertTrue(keys.contains("live_event_cursor"))
+        assertEquals(16, keys.size)
     }
 
     @Test

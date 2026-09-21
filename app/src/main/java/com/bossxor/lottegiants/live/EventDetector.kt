@@ -1,6 +1,7 @@
 package com.bossxor.lottegiants.live
 
 import android.content.Context
+import com.bossxor.lottegiants.data.AlertHistoryItem
 import com.bossxor.lottegiants.data.NotificationType
 import com.bossxor.lottegiants.data.SnapshotStore
 import com.bossxor.lottegiants.domain.GameStatus
@@ -13,6 +14,7 @@ import com.bossxor.lottegiants.domain.basesKey
 import com.bossxor.lottegiants.domain.belongsToKboToday
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.describePlayHow
+import com.bossxor.lottegiants.domain.dhSuffix
 import com.bossxor.lottegiants.domain.focusName
 import com.bossxor.lottegiants.domain.formatConcedeTitle
 import com.bossxor.lottegiants.domain.formatHomerunTitle
@@ -71,6 +73,8 @@ class EventDetector(private val store: SnapshotStore) {
     private var lastGameId: String = ""
     private var initialized = false
     private var emittingForLive = false
+    private var lastChanceBatter: String = ""
+    private var seenPitcherCodes: MutableSet<String> = mutableSetOf()
 
     suspend fun process(context: Context, game: LotteGameInfo?) {
         if (game == null) return
@@ -91,6 +95,9 @@ class EventDetector(private val store: SnapshotStore) {
             } else if (game.status == GameStatus.ENDED) {
                 notifyEnded(context, game)
             } else {
+                if (game.status == GameStatus.LIVE) {
+                    maybeNotifyGameStart(context, game)
+                }
                 maybeNotifyLineup(context, game)
             }
             return
@@ -99,11 +106,7 @@ class EventDetector(private val store: SnapshotStore) {
         val prevStatus = lastStatus
         if (prevStatus != null && prevStatus != game.status) {
             when (game.status) {
-                GameStatus.LIVE ->             maybeNotify(
-                context, NotificationType.GAME_START, 2001,
-                "경기 시작!", "${game.opponentName}전 시작 · ${game.stadium}",
-                gameId = game.gameId,
-            )
+                GameStatus.LIVE -> maybeNotifyGameStart(context, game)
                 GameStatus.ENDED -> notifyEnded(context, game)
                 GameStatus.CANCELED -> notifyCanceled(context, game)
                 else -> {}
@@ -116,6 +119,7 @@ class EventDetector(private val store: SnapshotStore) {
         if (game.status != GameStatus.LIVE && game.status != GameStatus.ENDED) {
             seedScores(game)
             if (game.currentPitcherCode.isNotBlank()) lastPitcherCode = game.currentPitcherCode
+            persistCursor(game)
             return
         }
 
@@ -224,6 +228,31 @@ class EventDetector(private val store: SnapshotStore) {
                 )
             }
         }
+        // 불펜 목록에 즐겨찾기가 새로 올라온 경우 (currentPitcher 경로를 놓친 등판)
+        if (game.status == GameStatus.LIVE) {
+            val poolCodes = (game.lottePitchers + game.opponentPitchers)
+                .map { it.playerCode }.filter { it.isNotBlank() }.toSet()
+            for (code in poolCodes) {
+                if (code !in favCodes) continue
+                if (code in seenPitcherCodes) continue
+                if (code == lastPitcherCode || code == newPitcherCode) {
+                    // currentPitcher 경로에서 이미 알렸을 수 있음 — seen만 맞춤
+                    seenPitcherCodes.add(code)
+                    continue
+                }
+                val line = (game.lottePitchers + game.opponentPitchers)
+                    .firstOrNull { it.playerCode == code }
+                val favName = favorites.firstOrNull { it.code == code }?.name
+                    ?.ifBlank { line?.name.orEmpty() } ?: line?.name.orEmpty().ifBlank { "투수" }
+                maybeNotify(
+                    context, NotificationType.FAVORITE_PITCHING, 2713,
+                    "즐겨찾기 등판", "$favName · ${game.inningLabel}",
+                    gameId = game.gameId, detailTab = "relay",
+                )
+                seenPitcherCodes.add(code)
+            }
+            seenPitcherCodes.addAll(poolCodes)
+        }
         if (newPitcherCode.isNotBlank()) lastPitcherCode = newPitcherCode
 
         if (game.status == GameStatus.LIVE &&
@@ -272,12 +301,14 @@ class EventDetector(private val store: SnapshotStore) {
             lastBasesKey = basesKey(game.onBase1, game.onBase2, game.onBase3)
         } else if (game.isLotteBatting) {
             val key = basesKey(game.onBase1, game.onBase2, game.onBase3)
+            val nowChance = game.onBase2 || game.onBase3
+            val nowLoaded = game.onBase1 && game.onBase2 && game.onBase3
+            val scoringChance = nowChance || nowLoaded
+            val batterName = game.currentBatterName.trim()
             if (key != lastBasesKey) {
                 val (was1, was2, was3) = parseBasesKey(lastBasesKey)
                 val wasChance = was2 || was3
-                val nowChance = game.onBase2 || game.onBase3
                 val wasLoaded = was1 && was2 && was3
-                val nowLoaded = game.onBase1 && game.onBase2 && game.onBase3
                 val play = pickAdvanceRelay(newTexts)
                 val who = pickPlayerName(
                     play?.text.orEmpty(),
@@ -326,10 +357,43 @@ class EventDetector(private val store: SnapshotStore) {
                     )
                 }
                 lastBasesKey = key
+                lastChanceBatter = atBat.ifBlank { batterName }
+            } else if (
+                scoringChance &&
+                batterName.isNotBlank() &&
+                lastChanceBatter.isNotBlank() &&
+                batterName != lastChanceBatter &&
+                store.chanceAtBatChange()
+            ) {
+                val runners = runnersLabel(
+                    first = runnerName(game, game.onBase1, game.runnerOn1Order, game.runnerOn1Code),
+                    second = runnerName(game, game.onBase2, game.runnerOn2Order, game.runnerOn2Code),
+                    third = runnerName(game, game.onBase3, game.runnerOn3Order, game.runnerOn3Code),
+                )
+                val alert = formatScoringChanceAlert(
+                    loaded = nowLoaded,
+                    runners = runners,
+                    batterNow = batterName,
+                    inningLabel = game.inningLabel,
+                    outs = game.out,
+                    on1 = game.onBase1,
+                    on2 = game.onBase2,
+                    on3 = game.onBase3,
+                )
+                maybeNotify(
+                    context, NotificationType.SCORING_CHANCE, 2603,
+                    alert.title, alert.text,
+                    gameId = game.gameId, detailTab = "relay",
+                )
+                lastChanceBatter = batterName
+            } else if (scoringChance && batterName.isNotBlank() && lastChanceBatter.isBlank()) {
+                lastChanceBatter = batterName
             }
         } else {
             lastBasesKey = ""
+            lastChanceBatter = ""
         }
+        persistCursor(game)
     }
 
     /**
@@ -500,12 +564,14 @@ class EventDetector(private val store: SnapshotStore) {
             game.lotteScore < game.opponentScore -> "${game.focusName()} 패배"
             else -> "무승부"
         }
+        val dh = dhSuffix(game.doubleHeaderNo)
         maybeNotify(
             context, NotificationType.GAME_END, 2002,
-            result, "최종 ${game.lotteScore}:${game.opponentScore} vs ${game.opponentName}",
+            "$result$dh", "최종 ${game.lotteScore}:${game.opponentScore} vs ${game.opponentName}",
             gameId = game.gameId,
         )
         store.setNotifiedEndGameId(game.gameId)
+        store.setWidgetEndedHold(game.gameId)
     }
 
     private suspend fun notifyCanceled(context: Context, game: LotteGameInfo) {
@@ -616,26 +682,70 @@ class EventDetector(private val store: SnapshotStore) {
         eighthNotifiedFor = ""
         extraNotifiedFor = ""
         lastFavoriteBatterCode = ""
+        lastChanceBatter = ""
+        seenPitcherCodes = mutableSetOf()
         initialized = false
     }
 
     private suspend fun seed(game: LotteGameInfo) {
-        lastSeqno = game.recentTexts.maxOfOrNull { it.seqno } ?: -1
-        lastPitcherCode = game.currentPitcherCode
-        seedScores(game)
+        val cursor = store.liveEventCursor()
+        val parts = cursor.split('|')
+        val sameGame = parts.size >= 8 && parts[0] == game.gameId
+        if (sameGame) {
+            lastSeqno = parts[1].toIntOrNull() ?: (game.recentTexts.maxOfOrNull { it.seqno } ?: -1)
+            lastLotteScore = parts[2].toIntOrNull() ?: game.lotteScore
+            lastOppScore = parts[3].toIntOrNull() ?: game.opponentScore
+            lastBasesKey = parts[4]
+            lastPitcherCode = parts[5]
+            lastFavoriteBatterCode = parts[6]
+            lastStatus = runCatching { GameStatus.valueOf(parts[7]) }.getOrNull() ?: game.status
+        } else {
+            lastSeqno = game.recentTexts.maxOfOrNull { it.seqno } ?: -1
+            lastPitcherCode = game.currentPitcherCode
+            seedScores(game)
+            lastStatus = game.status
+            lastBasesKey = basesKey(game.onBase1, game.onBase2, game.onBase3)
+            lastFavoriteBatterCode = (game.lotteLineup + game.opponentLineup + game.lotteBenchBatters + game.opponentBenchBatters)
+                .firstOrNull { it.name == game.currentBatterName }?.playerCode.orEmpty()
+        }
         lastInning = game.inning
         lastTop = game.isTopInning
-        lastStatus = game.status
-        lastBasesKey = basesKey(game.onBase1, game.onBase2, game.onBase3)
         eighthNotifiedFor = store.notifiedEighthKey()
         extraNotifiedFor = store.notifiedExtraKey()
-        lastFavoriteBatterCode = (game.lotteLineup + game.opponentLineup + game.lotteBenchBatters + game.opponentBenchBatters)
-            .firstOrNull { it.name == game.currentBatterName }?.playerCode.orEmpty()
+        seenPitcherCodes = (game.lottePitchers + game.opponentPitchers)
+            .map { it.playerCode }.filter { it.isNotBlank() }.toMutableSet()
+        lastChanceBatter = game.currentBatterName.trim()
+    }
+
+    private suspend fun persistCursor(game: LotteGameInfo) {
+        val raw = listOf(
+            game.gameId,
+            lastSeqno.toString(),
+            lastLotteScore.toString(),
+            lastOppScore.toString(),
+            lastBasesKey,
+            lastPitcherCode,
+            lastFavoriteBatterCode,
+            (lastStatus ?: game.status).name,
+        ).joinToString("|")
+        store.setLiveEventCursor(raw)
     }
 
     private fun seedScores(game: LotteGameInfo) {
         lastLotteScore = game.lotteScore
         lastOppScore = game.opponentScore
+    }
+
+    private suspend fun maybeNotifyGameStart(context: Context, game: LotteGameInfo) {
+        if (store.notifiedGameStartId() == game.gameId) return
+        val dh = dhSuffix(game.doubleHeaderNo)
+        maybeNotify(
+            context, NotificationType.GAME_START, 2001,
+            "경기 시작!$dh",
+            "${game.opponentName}전 시작$dh · ${game.stadium}",
+            gameId = game.gameId,
+        )
+        store.setNotifiedGameStartId(game.gameId)
     }
 
     private fun lotteRosterNames(game: LotteGameInfo): List<String> =
@@ -716,6 +826,14 @@ class EventDetector(private val store: SnapshotStore) {
         )
         if (allow) {
             NotificationHelper.notifyEvent(context, type, title, text, id, gameId, detailTab)
+            store.appendAlertHistory(
+                AlertHistoryItem(
+                    millis = System.currentTimeMillis(),
+                    type = type.name,
+                    title = title,
+                    text = text,
+                ),
+            )
         }
     }
 
