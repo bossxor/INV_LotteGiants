@@ -186,14 +186,9 @@
             android:name=".live.GameAlarmReceiver"
             android:exported="true"
             android:directBootAware="true">
+            <!-- 커스텀 액션은 명시적 PendingIntent만 쓴다. 필터에 넣으면 외부 implicit 송신이 가능함. -->
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="com.bossxor.lottegiants.START_LIVE" />
-                <action android:name="com.bossxor.lottegiants.PREGAME" />
-                <action android:name="com.bossxor.lottegiants.HIDE_LIVE" />
-                <action android:name="com.bossxor.lottegiants.FAST_POLL" />
-                <action android:name="com.bossxor.lottegiants.ROSTER_POLL" />
-                <action android:name="com.bossxor.lottegiants.KBO_DAY_ROLLOVER" />
             </intent-filter>
         </receiver>
 

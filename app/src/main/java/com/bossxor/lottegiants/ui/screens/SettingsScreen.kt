@@ -78,6 +78,7 @@ import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.ThemeMode
 import com.bossxor.lottegiants.domain.liveLeadChipLabel
 import com.bossxor.lottegiants.domain.liveLeadLabel
+import com.bossxor.lottegiants.live.CrashGuard
 import com.bossxor.lottegiants.live.LiveScoreService
 import com.bossxor.lottegiants.live.NotificationHelper
 import com.bossxor.lottegiants.widget.WidgetUpdater
@@ -584,7 +585,7 @@ fun SettingsScreen(
         SectionCard {
             Column {
                 Text(
-                    "즐겨찾기·알림 종류·테마·위젯을 JSON으로 빼 두었다가, 앱을 다시 깔 때 가져옵니다.",
+                    "즐겨찾기·알림 종류·테마·위젯·내 팀을 JSON으로 빼 두었다가, 앱을 다시 깔 때 가져옵니다.",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -655,6 +656,34 @@ fun SettingsScreen(
                 ) {
                     Text("삼성 잠자기 앱에서 빼기", fontWeight = FontWeight.Bold)
                 }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Text("진단", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        SectionCard {
+            Column {
+                val lastCrash = remember { CrashGuard.lastCrashSummary(context) }
+                val exactOk = remember {
+                    if (Build.VERSION.SDK_INT < 31) true
+                    else context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() == true
+                }
+                Text(
+                    "최근 크래시: ${lastCrash ?: "없음"}",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    if (exactOk) "정확한 알람: 허용됨" else "정확한 알람: 꺼짐",
+                    fontSize = 13.sp,
+                    color = if (exactOk) MaterialTheme.colorScheme.onSurfaceVariant else LoseRed,
+                )
+                Text(
+                    "시스템 강제종료(FORCE_STOP) 후에는 앱을 다시 열어야 감시가 복구됩니다.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 

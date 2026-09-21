@@ -648,7 +648,13 @@ class EventDetector(private val store: SnapshotStore) {
     private fun runnerName(game: LotteGameInfo, onBase: Boolean, order: Int): String? {
         if (!onBase) return null
         lineupNameByOrder(game.lotteLineup + game.lotteBenchBatters, order)?.let { return it }
-        // 타순이 비어 있으면 이름을 못 붙인다 (만루 표시는 onBase bool로 유지)
+        // 타순이 비면 중계 텍스트·라인업에서 이름을 못 붙인다. 루 bool은 유지.
+        if (order <= 0) {
+            android.util.Log.w(
+                "EventDetector",
+                "runner on base without bat order (game=${game.gameId})",
+            )
+        }
         return null
     }
 

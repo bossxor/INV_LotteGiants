@@ -313,6 +313,34 @@ fun runnerOccupied(raw: String?): Boolean {
     }
 }
 
+/**
+ * 중계 base 필드(선수코드/`1`/`Y`)에서 타순을 찾는다.
+ * 코드로 찾으면 그걸 쓰고, `"1"`처럼 점유만 알리거나 필드가 비면 [kboOrder]를 유지한다.
+ *
+ * @param battingOrder 타순 → (선수코드, 이름)
+ * @param names 선수코드 → 이름
+ */
+fun runnerOrderFromRelay(
+    relayRaw: String?,
+    battingOrder: Map<Int, Pair<String, String>>,
+    names: Map<String, String>,
+    kboOrder: Int,
+): Int {
+    val raw = relayRaw?.trim().orEmpty()
+    if (raw.isEmpty()) return kboOrder.takeIf { it > 0 } ?: 0
+    if (!runnerOccupied(raw)) return 0
+    // 점유 플래그만 온 경우 (선수코드 아님)
+    if (raw.length <= 2 && raw.all { it.isDigit() || it.equals('y', true) || it.equals('t', true) }) {
+        return kboOrder.takeIf { it > 0 } ?: 0
+    }
+    battingOrder.entries.firstOrNull { it.value.first == raw }?.key?.let { return it }
+    val byName = names[raw]?.takeIf { it.isNotBlank() }
+    if (byName != null) {
+        battingOrder.entries.firstOrNull { it.value.second == byName }?.key?.let { return it }
+    }
+    return kboOrder.takeIf { it > 0 } ?: 0
+}
+
 fun isPitcherPosition(position: String, hinted: Boolean = false): Boolean {
     if (hinted) return true
     val p = position.trim()

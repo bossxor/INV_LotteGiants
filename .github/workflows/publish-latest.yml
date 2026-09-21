@@ -23,6 +23,11 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
+      - name: Unit tests
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testDebugUnitTest --stacktrace
+
       - name: Decode release keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
@@ -41,7 +46,6 @@ jobs:
 
       - name: Build release APK
         run: |
-          chmod +x gradlew
           ./gradlew :app:assembleRelease --stacktrace
 
       - name: Read version from APK

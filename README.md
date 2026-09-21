@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.16` (`versionCode` **2016**) |
+| **버전** | `2.0.17` (`versionCode` **2017**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.netlify.app/) |
@@ -127,7 +127,8 @@
 | **AlarmManager** | 라인업·등말소 백업. 감시와 겹치면 건너뜀 | 25~35초 |
 | **WorkManager** | 전체 스냅샷·알람 재등록. 프로세스가 죽어도 15분 안에 다시 잡는다 | 15분 (보조) |
 
-예외로 프로세스가 죽으면 알람·워커를 다시 걸어, 앱을 직접 열기 전까지 감시가 멈추지 않게 한다 (2.0.15).
+예외로 프로세스가 죽으면 알람·워커·감시를 다시 걸어, 앱을 직접 열기 전까지 감시가 멈추지 않게 한다 (2.0.15~2.0.17).  
+**설정에서 앱 강제종료**하면 알람까지 취소되므로, 그때는 앱을 한 번 다시 열어야 한다.
 
 ### 실시간 스코어 알림 (1.3.64~)
 
@@ -219,7 +220,12 @@ NAS 경로에서 `adb install`이 자주 걸리므로 APK는 `%TEMP%`로 복사�
 CI 서명 시크릿: `.\scripts\setup-ci-signing.ps1`  
 debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기기는 서명이 달라 덮어쓰기가 실패하므로 한 번 지운 뒤 다시 설치한다.
 
-릴리스 `mergeReleaseResources`는 NAS 잠금으로 실패하는 경우가 있다. 그때는 debug APK로 실기한다.
+**집·회사 키 맞추기 (첫날 3줄)**
+1. 집(또는 CI에 올린 원본)에서 `lotte-release.jks` + `keystore.properties`를 회사 프로젝트 루트에 복사한다.
+2. `.\gradlew.bat :app:assembleDebug` 로 릴리스 키 서명을 확인한다.
+3. 덮어쓰기가 거절되면 CI `latest`로 설치하고, 기존 다른 키 앱은 `adb uninstall` 후 다시 깐다.
+
+릴리스 `mergeReleaseResources`는 NAS 잠금으로 실패하는 경우가 있다. 그때는 debug APK 또는 CI `latest`로 실기한다 (`scripts\build.ps1`도 안내).
 
 **커밋하지 않는 것:** APK · `.gradle` · `app/build` · `_keubo_apk_res` · 시크릿
 
@@ -231,8 +237,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.7` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2007` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.17` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2017` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -273,6 +279,9 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.17** | 크래시 후 감시 즉시 재기동, FGS 오기동 완화, DataStore 읽기 안전화, CI unit test, 설정 진단·서명 체크리스트 |
+| **2.0.16** | 득점권 타석 밀림·만루 3루 이름 누락 수정 |
+| **2.0.15** | 득점권 타석·새벽 등말소·강제종료 후 감시 재개 |
 | **2.0.7** | 경기 전 승률 후보가 비어 있을 때 `WinProb.pickSeries`가 터지던 문제 수정. 라이브·위젯 복구 |
 | **2.0.6** | 중계 라인업 병합 예외·빈 캐시 폴백 보강 |
 | **2.0.5** | DataStore 읽기 실패 때도 오늘 경기는 보여 줌. 라이브 공백 수정 |

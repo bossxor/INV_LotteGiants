@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.ServiceCompat
 import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.data.NotificationType
@@ -67,13 +68,23 @@ class AlertWatchService : Service() {
                     delay(AlertWatchGate.pollIntervalMs(System.currentTimeMillis(), start) + failStreak * 10_000L)
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
-                } catch (_: Throwable) {
+                } catch (t: Throwable) {
+                    Log.e(TAG, "alert watch poll failed", t)
                     failStreak = (failStreak + 1).coerceAtMost(4)
                     delay(AlertWatchGate.ROSTER_POLL_MS + failStreak * 10_000L)
                 }
             }
         }
         return START_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        runCatching {
+            GameSchedulerWorker.enqueue(applicationContext)
+            GameSchedulerWorker.scheduleKboDayRollover(applicationContext)
+            GameSchedulerWorker.scheduleRosterPoll(applicationContext)
+        }
     }
 
     override fun onDestroy() {
@@ -88,6 +99,7 @@ class AlertWatchService : Service() {
     private fun inWatchHours(): Boolean = Companion.inWatchHours()
 
     companion object {
+        private const val TAG = "AlertWatchService"
         private const val NOTIFICATION_ID = 9001
 
         @Volatile

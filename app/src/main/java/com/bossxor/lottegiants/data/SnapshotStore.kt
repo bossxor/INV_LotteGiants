@@ -30,6 +30,10 @@ class SnapshotStore(private val context: Context) {
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** DataStore가 비어 예외를 내도 전체 조회가 죽지 않게 한다 (2.0.5 / 2.0.17). */
+    private suspend fun <T> safeFirst(flow: Flow<T>, default: T): T =
+        runCatching { flow.first() }.getOrDefault(default)
+
     val snapshotFlow: Flow<LiveSnapshot?> = context.dataStore.data.map { prefs ->
         prefs[KEY_SNAPSHOT]?.let { runCatching { json.decodeFromString<LiveSnapshot>(it) }.getOrNull() }
     }
@@ -47,7 +51,7 @@ class SnapshotStore(private val context: Context) {
         context.dataStore.data.map { it[booleanPreferencesKey("notif_${type.name}")] ?: true }
 
     suspend fun isNotificationEnabled(type: NotificationType): Boolean =
-        notificationEnabledFlow(type).first()
+        safeFirst(notificationEnabledFlow(type), true)
 
     suspend fun setNotificationEnabled(type: NotificationType, enabled: Boolean) {
         context.dataStore.edit { it[booleanPreferencesKey("notif_${type.name}")] = enabled }
@@ -74,7 +78,7 @@ class SnapshotStore(private val context: Context) {
         it[KEY_LIVE_ENABLED] ?: true
     }
 
-    suspend fun isLiveScoreEnabled(): Boolean = liveScoreEnabledFlow.first()
+    suspend fun isLiveScoreEnabled(): Boolean = safeFirst(liveScoreEnabledFlow, true)
 
     suspend fun setLiveScoreEnabled(enabled: Boolean) {
         context.dataStore.edit { it[KEY_LIVE_ENABLED] = enabled }
@@ -82,7 +86,7 @@ class SnapshotStore(private val context: Context) {
 
     /** 설정 '다시 표시'로 lead 창 밖에서도 알림을 고정할 때 */
     suspend fun isLiveNotificationPinned(): Boolean =
-        context.dataStore.data.map { it[KEY_LIVE_PINNED] ?: false }.first()
+        safeFirst(context.dataStore.data.map { it[KEY_LIVE_PINNED] ?: false }, false)
 
     suspend fun setLiveNotificationPinned(pinned: Boolean) {
         context.dataStore.edit { it[KEY_LIVE_PINNED] = pinned }
@@ -94,7 +98,8 @@ class SnapshotStore(private val context: Context) {
         }.getOrDefault(LiveDisplayMode.FULL)
     }
 
-    suspend fun liveDisplayMode(): LiveDisplayMode = liveDisplayModeFlow.first()
+    suspend fun liveDisplayMode(): LiveDisplayMode =
+        safeFirst(liveDisplayModeFlow, LiveDisplayMode.FULL)
 
     suspend fun setLiveDisplayMode(mode: LiveDisplayMode) {
         context.dataStore.edit { it[KEY_LIVE_MODE] = mode.name }
@@ -104,7 +109,8 @@ class SnapshotStore(private val context: Context) {
         clampLiveLeadMinutes(prefs[KEY_LIVE_LEAD_MINUTES] ?: LIVE_LEAD_MINUTES_DEFAULT)
     }
 
-    suspend fun liveLeadMinutes(): Int = liveLeadMinutesFlow.first()
+    suspend fun liveLeadMinutes(): Int =
+        safeFirst(liveLeadMinutesFlow, LIVE_LEAD_MINUTES_DEFAULT)
 
     suspend fun setLiveLeadMinutes(minutes: Int) {
         context.dataStore.edit { it[KEY_LIVE_LEAD_MINUTES] = clampLiveLeadMinutes(minutes) }
@@ -123,7 +129,7 @@ class SnapshotStore(private val context: Context) {
         it[KEY_ONBOARDING] ?: false
     }
 
-    suspend fun isOnboardingDone(): Boolean = onboardingDoneFlow.first()
+    suspend fun isOnboardingDone(): Boolean = safeFirst(onboardingDoneFlow, false)
 
     suspend fun setOnboardingDone(done: Boolean = true) {
         context.dataStore.edit { it[KEY_ONBOARDING] = done }
@@ -163,10 +169,10 @@ class SnapshotStore(private val context: Context) {
         list.map { it.code }.toSet()
     }
 
-    suspend fun favoriteCodes(): Set<String> = favoriteCodesFlow.first()
+    suspend fun favoriteCodes(): Set<String> = safeFirst(favoriteCodesFlow, emptySet())
 
     suspend fun favoritePlayers(): List<FavoritePlayer> =
-        favoritePlayersFlow.first()
+        safeFirst(favoritePlayersFlow, emptyList())
 
     suspend fun toggleFavorite(code: String, name: String = "", team: String = ""): Boolean {
         if (code.isBlank()) return false
@@ -216,7 +222,7 @@ class SnapshotStore(private val context: Context) {
         it[KEY_BANNER_DAY].orEmpty()
     }
 
-    suspend fun bannerDismissedDay(): String = bannerDismissedDayFlow.first()
+    suspend fun bannerDismissedDay(): String = safeFirst(bannerDismissedDayFlow, "")
 
     suspend fun setBannerDismissedDay(day: String) {
         context.dataStore.edit { it[KEY_BANNER_DAY] = day }
@@ -224,7 +230,7 @@ class SnapshotStore(private val context: Context) {
 
     /** 이미 알림을 보낸 등말소 키 (중복 알림 방지) */
     suspend fun notifiedRosterKeys(): Set<String> =
-        context.dataStore.data.map { it[KEY_NOTIFIED_ROSTER].orEmpty() }.first()
+        safeFirst(context.dataStore.data.map { it[KEY_NOTIFIED_ROSTER].orEmpty() }, emptySet())
 
     suspend fun setNotifiedRosterKeys(keys: Set<String>) {
         context.dataStore.edit { it[KEY_NOTIFIED_ROSTER] = keys }
@@ -232,9 +238,7 @@ class SnapshotStore(private val context: Context) {
 
     /** 당일 「등말소 변화 없음」알림을 이미 보냈는지 (yyyy-MM-dd) */
     suspend fun notifiedRosterNoneDay(): String =
-        runCatching {
-            context.dataStore.data.map { it[KEY_NOTIFIED_ROSTER_NONE].orEmpty() }.first()
-        }.getOrDefault("")
+        safeFirst(context.dataStore.data.map { it[KEY_NOTIFIED_ROSTER_NONE].orEmpty() }, "")
 
     suspend fun setNotifiedRosterNoneDay(day: String) {
         context.dataStore.edit { it[KEY_NOTIFIED_ROSTER_NONE] = day }
@@ -242,9 +246,7 @@ class SnapshotStore(private val context: Context) {
 
     suspend fun jerseyRoster(teamCode: String, season: Int): List<com.bossxor.lottegiants.domain.EntryPlayer> {
         val key = jerseyKey(teamCode, season)
-        val raw = runCatching {
-            context.dataStore.data.map { it[key].orEmpty() }.first()
-        }.getOrDefault("")
+        val raw = safeFirst(context.dataStore.data.map { it[key].orEmpty() }, "")
         if (raw.isBlank()) return emptyList()
         return runCatching {
             json.decodeFromString(
@@ -276,7 +278,7 @@ class SnapshotStore(private val context: Context) {
         stringPreferencesKey("jersey_roster_${teamCode.uppercase()}_$season")
 
     suspend fun lastLiveNotifyKey(): String =
-        context.dataStore.data.map { it[KEY_LIVE_NOTIFY] ?: "" }.first()
+        safeFirst(context.dataStore.data.map { it[KEY_LIVE_NOTIFY] ?: "" }, "")
 
     suspend fun setLastLiveNotifyKey(key: String) {
         context.dataStore.edit { it[KEY_LIVE_NOTIFY] = key }
@@ -287,7 +289,7 @@ class SnapshotStore(private val context: Context) {
      * 스케줄러 워커는 매 실행마다 새 detector를 만들기 때문에 메모리 대신 여기 남겨야 한다.
      */
     suspend fun notifiedLineupState(): String =
-        context.dataStore.data.map { it[KEY_NOTIFIED_LINEUP].orEmpty() }.first()
+        safeFirst(context.dataStore.data.map { it[KEY_NOTIFIED_LINEUP].orEmpty() }, "")
 
     suspend fun setNotifiedLineupState(state: String) {
         context.dataStore.edit { it[KEY_NOTIFIED_LINEUP] = state }
@@ -295,7 +297,7 @@ class SnapshotStore(private val context: Context) {
 
     /** 이미 취소 알림을 보낸 경기 ID (중복 알림 방지) */
     suspend fun notifiedCancelGameId(): String =
-        context.dataStore.data.map { it[KEY_NOTIFIED_CANCEL].orEmpty() }.first()
+        safeFirst(context.dataStore.data.map { it[KEY_NOTIFIED_CANCEL].orEmpty() }, "")
 
     suspend fun setNotifiedCancelGameId(gameId: String) {
         context.dataStore.edit { it[KEY_NOTIFIED_CANCEL] = gameId }
@@ -303,7 +305,7 @@ class SnapshotStore(private val context: Context) {
 
     /** 이미 종료 알림을 보낸 경기 ID (워커 재시작·콜드 스타트 중복 방지) */
     suspend fun notifiedEndGameId(): String =
-        context.dataStore.data.map { it[KEY_NOTIFIED_END].orEmpty() }.first()
+        safeFirst(context.dataStore.data.map { it[KEY_NOTIFIED_END].orEmpty() }, "")
 
     suspend fun setNotifiedEndGameId(gameId: String) {
         context.dataStore.edit { it[KEY_NOTIFIED_END] = gameId }
@@ -314,7 +316,7 @@ class SnapshotStore(private val context: Context) {
      * 같은 경기는 다시 올리지 않는다(다시 표시·새 LIVE만 예외).
      */
     suspend fun dismissedFinishedLiveGameId(): String =
-        context.dataStore.data.map { it[KEY_DISMISSED_FINISHED_LIVE].orEmpty() }.first()
+        safeFirst(context.dataStore.data.map { it[KEY_DISMISSED_FINISHED_LIVE].orEmpty() }, "")
 
     suspend fun setDismissedFinishedLiveGameId(gameId: String) {
         context.dataStore.edit { it[KEY_DISMISSED_FINISHED_LIVE] = gameId }
@@ -326,12 +328,13 @@ class SnapshotStore(private val context: Context) {
 
     /** 권한 대기 중인 업데이트 APK (절대 경로). 빈 문자열이면 없음. */
     suspend fun pendingUpdateApkPath(): String =
-        context.dataStore.data.map { it[KEY_PENDING_UPDATE_APK].orEmpty() }.first()
+        safeFirst(context.dataStore.data.map { it[KEY_PENDING_UPDATE_APK].orEmpty() }, "")
 
     suspend fun pendingUpdateVersionCode(): Int =
-        context.dataStore.data.map {
-            it[KEY_PENDING_UPDATE_CODE]?.toIntOrNull() ?: 0
-        }.first()
+        safeFirst(
+            context.dataStore.data.map { it[KEY_PENDING_UPDATE_CODE]?.toIntOrNull() ?: 0 },
+            0,
+        )
 
     suspend fun setPendingUpdate(apkPath: String, versionCode: Int) {
         context.dataStore.edit {
@@ -361,7 +364,7 @@ class SnapshotStore(private val context: Context) {
         it[KEY_ALERTS_LIVE_ONLY] ?: false
     }
 
-    suspend fun alertsLiveOnly(): Boolean = alertsLiveOnlyFlow.first()
+    suspend fun alertsLiveOnly(): Boolean = safeFirst(alertsLiveOnlyFlow, false)
 
     suspend fun setAlertsLiveOnly(enabled: Boolean) {
         context.dataStore.edit { it[KEY_ALERTS_LIVE_ONLY] = enabled }
@@ -371,7 +374,7 @@ class SnapshotStore(private val context: Context) {
         it[KEY_ALERT_VIBRATE] ?: true
     }
 
-    suspend fun alertVibrate(): Boolean = alertVibrateFlow.first()
+    suspend fun alertVibrate(): Boolean = safeFirst(alertVibrateFlow, true)
 
     suspend fun setAlertVibrate(enabled: Boolean) {
         context.dataStore.edit { it[KEY_ALERT_VIBRATE] = enabled }
@@ -381,7 +384,7 @@ class SnapshotStore(private val context: Context) {
         it[KEY_QUIET_ENABLED] ?: false
     }
 
-    suspend fun quietHoursEnabled(): Boolean = quietHoursEnabledFlow.first()
+    suspend fun quietHoursEnabled(): Boolean = safeFirst(quietHoursEnabledFlow, false)
 
     suspend fun setQuietHoursEnabled(enabled: Boolean) {
         context.dataStore.edit { it[KEY_QUIET_ENABLED] = enabled }
@@ -395,9 +398,9 @@ class SnapshotStore(private val context: Context) {
         it[KEY_QUIET_END] ?: 8
     }
 
-    suspend fun quietStartHour(): Int = quietStartHourFlow.first()
+    suspend fun quietStartHour(): Int = safeFirst(quietStartHourFlow, 23)
 
-    suspend fun quietEndHour(): Int = quietEndHourFlow.first()
+    suspend fun quietEndHour(): Int = safeFirst(quietEndHourFlow, 8)
 
     suspend fun setQuietHours(startHour: Int, endHour: Int) {
         context.dataStore.edit {
@@ -410,7 +413,7 @@ class SnapshotStore(private val context: Context) {
         (it[KEY_WIDGET_OPACITY] ?: 100).coerceIn(20, 100)
     }
 
-    suspend fun widgetOpacity(): Int = widgetOpacityFlow.first()
+    suspend fun widgetOpacity(): Int = safeFirst(widgetOpacityFlow, 100)
 
     suspend fun setWidgetOpacity(pct: Int) {
         context.dataStore.edit { it[KEY_WIDGET_OPACITY] = pct.coerceIn(20, 100) }
@@ -420,14 +423,14 @@ class SnapshotStore(private val context: Context) {
         it[KEY_WIDGET_OPP_LOGO] ?: true
     }
 
-    suspend fun widgetShowOppLogo(): Boolean = widgetShowOppLogoFlow.first()
+    suspend fun widgetShowOppLogo(): Boolean = safeFirst(widgetShowOppLogoFlow, true)
 
     suspend fun setWidgetShowOppLogo(show: Boolean) {
         context.dataStore.edit { it[KEY_WIDGET_OPP_LOGO] = show }
     }
 
     suspend fun lastRaceFingerprint(): String =
-        context.dataStore.data.map { it[KEY_LAST_RACE].orEmpty() }.first()
+        safeFirst(context.dataStore.data.map { it[KEY_LAST_RACE].orEmpty() }, "")
 
     suspend fun setLastRaceFingerprint(value: String) {
         context.dataStore.edit { it[KEY_LAST_RACE] = value }
@@ -438,7 +441,7 @@ class SnapshotStore(private val context: Context) {
     }
 
     suspend fun myTeamCode(): String =
-        runCatching { myTeamCodeFlow.first() }.getOrDefault(LOTTE_TEAM_CODE)
+        safeFirst(myTeamCodeFlow, LOTTE_TEAM_CODE)
 
     suspend fun setMyTeamCode(code: String) {
         context.dataStore.edit { it[KEY_MY_TEAM] = normalizeTeamCode(code) }
@@ -461,7 +464,7 @@ class SnapshotStore(private val context: Context) {
             liveEnabled = isLiveScoreEnabled(),
             liveMode = liveDisplayMode().name,
             liveLeadMinutes = liveLeadMinutes(),
-            theme = themeModeFlow.first(),
+            theme = safeFirst(themeModeFlow, ThemeMode.SYSTEM.name),
             widgetOpacity = widgetOpacity(),
             widgetShowOppLogo = widgetShowOppLogo(),
             alertsLiveOnly = alertsLiveOnly(),

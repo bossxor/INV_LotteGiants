@@ -356,11 +356,18 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
 
 class GameAlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
+        val action = intent?.action ?: return
+        // BOOT만 exported 필터에 있다. 커스텀 액션은 우리 앱이 만든 명시적 PendingIntent만 허용.
+        if (action != Intent.ACTION_BOOT_COMPLETED &&
+            !action.startsWith("com.bossxor.lottegiants.")
+        ) {
+            return
+        }
         val pending = goAsync()
         Thread {
             try {
                 withWakeLock(context) {
-                    when (intent?.action) {
+                    when (action) {
                         GameSchedulerWorker.ACTION_KBO_DAY_ROLLOVER -> {
                             runBlocking {
                                 val repo = GiantsRepository.get(context)

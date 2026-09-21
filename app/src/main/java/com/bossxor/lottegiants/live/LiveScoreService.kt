@@ -219,6 +219,16 @@ class LiveScoreService : Service() {
         stopSelf()
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        // 최근 앱 스와이프 후에도 알람·워커는 남겨 둔다 (OEM이 FGS를 같이 죽일 수 있음).
+        runCatching {
+            GameSchedulerWorker.enqueue(applicationContext)
+            GameSchedulerWorker.scheduleKboDayRollover(applicationContext)
+            GameSchedulerWorker.scheduleRosterPoll(applicationContext)
+        }
+    }
+
     override fun onDestroy() {
         pollJob?.cancel()
         scope.cancel()
@@ -247,7 +257,11 @@ class LiveScoreService : Service() {
                     ignoreLeadWindow = forceShow || pinned,
                 )
                 game?.status == GameStatus.LIVE
-            }.getOrElse { true }
+            }.getOrElse {
+                // 스냅샷 판별 실패 시 FGS를 억지로 켜면 타임아웃·깜빡임만 난다. 알림만 갱신.
+                Log.w(TAG, "live check failed; skip FGS", it)
+                false
+            }
             if (!isLive) {
                 runCatching { runBlocking { NotificationHelper.refreshLiveNotificationIfNeeded(app) } }
                 return
