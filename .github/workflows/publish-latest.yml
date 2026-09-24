@@ -80,9 +80,11 @@ jobs:
         run: |
           if gh release view latest >/dev/null 2>&1; then
             gh release upload latest dist/LotteGiants.apk dist/update.json --clobber
-            gh release edit latest --notes-file dist/notes.md --title "latest (${{ env.VERSION_NAME }})"
+            # v1.x 등 다른 태그가 GitHub "Latest" 배지를 가져가지 않게 고정
+            gh release edit latest --notes-file dist/notes.md --title "latest (${{ env.VERSION_NAME }})" --latest
           else
             gh release create latest dist/LotteGiants.apk dist/update.json \
               --notes-file dist/notes.md \
-              --title "latest (${{ env.VERSION_NAME }})"
+              --title "latest (${{ env.VERSION_NAME }})" \
+              --latest
           fi

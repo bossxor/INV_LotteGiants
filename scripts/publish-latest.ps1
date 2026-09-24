@@ -63,10 +63,11 @@ $ErrorActionPreference = $prevEA
 if ($hasLatest) {
   gh release upload latest $apkOut $manifestPath -R bossxor/INV_LotteGiants --clobber
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-  gh release edit latest -R bossxor/INV_LotteGiants --notes-file $bodyFile --title "latest ($versionName)"
+  # v1.x 등 다른 태그가 GitHub "Latest" 배지를 가져가지 않게 고정
+  gh release edit latest -R bossxor/INV_LotteGiants --notes-file $bodyFile --title "latest ($versionName)" --latest
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } else {
-  gh release create latest $apkOut $manifestPath -R bossxor/INV_LotteGiants --notes-file $bodyFile --title "latest ($versionName)"
+  gh release create latest $apkOut $manifestPath -R bossxor/INV_LotteGiants --notes-file $bodyFile --title "latest ($versionName)" --latest
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 

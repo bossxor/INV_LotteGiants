@@ -237,14 +237,23 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.20` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2020` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.21` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2021` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
 ### `latest` 채널
 
-`main` push 시 GitHub Actions가 release APK를 빌드해 고정 태그 **`latest`** 에 덮어쓴다.
+`main` push 시 GitHub Actions가 release APK를 빌드해 고정 태그 **`latest`** 에 덮어쓴다.  
+웹에서 **Latest** 배지도 이 태그를 가리키게 유지한다 (`v1.3.x` 같은 옛 태그가 Latest로 잡히면 사직스코어 APK가 내려간다).
+
+수동 받을 때:
+
+```powershell
+gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.apk --dir $env:TEMP --clobber
+```
+
+또는 릴리스 페이지에서 태그 **`latest`** (제목 `latest (2.0.x)`)의 `LotteGiants.apk`를 받는다.
 
 1. **프로세스 시작과 동시에** `latest` 릴리스 본문 `versionCode`를 본다. 이미 최신이면 `update.json`을 받지 않는다 (1.3.72).
 2. 더 크면 APK를 GitHub API 에셋으로 받고 **앱 내부 PackageInstaller**로 갱신
