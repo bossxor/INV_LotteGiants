@@ -175,7 +175,7 @@ fun PlayersScreen(
                 Spacer(Modifier.height(22.dp))
                 Text("등번호 일람", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "팀별 1군 등록 명단 · 등번호 오름차순",
+                    "팀별 구단 전체 선수 · 등번호 오름차순",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                 )

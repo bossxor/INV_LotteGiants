@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.20` (`versionCode` **2020**) |
+| **버전** | `2.0.21` (`versionCode` **2021**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.netlify.app/) |
@@ -60,7 +60,7 @@
 ### 선수
 
 - 즐겨찾기 목록·검색 추가·삭제 (설정에서 옮김)
-- 팀별 **등번호 일람** (KBO 1군 등록 현황, 팀+시즌 캐시 후 차이만 갱신)
+- 팀별 **등번호 일람** (KBO 선수조회 구단 전체·1군·퓨처스 포함, 팀+시즌 캐시 후 차이만 갱신)
 - 이름·등번호·포지션 검색, 당겨서 새로고침
 
 ### 순위 · 엔트리

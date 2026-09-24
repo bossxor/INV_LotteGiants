@@ -1278,8 +1278,8 @@ class GiantsRepository private constructor(context: Context) {
     }
 
     /**
-     * 팀별 1군 등번호 일람. 캐시와 같으면 네트워크 결과만 버리고 캐시를 유지한다.
-     * RegisterAll HTML은 OkHttp 동기 호출이라 IO에서 실행해야 한다.
+     * 팀별 등번호 일람(구단 소속 전체: 1군·퓨처스). 캐시와 같으면 네트워크 결과만 버리고 캐시를 유지한다.
+     * KBO 선수조회 HTML은 OkHttp 동기 호출이라 IO에서 실행해야 한다.
      */
     suspend fun fetchTeamJerseyRoster(
         teamCode: String = LOTTE_TEAM_CODE,
@@ -1296,11 +1296,18 @@ class GiantsRepository private constructor(context: Context) {
             store.setJerseyRoster(code, season, emptyList())
         }
         val remote = runCatching {
-            val html = KboRegisterAllParser.fetchHtml()
-            KboRegisterAllParser.parseTeamPlayers(html, code)
+            KboPlayerSearchParser.fetchTeamPlayers(code)
         }.onFailure { e ->
-            Log.w("GiantsRepo", "jersey roster parse failed: ${e.message}")
-        }.getOrDefault(emptyList())
+            Log.w("GiantsRepo", "jersey roster search failed: ${e.message}")
+        }.getOrDefault(emptyList()).ifEmpty {
+            // 선수조회 실패 시 1군 등록현황으로 폴백
+            runCatching {
+                val html = KboRegisterAllParser.fetchHtml()
+                KboRegisterAllParser.parseTeamPlayers(html, code)
+            }.onFailure { e ->
+                Log.w("GiantsRepo", "jersey roster registerAll fallback failed: ${e.message}")
+            }.getOrDefault(emptyList())
+        }
         if (remote.isEmpty()) {
             if (cached.isNotEmpty()) return@withContext cached
             return@withContext leadersAsJerseyFallback(code)

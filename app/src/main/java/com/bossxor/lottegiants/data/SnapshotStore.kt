@@ -275,7 +275,7 @@ class SnapshotStore(private val context: Context) {
     }
 
     private fun jerseyKey(teamCode: String, season: Int) =
-        stringPreferencesKey("jersey_roster_${teamCode.uppercase()}_$season")
+        stringPreferencesKey("jersey_roster_all_${teamCode.uppercase()}_$season")
 
     suspend fun lastLiveNotifyKey(): String =
         safeFirst(context.dataStore.data.map { it[KEY_LIVE_NOTIFY] ?: "" }, "")
