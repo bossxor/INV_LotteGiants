@@ -41,6 +41,7 @@ import com.bossxor.lottegiants.domain.EntryPlayer
 import com.bossxor.lottegiants.domain.FavoritePlayer
 import com.bossxor.lottegiants.domain.KBO_TEAMS
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
+import com.bossxor.lottegiants.domain.PlayerDetail
 import com.bossxor.lottegiants.ui.LoseRed
 import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.components.PlayerAvatar
@@ -51,6 +52,7 @@ import com.bossxor.lottegiants.ui.components.SectionCard
 @Composable
 fun PlayersScreen(
     favoritePlayers: List<FavoritePlayer>,
+    favoriteStats: Map<String, PlayerDetail> = emptyMap(),
     jerseyPlayers: List<EntryPlayer>,
     playersTeamCode: String,
     myTeamCode: String = LOTTE_TEAM_CODE,
@@ -123,17 +125,18 @@ fun PlayersScreen(
                         )
                     } else {
                         favoritePlayers.forEachIndexed { i, fav ->
+                            val stats = favoriteStats[fav.code]
                             Row(
                                 Modifier
                                     .fillMaxWidth()
                                     .clickable { onFavoriteClick(fav) }
-                                    .padding(vertical = 6.dp),
+                                    .padding(vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 PlayerAvatar(
                                     playerCode = fav.code,
                                     name = fav.name.ifBlank { fav.code },
-                                    size = 40.dp,
+                                    size = 44.dp,
                                 )
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
@@ -142,13 +145,11 @@ fun PlayersScreen(
                                         fontWeight = FontWeight.SemiBold,
                                         fontSize = 15.sp,
                                     )
-                                    if (fav.team.isNotBlank()) {
-                                        Text(
-                                            fav.team,
-                                            fontSize = 12.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
+                                    Text(
+                                        favoriteSeasonLine(stats, fav.team),
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
                                 }
                                 Text(
                                     "삭제",
@@ -271,4 +272,24 @@ private fun PlayersModeChip(label: String, selected: Boolean, onClick: () -> Uni
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         fontSize = 13.sp,
     )
+}
+
+private fun favoriteSeasonLine(detail: PlayerDetail?, team: String): String {
+    if (detail == null) {
+        return if (team.isNotBlank()) "$team · 시즌 성적 불러오는 중" else "시즌 성적 불러오는 중"
+    }
+    val stats = if (detail.isPitcher) {
+        buildString {
+            append("ERA ${detail.pitcherEra.ifBlank { "-" }}")
+            append(" · ${detail.pitcherWins}승 ${detail.pitcherLosses}패")
+            if (detail.pitcherSo > 0) append(" · SO ${detail.pitcherSo}")
+        }
+    } else {
+        buildString {
+            append("타율 ${detail.seasonAvg.ifBlank { "-" }}")
+            append(" · ${detail.seasonHr}홈런")
+            append(" · ${detail.seasonRbi}타점")
+        }
+    }
+    return if (team.isNotBlank()) "$team · $stats" else stats
 }

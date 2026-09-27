@@ -62,6 +62,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** 라이브 탭 자동 새로고침 실패 안내 (히스토리·엔트리와 무관) */
     private val _refreshError = MutableStateFlow<String?>(null)
     val refreshError: StateFlow<String?> = _refreshError.asStateFlow()
+    /** 사용자가 배너를 닫으면 자동 폴링 실패로 다시 안 띄운다. */
+    private var refreshErrorDismissed = false
+
+    private val _favoriteStats = MutableStateFlow<Map<String, PlayerDetail>>(emptyMap())
+    val favoriteStats: StateFlow<Map<String, PlayerDetail>> = _favoriteStats.asStateFlow()
+    private var favoriteStatsJob: Job? = null
 
     private val _dayGames = MutableStateFlow<List<MiniGame>>(emptyList())
     val dayGames: StateFlow<List<MiniGame>> = _dayGames.asStateFlow()
@@ -179,6 +185,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             refreshWeatherFromSnapshot(_snapshot.value)
             if (_resultsTeamCode.value.isBlank()) {
                 _resultsTeamCode.value = repo.store.myTeamCode()
+            }
+        }
+        viewModelScope.launch {
+            favoritePlayers.collect { list ->
+                loadFavoriteStats(list)
             }
         }
     }
@@ -463,6 +474,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearRefreshError() {
         _refreshError.value = null
+        refreshErrorDismissed = true
+    }
+
+    private fun loadFavoriteStats(list: List<FavoritePlayer>) {
+        favoriteStatsJob?.cancel()
+        if (list.isEmpty()) {
+            _favoriteStats.value = emptyMap()
+            return
+        }
+        favoriteStatsJob = viewModelScope.launch {
+            val out = linkedMapOf<String, PlayerDetail>()
+            for (fav in list) {
+                if (fav.code.isBlank()) continue
+                val detail = runCatching {
+                    repo.fetchPlayerDetail(fav.code)
+                }.getOrNull() ?: continue
+                out[fav.code] = detail
+                _favoriteStats.value = out.toMap()
+            }
+        }
     }
 
     suspend fun refreshOnce(force: Boolean = false) {
@@ -483,6 +514,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .onSuccess {
                 _snapshot.value = it
                 _refreshError.value = null
+                refreshErrorDismissed = false
                 WidgetUpdater.updateAll(getApplication())
                 if (_selectedDate.value == kboToday()) {
                     syncTodayGamesFromSnapshot(it)
@@ -493,12 +525,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .onFailure { e ->
                 if (e is CancellationException) throw e
                 Log.e("LiveVM", "refreshOnce", e)
-                if (_snapshot.value == null) {
+                val snap = _snapshot.value
+                if (snap == null) {
                     _refreshError.value = e.message ?: "경기를 불러오지 못했습니다."
                     return@onFailure
                 }
-                if (!force) return@onFailure
-                _refreshError.value = null
+                val whenStr = java.text.SimpleDateFormat("HH:mm", java.util.Locale.KOREA)
+                    .format(java.util.Date(snap.updatedAtMillis.coerceAtLeast(0L)))
+                val msg = "오프라인 · 마지막 갱신 $whenStr"
+                // 수동 새로고침 실패는 항상, 자동은 닫기 전 한 번만
+                if (force || !refreshErrorDismissed) {
+                    _refreshError.value = msg
+                }
             }
     }
 

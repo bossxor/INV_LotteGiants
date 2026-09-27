@@ -468,7 +468,7 @@ fun SettingsScreen(
                 Text(
                     when (liveMode) {
                         LiveDisplayMode.LOCK_NOW ->
-                            "상세와 같은 스코어카드. 원정/홈·구장·루상·선발."
+                            "Now Bar·상태바 칩용 라이브 바 (ProgressStyle). 잠금화면에 점수 칩이 올라갑니다."
                         LiveDisplayMode.FULL ->
                             "팀 로고·점수 카드. 하단에 양 팀 승리 예측 게이지. 경기 전에는 시각·선발·구장, 중에는 루상·투수·타자, 끝나면 승·패."
                         LiveDisplayMode.STATUS_SCORE ->
@@ -477,6 +477,28 @@ fun SettingsScreen(
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (liveMode == LiveDisplayMode.LOCK_NOW) {
+                    Spacer(Modifier.height(8.dp))
+                    val nowBar = remember { NotificationHelper.nowBarStatus(context) }
+                    Text(
+                        NotificationHelper.nowBarStatusLabel(nowBar),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (nowBar.apiOk && !nowBar.canPost) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "라이브 알림 설정 열기",
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { NotificationHelper.openNowBarSettings(context) }
+                                .padding(vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp,
+                        )
+                    }
+                }
                 Spacer(Modifier.height(14.dp))
                 val liveLead by store.liveLeadMinutesFlow.collectAsState(initial = 120)
                 Text("알림 표시 시작", fontWeight = FontWeight.SemiBold)
@@ -724,16 +746,39 @@ fun SettingsScreen(
         Spacer(Modifier.height(8.dp))
         SectionCard {
             Column {
-                val lastCrash = remember { CrashGuard.lastCrashSummary(context) }
+                var lastCrash by remember { mutableStateOf(CrashGuard.lastCrashSummary(context)) }
                 val exactOk = remember {
                     if (Build.VERSION.SDK_INT < 31) true
                     else context.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() == true
                 }
                 Text(
-                    "최근 크래시: ${lastCrash ?: "없음"}",
+                    "최근 크래시",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    lastCrash ?: "없음",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (lastCrash != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "기록 지우기",
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                CrashGuard.clearCrash(context)
+                                lastCrash = null
+                            }
+                            .padding(vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
                 Text(
                     if (exactOk) "정확한 알람: 허용됨" else "정확한 알람: 꺼짐",
                     fontSize = 13.sp,

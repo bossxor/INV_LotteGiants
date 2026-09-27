@@ -45,12 +45,27 @@ class LiveScoreService : Service() {
         NotificationHelper.createChannels(this)
         // 스냅샷·RemoteViews보다 먼저 FGS를 올려 타임아웃 강제종료를 막는다
         if (!foregroundStarted) {
-            ServiceCompat.startForeground(
-                this,
-                NotificationHelper.LIVE_NOTIFICATION_ID,
-                NotificationHelper.buildLiveBootstrapNotification(this),
-                if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
-            )
+            val ok = runCatching {
+                ServiceCompat.startForeground(
+                    this,
+                    NotificationHelper.LIVE_NOTIFICATION_ID,
+                    NotificationHelper.buildLiveBootstrapNotification(this),
+                    if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
+                )
+                true
+            }.getOrElse { t ->
+                Log.e(TAG, "startForeground failed", t)
+                CrashGuard.recordCrash(this, t)
+                false
+            }
+            if (!ok) {
+                // suspend 알림 갱신은 IO에서; 여기서는 FGS만 즉시 내린다
+                scope.launch {
+                    runCatching { NotificationHelper.refreshLiveNotificationIfNeeded(applicationContext) }
+                }
+                stopSelf()
+                return START_NOT_STICKY
+            }
             foregroundStarted = true
         }
         // DataStore await는 메인 스레드 runBlocking 금지 — IO에서 검사 후 LIVE가 아니면 stopSelf
@@ -58,7 +73,7 @@ class LiveScoreService : Service() {
             val repo = GiantsRepository.get(this@LiveScoreService)
             val enabled = repo.store.isLiveScoreEnabled()
             if (!enabled) {
-                stopSelf()
+                stopSelfSafely(removeNotification = true)
                 return@launch
             }
             val snap = repo.store.loadSnapshot()
@@ -68,14 +83,16 @@ class LiveScoreService : Service() {
 
             // LIVE가 아니면 FGS를 쓰지 않는다. startForegroundService 타임아웃·깜빡임 방지.
             if (game?.status != GameStatus.LIVE) {
-                if (shouldShowLive(game, lead)) {
+                val show = shouldShowLive(game, lead)
+                if (show) {
                     NotificationHelper.refreshLiveNotificationIfNeeded(applicationContext)
                 }
-                stopSelf()
+                // 알림을 남길 때는 DETACH, 아니면 REMOVE
+                stopSelfSafely(removeNotification = !show)
                 return@launch
             }
             if (!shouldShowLive(game, lead)) {
-                stopSelf()
+                stopSelfSafely(removeNotification = true)
                 return@launch
             }
 
@@ -107,7 +124,7 @@ class LiveScoreService : Service() {
             while (isActive) {
                 try {
                     if (!repo.store.isLiveScoreEnabled()) {
-                        stopSelf()
+                        stopSelfSafely(removeNotification = true)
                         break
                     }
                     val mode = repo.store.liveDisplayMode()
@@ -164,7 +181,7 @@ class LiveScoreService : Service() {
                             break
                         }
                         else -> {
-                            stopSelf()
+                            stopSelfSafely(removeNotification = true)
                             break
                         }
                     }
@@ -176,6 +193,20 @@ class LiveScoreService : Service() {
                 }
             }
         }
+    }
+
+    private fun stopSelfSafely(removeNotification: Boolean) {
+        if (foregroundStarted) {
+            runCatching {
+                ServiceCompat.stopForeground(
+                    this,
+                    if (removeNotification) ServiceCompat.STOP_FOREGROUND_REMOVE
+                    else ServiceCompat.STOP_FOREGROUND_DETACH,
+                )
+            }
+            foregroundStarted = false
+        }
+        stopSelf()
     }
 
     private fun liveGame(snap: LiveSnapshot?, lead: Int) =
@@ -230,7 +261,12 @@ class LiveScoreService : Service() {
     override fun onDestroy() {
         pollJob?.cancel()
         scope.cancel()
-        foregroundStarted = false
+        if (foregroundStarted) {
+            runCatching {
+                ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+            }
+            foregroundStarted = false
+        }
         super.onDestroy()
     }
 
@@ -266,6 +302,11 @@ class LiveScoreService : Service() {
                     return@launch
                 }
                 runCatching { app.startForegroundService(i) }
+                    .onFailure { t ->
+                        Log.e(TAG, "startForegroundService failed", t)
+                        CrashGuard.recordCrash(app, t)
+                        runCatching { NotificationHelper.refreshLiveNotificationIfNeeded(app) }
+                    }
             }
         }
 

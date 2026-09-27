@@ -17,14 +17,7 @@ object ScoreShare {
 
     fun share(context: Context, game: LotteGameInfo) {
         val deepLink = "sajik://game/${game.gameId}?tab=relay"
-        val caption = buildString {
-            append(game.focusName())
-            append(" ${game.lotteScore}:${game.opponentScore} ")
-            append(game.opponentName)
-            append(" · ${game.inningLabel}")
-            append("\n#집관")
-            append("\n$deepLink")
-        }
+        val caption = buildCaption(game) + "\n#집관\n$deepLink"
         val bitmap = renderBoard(game)
         val dir = File(context.cacheDir, "shares").apply { mkdirs() }
         val file = File(dir, "sajik-score.png")
@@ -53,6 +46,28 @@ object ScoreShare {
             putExtra(Intent.EXTRA_TEXT, body)
         }
         context.startActivity(Intent.createChooser(send, subject))
+    }
+
+    /** 캡션·보드 부제에 공통으로 쓰는 한 줄 요약. */
+    fun buildCaption(game: LotteGameInfo): String = buildString {
+        val date = game.gameDate.take(10).ifBlank { "" }
+        if (date.isNotBlank()) append("$date · ")
+        append(statusLabel(game))
+        append(" · ")
+        append(if (game.isHome) "홈" else "원정")
+        append("\n")
+        append(game.focusName())
+        append(" ${game.lotteScore}:${game.opponentScore} ")
+        append(game.opponentName)
+        append(" · ${game.inningLabel.ifBlank { game.startTime.ifBlank { "-" } }}")
+        if (game.stadium.isNotBlank()) append(" · ${game.stadium}")
+    }
+
+    private fun statusLabel(game: LotteGameInfo): String = when (game.status) {
+        GameStatus.LIVE -> if (game.isSuspended) "중단" else "LIVE"
+        GameStatus.ENDED -> "종료"
+        GameStatus.CANCELED -> "취소"
+        GameStatus.BEFORE -> "예정"
     }
 
     private fun renderBoard(g: LotteGameInfo): Bitmap {
@@ -98,7 +113,15 @@ object ScoreShare {
             scorePaint.textSize = 72f
             c.drawText(":", w * 0.5f, 330f, scorePaint)
         }
-        c.drawText(g.inningLabel.ifBlank { g.startTime }, w * 0.5f, 470f, sub)
+        val subLine = buildString {
+            append(statusLabel(g))
+            append(" · ")
+            append(if (g.isHome) "홈" else "원정")
+            append(" · ")
+            append(g.inningLabel.ifBlank { g.startTime })
+            if (g.stadium.isNotBlank()) append(" · ${g.stadium}")
+        }
+        c.drawText(subLine, w * 0.5f, 470f, sub)
         c.drawText("#집관", w * 0.5f, 520f, sub)
         return bmp
     }

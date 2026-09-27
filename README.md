@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.21` (`versionCode` **2021**) |
+| **버전** | `2.0.22` (`versionCode` **2022**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.netlify.app/) |
@@ -123,7 +123,7 @@
 
 | 계층 | 역할 | 주기 |
 |------|------|------|
-| **AlertWatchService** | 포그라운드 감시. 등말소 **14–23시** 또는 라인업 창만 | 라인업 창 **15초** · 그 외 **45초** |
+| **AlertWatchService** | 포그라운드 감시(`specialUse`). 등말소 **14–23시** 또는 라인업 창만 | 라인업 창 **15초** · 그 외 **45초** |
 | **AlarmManager** | 라인업·등말소 백업. 감시와 겹치면 건너뜀 | 25~35초 |
 | **WorkManager** | 전체 스냅샷·알람 재등록. 프로세스가 죽어도 15분 안에 다시 잡는다 | 15분 (보조) |
 
@@ -237,7 +237,7 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.21` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.22` |
 | `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2021` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.

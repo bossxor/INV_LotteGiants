@@ -150,6 +150,7 @@ class MainActivity : ComponentActivity() {
                 val playerLoading by vm.playerLoading.collectAsState()
                 val favoriteCodes by vm.favoriteCodes.collectAsState()
                 val favoritePlayers by vm.favoritePlayers.collectAsState()
+                val favoriteStats by vm.favoriteStats.collectAsState()
                 val viewingGame by vm.viewingGame.collectAsState()
                 val viewingLoading by vm.viewingLoading.collectAsState()
                 val resultsTeamCode by vm.resultsTeamCode.collectAsState()
@@ -320,6 +321,7 @@ class MainActivity : ComponentActivity() {
                     playerLoading = playerLoading,
                     favoriteCodes = favoriteCodes,
                     favoritePlayers = favoritePlayers,
+                    favoriteStats = favoriteStats,
                     onPlayerClick = { slot ->
                         vm.loadPlayerDetail(slot, viewingGame?.gameId ?: snapshot?.lotteGame?.gameId)
                     },
@@ -478,6 +480,7 @@ private fun AppScaffold(
     playerLoading: Boolean,
     favoriteCodes: Set<String>,
     favoritePlayers: List<com.bossxor.lottegiants.domain.FavoritePlayer>,
+    favoriteStats: Map<String, com.bossxor.lottegiants.domain.PlayerDetail> = emptyMap(),
     onPlayerClick: (LineupSlot) -> Unit,
     onPitcherClick: (com.bossxor.lottegiants.domain.PitcherLine) -> Unit,
     onLeaderPlayerClick: (LeaderPlayer) -> Unit,
@@ -760,6 +763,7 @@ private fun AppScaffold(
                     )
                     2 -> PlayersScreen(
                         favoritePlayers = favoritePlayers,
+                        favoriteStats = favoriteStats,
                         jerseyPlayers = jerseyPlayers,
                         playersTeamCode = playersTeamCode,
                         myTeamCode = myTeamCode,
