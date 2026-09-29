@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.22` (`versionCode` **2022**) |
+| **버전** | `2.0.23` (`versionCode` **2023**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.netlify.app/) |
@@ -237,8 +237,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.22` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2021` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.23` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2023` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -288,6 +288,9 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.23** | 실시간 알림 팀 로고 캐시 선로딩(재설치 후 이니셜 표시 수정), CI `setup-android` 오류 수정으로 `latest` 자동 배포 복구 |
+| **2.0.22** | `dataSync` FGS 한도 초과 강제종료 수정, 설정 진단 스택, 오프라인 배너, 즐겨찾기 시즌 성적, 점수 공유, Now Bar |
+| **2.0.21** | 등번호 일람 구단 전체(1군·퓨처스), `latest` Latest 배지 정정 |
 | **2.0.20** | FGS `start()` 비동기화, mid-game GAME_START 억제, 커서에 득점권·seenPitchers, 위젯 DH·홀드, 스냅샷 캐시 4초 |
 | **2.0.18** | 8회말·연장 재알림 방지, 득점권 주자 코드 매칭, 빈 서명 업데이트 거부, 우천 라벨 오탐 완화 |
 | **2.0.17** | 크래시 후 감시 즉시 재기동, FGS 오기동 완화, DataStore 읽기 안전화, CI unit test, 설정 진단·서명 체크리스트 |
