@@ -269,6 +269,7 @@ object NotificationHelper {
             if (dismissed.isNotBlank() && dismissed == finishedLiveKey(game)) return
         }
         val mode = repo.store.liveDisplayMode()
+        warmLiveLogos(app, game)
         val n = buildLiveNotification(app, game, mode, snap.winProbSeries)
         notifyLive(app, n, liveNotificationKey(game, mode))
         if (game.status == GameStatus.LIVE) {
@@ -641,6 +642,14 @@ object NotificationHelper {
         val awayLogoUrl: String,
         val homeLogoUrl: String,
     )
+
+    /** buildLiveNotification 은 캐시만 읽으므로, 호출 전에 IO 에서 로고 캐시를 채운다. */
+    suspend fun warmLiveLogos(context: Context, game: LotteGameInfo?) {
+        if (game == null) return
+        val s = cardSides(game)
+        WidgetAssets.loadTeamLogoBitmap(context, s.awayCode, s.awayLogoUrl, s.awayName)
+        WidgetAssets.loadTeamLogoBitmap(context, s.homeCode, s.homeLogoUrl, s.homeName)
+    }
 
     private fun cardSides(game: LotteGameInfo): CardSides {
         val oppCode = game.opponentCode.ifBlank { teamNameToCode(game.opponentName) }

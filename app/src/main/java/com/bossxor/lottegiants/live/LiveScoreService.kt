@@ -96,6 +96,7 @@ class LiveScoreService : Service() {
                 return@launch
             }
 
+            NotificationHelper.warmLiveLogos(applicationContext, game)
             val notification = NotificationHelper.buildLiveNotification(
                 this@LiveScoreService,
                 game,
@@ -136,6 +137,7 @@ class LiveScoreService : Service() {
                         continue
                     }
                     val game = liveGame(snap, lead)
+                    NotificationHelper.warmLiveLogos(applicationContext, game)
                     val live = NotificationHelper.buildLiveNotification(
                         this@LiveScoreService,
                         game,
