@@ -253,7 +253,7 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.apk --dir $env:TEMP --clobber
 ```
 
-또는 릴리스 페이지에서 태그 **`latest`** (제목 `latest (2.0.x)`)의 `LotteGiants.apk`를 받는다.
+또는 릴리스 페이지에서 태그 **`latest`** (제목 `v2.0.x-yyMMdd`)의 `LotteGiants.apk`를 받는다.
 
 1. **프로세스 시작과 동시에** `latest` 릴리스 본문 `versionCode`를 본다. 이미 최신이면 `update.json`을 받지 않는다 (1.3.72).
 2. 더 크면 APK를 GitHub API 에셋으로 받고 **앱 내부 PackageInstaller**로 갱신
