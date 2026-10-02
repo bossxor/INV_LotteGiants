@@ -216,7 +216,7 @@ fun PlayersScreen(
                     )
                 }
             } else {
-                items(filtered, key = { "${it.backNumber}-${it.name}-${it.playerCode}" }) { p ->
+                items(filtered.distinctBy { "${it.backNumber}-${it.name}-${it.playerCode}" }, key = { "${it.backNumber}-${it.name}-${it.playerCode}" }) { p ->
                     JerseyPlayerRow(p, onClick = { onJerseyClick(p) })
                 }
             }

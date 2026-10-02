@@ -394,7 +394,7 @@ enum class LiveDisplayMode {
     FULL,
     /** 로고와 점수만 */
     STATUS_SCORE,
-    /** Now Bar·상태바 칩용 Live Update (ProgressStyle) */
+    /** Now Bar·상태바 칩용 Live Update (표준 템플릿, 커스텀 뷰 없음) */
     LOCK_NOW,
 }
 

@@ -260,7 +260,7 @@ fun ResultsScreen(
                 }
                 Spacer(Modifier.height(8.dp))
                 val focus = myTeamCode.ifBlank { LOTTE_TEAM_CODE }
-                val visibleGames = remember(games, focus) { games.sortedWith(teamFirstComparator(focus)) }
+                val visibleGames = remember(games, focus) { games.distinctBy { it.gameId }.sortedWith(teamFirstComparator(focus)) }
                 val lotteGames = visibleGames.filter { it.involvesTeam(focus) }
                 val swipeModifier = Modifier
                     .weight(1f)
@@ -347,7 +347,7 @@ private fun TeamSeasonList(
     val wins = ended.count { it.teamWon(teamCode) == true }
     val losses = ended.count { it.teamWon(teamCode) == false }
     val draws = ended.count { it.teamWon(teamCode) == null }
-    val grouped = remember(teamGames) { teamGames.groupBy { it.gameDate }.toList() }
+    val grouped = remember(teamGames) { teamGames.distinctBy { it.gameId }.groupBy { it.gameDate }.toList() }
 
     Column(modifier.fillMaxWidth()) {
         Text(
@@ -600,6 +600,7 @@ private fun CalendarMonthView(
         )
         Spacer(Modifier.height(8.dp))
         val games = selectedGames
+            .distinctBy { it.gameId }
             .filter { filterTeamCode.isBlank() || it.involvesTeam(filterTeamCode) }
             .sortedWith(teamFirstComparator(focusTeamCode))
         LazyColumn(

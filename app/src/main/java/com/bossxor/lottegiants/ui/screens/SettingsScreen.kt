@@ -404,7 +404,7 @@ fun SettingsScreen(
         Spacer(Modifier.height(24.dp))
         Text("실시간 스코어 표시", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text(
-            "라이브 바·상세·점수만은 모두 알림 서랍 스코어카드입니다. 상세는 루상·선발·승률, 점수만은 로고와 점수입니다.",
+            "라이브 바는 Now Bar(잠금화면·상태바 칩)에 점수를 올리고, 끝나면 스코어카드로 바꿉니다. 상세·점수만은 알림 서랍 스코어카드입니다.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 12.sp,
         )
@@ -468,7 +468,7 @@ fun SettingsScreen(
                 Text(
                     when (liveMode) {
                         LiveDisplayMode.LOCK_NOW ->
-                            "Now Bar·상태바 칩용 라이브 바 (ProgressStyle). 잠금화면에 점수 칩이 올라갑니다."
+                            "Now Bar 라이브 알림. 접으면 점수·이닝, 펼치면 이닝·아웃·볼카운트·루상·투수·타자."
                         LiveDisplayMode.FULL ->
                             "팀 로고·점수 카드. 하단에 양 팀 승리 예측 게이지. 경기 전에는 시각·선발·구장, 중에는 루상·투수·타자, 끝나면 승·패."
                         LiveDisplayMode.STATUS_SCORE ->
@@ -488,7 +488,7 @@ fun SettingsScreen(
                     if (nowBar.apiOk && !nowBar.canPost) {
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "라이브 알림 설정 열기",
+                            "개발자 옵션 열기",
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .clickable { NotificationHelper.openNowBarSettings(context) }

@@ -3,8 +3,6 @@ package com.bossxor.lottegiants.live
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
-import android.os.Build
 import android.os.IBinder
 import androidx.core.app.ServiceCompat
 import com.bossxor.lottegiants.data.GiantsRepository
@@ -50,7 +48,8 @@ class LiveScoreService : Service() {
                     this,
                     NotificationHelper.LIVE_NOTIFICATION_ID,
                     NotificationHelper.buildLiveBootstrapNotification(this),
-                    if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0,
+                    // dataSync는 Android 15+ 하루 6시간 한도 → 연이틀·더블헤더면 onTimeout 크래시. specialUse는 한도 없음.
+                    AlertWatchService.foregroundType(),
                 )
                 true
             }.getOrElse { t ->
@@ -103,7 +102,7 @@ class LiveScoreService : Service() {
                 mode,
                 snap?.winProbSeries.orEmpty(),
             )
-            val notifyKey = NotificationHelper.liveNotificationKey(game, mode)
+            val notifyKey = NotificationHelper.liveNotificationKey(this@LiveScoreService, game, mode)
             if (pollJob?.isActive == true) {
                 NotificationHelper.notifyLive(this@LiveScoreService, notification, notifyKey)
                 return@launch
@@ -144,7 +143,7 @@ class LiveScoreService : Service() {
                         mode,
                         snap?.winProbSeries.orEmpty(),
                     )
-                    val notifyKey = NotificationHelper.liveNotificationKey(game, mode)
+                    val notifyKey = NotificationHelper.liveNotificationKey(this@LiveScoreService, game, mode)
                     if (game?.status != GameStatus.LIVE || !shouldShowLive(game, lead)) {
                         val pinned = repo.store.isLiveNotificationPinned()
                         if (pinned) {
