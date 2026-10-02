@@ -81,6 +81,7 @@ import com.bossxor.lottegiants.domain.liveLeadLabel
 import com.bossxor.lottegiants.live.CrashGuard
 import com.bossxor.lottegiants.live.LiveScoreService
 import com.bossxor.lottegiants.live.NotificationHelper
+import com.bossxor.lottegiants.live.NowBarPreview
 import com.bossxor.lottegiants.widget.WidgetUpdater
 import com.bossxor.lottegiants.ui.LoseRed
 import com.bossxor.lottegiants.ui.LotteRed
@@ -468,7 +469,7 @@ fun SettingsScreen(
                 Text(
                     when (liveMode) {
                         LiveDisplayMode.LOCK_NOW ->
-                            "Now Bar 라이브 알림. 접으면 점수·이닝, 펼치면 이닝·아웃·볼카운트·루상·투수·타자."
+                            "Now Bar 라이브 알림. 로고·점수·이닝 한 줄 알약 + 카드(경기 전 선발·순위·승률, 경기 중 루상·아웃·투수·타자·이닝별 점수, 경기 후 결과·다음 경기)."
                         LiveDisplayMode.FULL ->
                             "팀 로고·점수 카드. 하단에 양 팀 승리 예측 게이지. 경기 전에는 시각·선발·구장, 중에는 루상·투수·타자, 끝나면 승·패."
                         LiveDisplayMode.STATUS_SCORE ->
@@ -485,6 +486,14 @@ fun SettingsScreen(
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    Spacer(Modifier.height(8.dp))
+                    Text("미리보기 (잠시 뒤 실제 알림으로 돌아갑니다)", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ModeChip("경기 전", false) { scope.launch { NowBarPreview.post(context, NowBarPreview.State.BEFORE) } }
+                        ModeChip("경기 중", false) { scope.launch { NowBarPreview.post(context, NowBarPreview.State.LIVE) } }
+                        ModeChip("경기 후", false) { scope.launch { NowBarPreview.post(context, NowBarPreview.State.ENDED) } }
+                    }
                     if (nowBar.apiOk && !nowBar.canPost) {
                         Spacer(Modifier.height(6.dp))
                         Text(

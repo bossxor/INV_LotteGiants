@@ -6,16 +6,22 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Typeface
 import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
+import android.text.style.TypefaceSpan
 import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.graphics.drawable.toBitmap
 import com.bossxor.lottegiants.MainActivity
 import com.bossxor.lottegiants.R
 import com.bossxor.lottegiants.data.NotificationType
@@ -24,6 +30,8 @@ import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.LiveSnapshot
+import com.bossxor.lottegiants.domain.NowBarContent
+import com.bossxor.lottegiants.domain.NowBarText
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.WinProbPoint
 import com.bossxor.lottegiants.domain.LIVE_LEAD_MINUTES_DEFAULT
@@ -79,10 +87,17 @@ object NotificationHelper {
     @Volatile private var lastLiveCustom: Boolean? = null
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 9
+    private const val LIVE_NOTIFY_STYLE_REV = 18
     private const val COLOR_LOTTE = 0xFFC8102E.toInt()
+    private const val COLOR_CHIP = 0xFF2F6FED.toInt()
+    private const val COLOR_LABEL = 0xFF8A8F98.toInt()
 
-    fun liveNotificationKey(context: Context, game: LotteGameInfo?, mode: LiveDisplayMode): String =
+    fun liveNotificationKey(
+        context: Context,
+        game: LotteGameInfo?,
+        mode: LiveDisplayMode,
+        nextGame: LotteGameInfo? = null,
+    ): String =
         LIVE_NOTIFY_STYLE_REV.toString() + "|" + listOf(
             game?.gameId,
             game?.status?.name,
@@ -98,6 +113,20 @@ object NotificationHelper {
             game?.isLotteBatting,
             game?.currentBatterName,
             game?.currentPitcherName,
+            game?.currentPitcherPitchCount,
+            game?.lotteStartingPitcher,
+            game?.opponentStartingPitcher,
+            game?.lotteRank,
+            game?.opponentRank,
+            game?.preview?.lotteStanding?.wra,
+            game?.winPitcherName,
+            game?.losePitcherName,
+            game?.savePitcherName,
+            nextGame?.gameId,
+            nextGame?.gameDate,
+            nextGame?.startTime,
+            nextGame?.lotteStartingPitcher,
+            nextGame?.opponentStartingPitcher,
             game?.isSuspended,
             mode.name,
             canPostNowBar(context),
@@ -274,8 +303,8 @@ object NotificationHelper {
         }
         val mode = repo.store.liveDisplayMode()
         warmLiveLogos(app, game)
-        val n = buildLiveNotification(app, game, mode, snap.winProbSeries)
-        notifyLive(app, n, liveNotificationKey(app, game, mode))
+        val n = buildLiveNotification(app, game, mode, snap.winProbSeries, snap.nextLotteGame)
+        notifyLive(app, n, liveNotificationKey(app, game, mode, snap.nextLotteGame))
         if (game.status == GameStatus.LIVE) {
             LiveScoreService.start(app)
         }
@@ -286,6 +315,7 @@ object NotificationHelper {
         game: LotteGameInfo?,
         mode: LiveDisplayMode = LiveDisplayMode.FULL,
         winProbSeries: List<WinProbPoint> = emptyList(),
+        nextGame: LotteGameInfo? = null,
     ): Notification {
         val intent = PendingIntent.getActivity(
             context, 0,
@@ -299,18 +329,11 @@ object NotificationHelper {
             "${game.focusName()} ${game.lotteScore} : ${game.opponentScore} ${game.opponentName}"
         }
         val summary = gameSummary(game)
-        val compactLine = gameCompactLine(game)
-        val chipText = nowBarChipText(game)
-        val headerLine = if (game != null && game.status == GameStatus.LIVE && !game.isSuspended) {
-            buildString {
-                append(game.inningLabel)
-                append(com.bossxor.lottegiants.domain.dhSuffix(game.doubleHeaderNo))
-                append(if (game.isLotteBatting) " · ${game.focusName()} 공격" else " · 상대 공격")
-            }
-        } else {
-            compactLine
-        }
 
+        val pregameProb = game?.takeIf { it.status == GameStatus.BEFORE }?.preview?.let {
+            NowBarText.pregameFocusProb(it.lotteStanding.wra, it.opponentStanding.wra)
+        }
+        val nowBar = NowBarText.build(game, nextGame, pregameProb)
         val (title, text) = when (mode) {
             LiveDisplayMode.STATUS_SCORE -> {
                 val shortTitle = if (game == null) "집관 라이브"
@@ -318,14 +341,14 @@ object NotificationHelper {
                 shortTitle to (game?.inningLabel ?: "")
             }
             LiveDisplayMode.FULL -> scoreTitle to summary
-            LiveDisplayMode.LOCK_NOW -> scoreTitle to nowBarSmallLine(game)
+            LiveDisplayMode.LOCK_NOW -> nowBar.title to nowBar.text
         }
 
         // 경기가 끝나면 서비스가 멈춰도 알림은 남는다. 손으로 지울 수 있게 두고 스스로 만료시킨다.
         val finished = game != null &&
             (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED)
         // Now Bar = Live Update. 커스텀 RemoteViews가 있으면 시스템이 승격을 거절한다. 끝나면 스코어카드.
-        val useNowBar = !finished && mode == LiveDisplayMode.LOCK_NOW
+        val useNowBar = mode == LiveDisplayMode.LOCK_NOW
         val scoreOnly = mode == LiveDisplayMode.STATUS_SCORE
         val useScorecard = !useNowBar && game != null
         val channel = if (useNowBar) CHANNEL_LIVE_NOW else CHANNEL_LIVE_CARD
@@ -340,8 +363,8 @@ object NotificationHelper {
             .setContentTitle(title)
             .setContentText(text)
             .setContentIntent(intent)
-            .setOngoing(!finished)
-            .setAutoCancel(finished)
+            .setOngoing(useNowBar || !finished)
+            .setAutoCancel(finished && !useNowBar)
             .setOnlyAlertOnce(true)
             .setSilent(true)
             .setShowWhen(false)
@@ -361,27 +384,31 @@ object NotificationHelper {
         )
 
         if (useNowBar) {
-            if (chipText.isNotBlank()) {
-                builder
-                    .setSubText(chipText)
-                    .setShortCriticalText(chipText)
-            }
-            builder.setRequestPromotedOngoing(true)
-            applySamsungOngoingExtras(builder, context, chipText, title, text)
-            if (game != null && game.status == GameStatus.LIVE && !game.isSuspended) {
-                // 큰 화면 오른쪽에 루상 다이아몬드
-                androidx.core.content.ContextCompat.getDrawable(
-                    context,
-                    WidgetAssets.basesDrawable(game.onBase1, game.onBase2, game.onBase3),
-                )?.let { builder.setLargeIcon(it.toBitmap(128, 128)) }
-            }
+            val chip = nowBar.chip
             builder
-                .setStyle(
-                    NotificationCompat.BigTextStyle()
-                        .setBigContentTitle(title)
-                        .bigText(nowBarBigText(game, summary)),
+                .setSubText(nowBar.chipSub.ifBlank { null })
+                .setShortCriticalText(chip)
+                .setRequestPromotedOngoing(true)
+            val pair = if (game != null) {
+                val s = nowBarSides(game)
+                NowBarArt.logoPair(
+                    WidgetAssets.loadTeamLogoBitmapCachedOnly(context, s.leftCode, s.leftName),
+                    WidgetAssets.loadTeamLogoBitmapCachedOnly(context, s.rightCode, s.rightName),
+                    if (game.status == GameStatus.BEFORE) "vs" else "",
+                    game.takeIf { it.status == GameStatus.LIVE && !it.isSuspended },
                 )
-                .setDeleteIntent(hide)
+            } else {
+                null
+            }
+            val card = game?.let { buildLiveRemoteViews(context, it, winProbSeries, nowBar, pregameProb) }
+            applySamsungOngoingExtras(builder, context, nowBar, pair, card)
+            val style = NotificationCompat.BigTextStyle()
+                .setBigContentTitle(title)
+                .bigText(nowBarBigText(nowBar))
+            if (pair != null) builder.setLargeIcon(pair)
+            // 삼성 카드가 contentText를 카드 아래 글자 한 줄로 따로 그린다. 카드 안에 다 있으므로 뺀다.
+            builder.setContentText(null).setStyle(style).setDeleteIntent(hide)
+            if (finished) builder.addAction(0, "닫기", hide)
         } else if (useScorecard) {
             val publicNotification = NotificationCompat.Builder(context, channel)
                 .setSmallIcon(R.drawable.ic_notification)
@@ -414,52 +441,47 @@ object NotificationHelper {
         }
 
         val notification = builder.build()
-        if (useNowBar && chipText.isNotBlank()) {
-            notification.extras.putString("android.shortCriticalText", chipText)
+        if (useNowBar && nowBar.chip.isNotBlank()) {
+            notification.extras.putString("android.shortCriticalText", nowBar.chip)
         }
         return notification
     }
 
-    /** 라이브 바 접힌 화면: 이닝만 (점수는 제목). */
-    private fun nowBarSmallLine(game: LotteGameInfo?): String = when {
-        game == null -> "대기 중"
-        game.isSuspended -> game.suspendLabel
-        game.status == GameStatus.BEFORE -> buildString {
-            append(kickoffTime(game))
-            if (game.stadium.isNotBlank()) append(" · ${game.stadium}")
-        }
-        else -> game.inningLabel + com.bossxor.lottegiants.domain.dhSuffix(game.doubleHeaderNo)
+    /** 왼쪽 = 원정(초 공격), 오른쪽 = 홈(말 공격). */
+    private data class NowBarSides(val leftCode: String, val leftName: String, val rightCode: String, val rightName: String)
+
+    private fun nowBarSides(game: LotteGameInfo): NowBarSides {
+        val mine = game.focusTeamCode.ifBlank { LOTTE_TEAM_CODE }
+        val opp = game.opponentCode.ifBlank { teamNameToCode(game.opponentName) }
+        return if (game.isHome) NowBarSides(opp, game.opponentName, mine, game.focusName())
+        else NowBarSides(mine, game.focusName(), opp, game.opponentName)
     }
 
-    /** 라이브 바 펼친 화면: 이닝·공격, 아웃·볼카운트, 루상, 투수·타자. */
-    private fun nowBarBigText(game: LotteGameInfo?, fallback: String): String {
-        if (game == null || game.status != GameStatus.LIVE || game.isSuspended) return fallback
-        fun dots(n: Int, max: Int) = "●".repeat(n.coerceIn(0, max)) + "○".repeat(max - n.coerceIn(0, max))
-        return buildString {
-            append(game.inningLabel)
-            append(com.bossxor.lottegiants.domain.dhSuffix(game.doubleHeaderNo))
-            append(if (game.isLotteBatting) " · ${game.focusName()} 공격" else " · 상대 공격")
-            append("\n아웃 ${dots(game.out, 2)}   B ${dots(game.ball, 3)}  S ${dots(game.strike, 2)}")
-            append("\n루상 ${basesLabel(game)}")
-            append("\n투수 ${game.currentPitcherName.ifBlank { "-" }}")
-            if (game.currentPitcherPitchCount > 0) append(" ${game.currentPitcherPitchCount}구")
-            append(" · 타자 ")
-            if (game.currentBatterOrder > 0) append("${game.currentBatterOrder}번 ")
-            append(game.currentBatterName.ifBlank { "-" })
-        }
-    }
-
-    /** Now Bar 칩용. 대략 7자면 잘린다. 점수는 `3:2`, 예정은 `18:30`. */
-    fun nowBarChipText(game: LotteGameInfo?): String {
-        val raw = when {
-            game == null -> "대기"
-            game.status == GameStatus.BEFORE -> {
-                val t = game.startTime.trim()
-                Regex("""\d{1,2}:\d{2}""").find(t)?.value ?: t.ifBlank { "예정" }
+    /** 펼친 화면 글자. 라벨은 회색 굵게, 이닝 점수표는 고정폭. */
+    private fun nowBarBigText(c: NowBarContent): CharSequence {
+        val sb = SpannableStringBuilder()
+        fun nl() { if (sb.isNotEmpty()) sb.append('\n') }
+        c.lines.forEach { (label, value) ->
+            nl()
+            if (label.isBlank()) {
+                val st = sb.length
+                sb.append(value)
+                sb.setSpan(StyleSpan(Typeface.BOLD), st, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            } else {
+                val st = sb.length
+                sb.append(label)
+                sb.setSpan(ForegroundColorSpan(COLOR_LABEL), st, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                sb.setSpan(StyleSpan(Typeface.BOLD), st, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                sb.append("  ").append(value)
             }
-            else -> "${game.lotteScore}:${game.opponentScore}"
         }
-        return if (raw.length <= 7) raw else raw.take(7)
+        if (c.lineScore.isNotEmpty()) {
+            nl()
+            val st = sb.length
+            sb.append(c.lineScore.joinToString("\n"))
+            sb.setSpan(TypefaceSpan("monospace"), st, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        return sb
     }
 
     fun canPostNowBar(context: Context): Boolean {
@@ -537,51 +559,31 @@ object NotificationHelper {
     private fun applySamsungOngoingExtras(
         builder: NotificationCompat.Builder,
         context: Context,
-        chipText: String,
-        primary: String,
-        secondary: String,
+        c: NowBarContent,
+        chipArt: Bitmap?,
+        card: RemoteViews?,
     ) {
-        val chip = chipText.ifBlank { primary.take(7) }
+        val appIcon = Icon.createWithResource(context, R.drawable.ic_notification)
+        val chipIcon = chipArt?.let { Icon.createWithBitmap(it) } ?: appIcon
         val extras = Bundle().apply {
             putInt("android.ongoingActivityNoti.style", 1)
-            putString("android.ongoingActivityNoti.primaryInfo", primary)
-            putString("android.ongoingActivityNoti.secondaryInfo", secondary)
-            putParcelable(
-                "android.ongoingActivityNoti.secondaryInfoIcon",
-                Icon.createWithResource(context, R.drawable.ic_notification),
-            )
-            putInt("android.ongoingActivityNoti.chipBgColor", COLOR_LOTTE)
-            putParcelable(
-                "android.ongoingActivityNoti.chipIcon",
-                Icon.createWithResource(context, R.drawable.ic_notification),
-            )
-            putString("android.ongoingActivityNoti.chipExpandedText", chip)
-            putString("android.ongoingActivityNoti.nowbarPrimaryInfo", chip)
-            putString("android.ongoingActivityNoti.nowbarSecondaryInfo", secondary)
+            putString("android.ongoingActivityNoti.primaryInfo", c.title)
+            putInt("android.ongoingActivityNoti.chipBgColor", COLOR_CHIP)
+            putParcelable("android.ongoingActivityNoti.chipIcon", chipIcon)
+            putString("android.ongoingActivityNoti.chipExpandedText", c.chip)
+            putString("android.ongoingActivityNoti.nowbarPrimaryInfo", c.chip)
+            putString("android.ongoingActivityNoti.nowbarSecondaryInfo", c.chipSub)
+            // 종료 카드의 「닫기」 버튼을 삼성 카드에도 노출 (값의 뜻은 비공개 — 1/0이 동작 확인됨 여부는 실기 확인)
+            putInt("android.ongoingActivityNoti.actionType", 1)
+            putInt("android.ongoingActivityNoti.actionPrimarySet", 0)
+            if (card != null) {
+                // 삼성 Live Notification의 커스텀 슬롯. 기본 글자 영역(primary)을 이 뷰로 바꾼다.
+                putParcelable("android.ongoingActivityNoti.chronometerRemoteView", card)
+                putInt("android.ongoingActivityNoti.chronometerRemoteViewPosition", 1)
+                putString("android.ongoingActivityNoti.chronometerRemoteViewTag", "lotte_card")
+            }
         }
         builder.addExtras(extras)
-    }
-
-    /** 알림 접힘 상태용 한 줄 */
-    private fun gameCompactLine(game: LotteGameInfo?): String {
-        if (game == null) return "대기 중"
-        if (game.isSuspended) return game.suspendLabel
-        if (game.status != GameStatus.LIVE) {
-            return game.inningLabel.ifBlank { game.opponentName }
-        }
-        return buildString {
-            append(game.inningLabel)
-            append("  ${basesLabel(game)}")
-            if (game.currentPitcherName.isNotBlank()) {
-                append("  투 ${game.currentPitcherName}")
-                if (game.currentPitcherPitchCount > 0) append("(${game.currentPitcherPitchCount})")
-            }
-            if (game.currentBatterName.isNotBlank()) {
-                append("  타 ")
-                if (game.currentBatterOrder > 0) append("${game.currentBatterOrder}번 ")
-                append(game.currentBatterName)
-            }
-        }
     }
 
     /** 루타앱 경기요약에 가까운 전체 텍스트 (요약 탭과 동일 소스) */
@@ -752,8 +754,15 @@ object NotificationHelper {
         context: Context,
         game: LotteGameInfo,
         winProbSeries: List<WinProbPoint> = emptyList(),
+        nowBar: NowBarContent? = null,
+        pregameProb: Double? = null,
     ): RemoteViews {
-        val rv = RemoteViews(context.packageName, R.layout.notification_live)
+        val rv = RemoteViews(
+            context.packageName,
+            if (nowBar != null) R.layout.notification_nowbar else R.layout.notification_live,
+        )
+        val night = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
         val side = cardSides(game)
         val awayName = side.awayName
         val homeName = side.homeName
@@ -827,7 +836,8 @@ object NotificationHelper {
         }
         rv.setTextViewText(R.id.notif_pitcher_line, pitcherLine)
         rv.setTextViewText(R.id.notif_batter_line, batterLine)
-        val showWinProb = WinProb.shouldShowWinProbBar(game)
+        val showWinProb = (WinProb.shouldShowWinProbBar(game) && nowBar == null) ||
+            (game.status == GameStatus.BEFORE && pregameProb != null)
         rv.setViewVisibility(R.id.notif_winprob_row, if (showWinProb) View.VISIBLE else View.GONE)
         fun setDots(ids: IntArray, count: Int, kind: Char) {
             ids.forEachIndexed { i, id ->
@@ -841,10 +851,9 @@ object NotificationHelper {
         setDots(intArrayOf(R.id.notif_s0, R.id.notif_s1, R.id.notif_s2), strike, 'S')
         setDots(intArrayOf(R.id.notif_o0, R.id.notif_o1, R.id.notif_o2), out, 'O')
 
-        val lotteProb = WinProb.resolveDisplayFocusProb(
-            game,
-            winProbSeries.lastOrNull()?.homeProb,
-        ) ?: estimateLotteWinProb(game)
+        val lotteProb = pregameProb.takeIf { game.status == GameStatus.BEFORE }
+            ?: WinProb.resolveDisplayFocusProb(game, winProbSeries.lastOrNull()?.homeProb)
+            ?: estimateLotteWinProb(game)
         val (awayProb, homeProb) = WinProb.awayHomeFromFocus(game, lotteProb)
         if (showWinProb) {
             val (awayPct, homePct) = WinProb.displayPercents(awayProb, homeProb)
@@ -856,6 +865,28 @@ object NotificationHelper {
                 rightColor = WidgetAssets.winProbBarColor(homeCode),
             )
             rv.setImageViewBitmap(R.id.notif_winprob_bar, bar)
+        }
+
+        val info = nowBar?.lines.orEmpty()
+            .filter { it.first == "일시" || it.first == "순위" || it.first == "다음" }
+            .joinToString("\n") { if (it.first == "일시") it.second else "${it.first}  ${it.second}" }
+        rv.setViewVisibility(R.id.notif_info_line, if (info.isNotBlank()) View.VISIBLE else View.GONE)
+        if (info.isNotBlank()) rv.setTextViewText(R.id.notif_info_line, info)
+        val showBoard = nowBar != null && game.status != GameStatus.BEFORE &&
+            (game.lotteInningScores.isNotEmpty() || game.opponentInningScores.isNotEmpty())
+        rv.setViewVisibility(R.id.notif_scoreboard, if (showBoard) View.VISIBLE else View.GONE)
+        if (showBoard) rv.setImageViewBitmap(R.id.notif_scoreboard, NowBarArt.scoreboard(game, night))
+        if (nowBar != null) {
+            val ink = if (night) 0xFFF2F2F2.toInt() else 0xFF1B1B1F.toInt()
+            val sub = if (night) 0xFFB5B8BF.toInt() else 0xFF5F636B.toInt()
+            intArrayOf(
+                R.id.notif_away_name, R.id.notif_home_name,
+                R.id.notif_pitcher_line, R.id.notif_batter_line, R.id.notif_info_line,
+            ).forEach { rv.setTextColor(it, ink) }
+            intArrayOf(
+                R.id.notif_away_place, R.id.notif_home_place, R.id.notif_venue,
+                R.id.notif_winprob_left, R.id.notif_winprob_right,
+            ).forEach { rv.setTextColor(it, sub) }
         }
 
         val awayBmp = WidgetAssets.loadTeamLogoBitmapCachedOnly(context, awayCode, awayName)

@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.24` (`versionCode` **2024**) |
+| **버전** | `2.0.25` (`versionCode` **2025**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.netlify.app/) |
@@ -93,11 +93,11 @@
 
 | 모드 | 설명 |
 |------|------|
-| **라이브 바** | Now Bar(잠금화면·상태바 칩) Live Update. 칩은 점수(`3:2`), 접힘은 점수·이닝, 펼침은 이닝·공격, 아웃·볼카운트(●○), 루상(타순), 투수·타자 + 루상 다이아몬드. 종료되면 스코어카드 |
+| **라이브 바** | Now Bar(잠금화면 알약·상태바 칩·알림 카드) Live Update. 원정이 왼쪽, 홈이 오른쪽. 알약은 로고·점수·이닝 한 줄. 카드: 경기 전 선발·순위·승리확률(두 팀 승률 Log5)·일시, 경기 중 루상 다이아몬드·B/S/O·투수(구수)·타자·이닝별 점수표(R H E), 경기 후 승패투수·이닝별 점수표·다음 경기 |
 | **상세 알림** | 스코어카드. 펼치면 승률 바·투수/타자·루상 |
 | **점수만** | 로고와 점수만 있는 스코어카드 |
 
-**Now Bar 조건 (2.0.24)** — Live Update는 커스텀 RemoteViews가 있으면 승격되지 않아 라이브 바만 표준 템플릿(BigText + `setShortCriticalText` + `setRequestPromotedOngoing`)을 쓴다. 삼성 One UI는 허용 목록 밖 앱을 승격하지 않으므로(`canPostPromotedNotifications()` false) **개발자 옵션 › 「모든 앱의 실시간 정보 보기」**를 켜야 한다. 앱 코드로 우회할 수 없다. 설정의 「개발자 옵션 열기」로 바로 간다.
+**Now Bar 조건 (2.0.24~)** — Live Update는 `contentView` 커스텀 RemoteViews가 있으면 승격되지 않는다. 그래서 알림 본체는 표준 템플릿(BigText + `setShortCriticalText` + `setRequestPromotedOngoing`)이고, 로고·점수 화면은 삼성 비공개 extras 슬롯 `android.ongoingActivityNoti.chronometerRemoteView`에 `notification_nowbar.xml`을 넣어 그린다. 알약은 이 뷰의 **윗줄만 잘라서** 보여 주므로 윗줄(로고·점수·이닝)을 좁게 유지해야 한다. 이닝별 점수표는 `NowBarArt.scoreboard` 비트맵. 설정의 「미리보기」(경기 전/중/후)로 경기가 없어도 확인한다. 삼성 One UI는 허용 목록 밖 앱을 승격하지 않으므로(`canPostPromotedNotifications()` false) **개발자 옵션 › 「모든 앱의 실시간 정보 보기」**를 켜야 한다. 앱 코드로 우회할 수 없다. 설정의 「개발자 옵션 열기」로 바로 간다.
 
 - 설정한 **경기 시작 N분 전**(30분~4시간, 30분 단위, 기본 2시간)부터 표시
 - 경기 중에는 항상 표시. 종료·취소 카드를 밀어 지우면 같은 경기는 다시 안 올림. **다시 표시**나 새 LIVE만 예외 (1.3.83)
@@ -237,8 +237,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.24` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2024` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.25` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2025` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -288,6 +288,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.25** | 라이브 바 전면 개편: 삼성 `chronometerRemoteView` 슬롯으로 팀 로고 카드(원정 왼쪽·홈 오른쪽), 경기 전 선발·순위·승률, 경기 중 다이아몬드·B/S/O·이닝별 점수표, 경기 후 결과·다음 경기, 잠금화면 알약 윗줄, 설정 미리보기 |
 | **2.0.24** | 라이브 스코어 FGS `dataSync`→`specialUse`(하루 6시간 한도 초과 강제종료 수정), 라이브 바를 Now Bar 표준 템플릿으로 개편(진행 바 제거, 루상·아웃·볼카운트), 점수마다 알림 cancel 하던 깜빡임 제거, 결과·선수 목록 키 중복 크래시 방지 |
 | **2.0.23** | 실시간 알림 팀 로고 캐시 선로딩(재설치 후 이니셜 표시 수정), CI `setup-android` 오류 수정으로 `latest` 자동 배포 복구 |
 | **2.0.22** | `dataSync` FGS 한도 초과 강제종료 수정, 설정 진단 스택, 오프라인 배너, 즐겨찾기 시즌 성적, 점수 공유, Now Bar |

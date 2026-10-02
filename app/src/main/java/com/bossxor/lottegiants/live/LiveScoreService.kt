@@ -101,8 +101,9 @@ class LiveScoreService : Service() {
                 game,
                 mode,
                 snap?.winProbSeries.orEmpty(),
+                snap?.nextLotteGame,
             )
-            val notifyKey = NotificationHelper.liveNotificationKey(this@LiveScoreService, game, mode)
+            val notifyKey = NotificationHelper.liveNotificationKey(this@LiveScoreService, game, mode, snap?.nextLotteGame)
             if (pollJob?.isActive == true) {
                 NotificationHelper.notifyLive(this@LiveScoreService, notification, notifyKey)
                 return@launch
@@ -142,8 +143,9 @@ class LiveScoreService : Service() {
                         game,
                         mode,
                         snap?.winProbSeries.orEmpty(),
+                        snap?.nextLotteGame,
                     )
-                    val notifyKey = NotificationHelper.liveNotificationKey(this@LiveScoreService, game, mode)
+                    val notifyKey = NotificationHelper.liveNotificationKey(this@LiveScoreService, game, mode, snap?.nextLotteGame)
                     if (game?.status != GameStatus.LIVE || !shouldShowLive(game, lead)) {
                         val pinned = repo.store.isLiveNotificationPinned()
                         if (pinned) {
