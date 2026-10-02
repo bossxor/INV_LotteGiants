@@ -64,10 +64,10 @@ if ($hasLatest) {
   gh release upload latest $apkOut $manifestPath -R bossxor/INV_LotteGiants --clobber
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
   # v1.x 등 다른 태그가 GitHub "Latest" 배지를 가져가지 않게 고정
-  gh release edit latest -R bossxor/INV_LotteGiants --notes-file $bodyFile --title "latest ($versionName)" --latest
+  gh release edit latest -R bossxor/INV_LotteGiants --notes-file $bodyFile --title "v$versionName-$((Get-Date).ToString('yyMMdd'))" --latest
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } else {
-  gh release create latest $apkOut $manifestPath -R bossxor/INV_LotteGiants --notes-file $bodyFile --title "latest ($versionName)" --latest
+  gh release create latest $apkOut $manifestPath -R bossxor/INV_LotteGiants --notes-file $bodyFile --title "v$versionName-$((Get-Date).ToString('yyMMdd'))" --latest
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 

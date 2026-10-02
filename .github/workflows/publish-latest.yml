@@ -80,13 +80,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # 제목은 v{versionName}-{yyMMdd} (KST). 태그는 앱 업데이트 확인이 쓰므로 latest 고정.
+          TITLE="v${{ env.VERSION_NAME }}-$(TZ=Asia/Seoul date +%y%m%d)"
           if gh release view latest >/dev/null 2>&1; then
             gh release upload latest dist/LotteGiants.apk dist/update.json --clobber
             # v1.x 등 다른 태그가 GitHub "Latest" 배지를 가져가지 않게 고정
-            gh release edit latest --notes-file dist/notes.md --title "latest (${{ env.VERSION_NAME }})" --latest
+            gh release edit latest --notes-file dist/notes.md --title "$TITLE" --latest
           else
             gh release create latest dist/LotteGiants.apk dist/update.json \
               --notes-file dist/notes.md \
-              --title "latest (${{ env.VERSION_NAME }})" \
+              --title "$TITLE" \
               --latest
           fi
