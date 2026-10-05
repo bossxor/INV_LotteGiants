@@ -42,17 +42,16 @@ object NowBarArt {
         val gap = 5f * d
         val a = awayScore.ifBlank { if (homeScore.isBlank()) "vs" else "-" }
         val h = homeScore
+        val label = if (h.isBlank()) a else "$a:$h"
         val scorePaint = paint {
             color = 0xFFFFFFFF.toInt()
             typeface = Typeface.DEFAULT_BOLD
             textAlign = Paint.Align.CENTER
             setShadowLayer(3f * d, 0f, 1f, 0x99000000.toInt())
         }
-        scorePaint.textSize = (if (h.isBlank() || a.length > 2) 16f else 20f) * d
-        val aw = scorePaint.measureText(a)
-        val hw = if (h.isBlank()) 0f else scorePaint.measureText(h)
-        val mid = if (h.isBlank()) 0f else 8f * d
-        val wPx = (pad + r * 2 + gap + aw + mid + hw + gap + r * 2 + pad).toInt().coerceAtLeast(hPx)
+        scorePaint.textSize = (if (h.isBlank() || a.length > 2) 15f else 18f) * d
+        val tw = scorePaint.measureText(label)
+        val wPx = (pad + r * 2 + gap + tw + gap + r * 2 + pad).toInt().coerceAtLeast(hPx)
         val bmp = Bitmap.createBitmap(wPx, hPx, Bitmap.Config.ARGB_8888)
         bmp.density = dpi
         val c = Canvas(bmp)
@@ -60,14 +59,7 @@ object NowBarArt {
         drawLogo(c, left, pad + r, cy, r)
         drawLogo(c, right, wPx - pad - r, cy, r)
         val base = cy - (scorePaint.descent() + scorePaint.ascent()) / 2f
-        if (h.isBlank()) {
-            c.drawText(a, wPx / 2f, base, scorePaint)
-        } else {
-            val leftScoreCx = pad + r * 2 + gap + aw / 2f
-            val rightScoreCx = leftScoreCx + aw / 2f + mid + hw / 2f
-            c.drawText(a, leftScoreCx, base, scorePaint)
-            c.drawText(h, rightScoreCx, base, scorePaint)
-        }
+        c.drawText(label, pad + r * 2 + gap + tw / 2f, base, scorePaint)
         return bmp
     }
 
