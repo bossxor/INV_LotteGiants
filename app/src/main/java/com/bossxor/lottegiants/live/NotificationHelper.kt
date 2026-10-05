@@ -87,7 +87,7 @@ object NotificationHelper {
     @Volatile private var lastLiveCustom: Boolean? = null
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 18
+    private const val LIVE_NOTIFY_STYLE_REV = 19
     private const val COLOR_LOTTE = 0xFFC8102E.toInt()
     private const val COLOR_CHIP = 0xFF2F6FED.toInt()
     private const val COLOR_LABEL = 0xFF8A8F98.toInt()
@@ -836,8 +836,13 @@ object NotificationHelper {
         }
         rv.setTextViewText(R.id.notif_pitcher_line, pitcherLine)
         rv.setTextViewText(R.id.notif_batter_line, batterLine)
-        val showWinProb = (WinProb.shouldShowWinProbBar(game) && nowBar == null) ||
-            (game.status == GameStatus.BEFORE && pregameProb != null)
+        // 라이브 바: 경기 전만 승률. 경기 중·후는 스코어보드(승률 바 숨김).
+        // 상세 알림(FULL): 기존처럼 진행·종료 승률 바.
+        val showWinProb = if (nowBar != null) {
+            game.status == GameStatus.BEFORE && pregameProb != null
+        } else {
+            WinProb.shouldShowWinProbBar(game)
+        }
         rv.setViewVisibility(R.id.notif_winprob_row, if (showWinProb) View.VISIBLE else View.GONE)
         fun setDots(ids: IntArray, count: Int, kind: Char) {
             ids.forEachIndexed { i, id ->
@@ -872,8 +877,9 @@ object NotificationHelper {
             .joinToString("\n") { if (it.first == "일시") it.second else "${it.first}  ${it.second}" }
         rv.setViewVisibility(R.id.notif_info_line, if (info.isNotBlank()) View.VISIBLE else View.GONE)
         if (info.isNotBlank()) rv.setTextViewText(R.id.notif_info_line, info)
-        val showBoard = nowBar != null && game.status != GameStatus.BEFORE &&
-            (game.lotteInningScores.isNotEmpty() || game.opponentInningScores.isNotEmpty())
+        // 라이브 바 경기 중·종료: 이닝별 점수표 + R/H/E (승률 바 대신)
+        val showBoard = nowBar != null &&
+            (game.status == GameStatus.LIVE || game.status == GameStatus.ENDED)
         rv.setViewVisibility(R.id.notif_scoreboard, if (showBoard) View.VISIBLE else View.GONE)
         if (showBoard) rv.setImageViewBitmap(R.id.notif_scoreboard, NowBarArt.scoreboard(game, night))
         if (nowBar != null) {
@@ -881,6 +887,7 @@ object NotificationHelper {
             val sub = if (night) 0xFFB5B8BF.toInt() else 0xFF5F636B.toInt()
             intArrayOf(
                 R.id.notif_away_name, R.id.notif_home_name,
+                R.id.notif_away_score, R.id.notif_home_score,
                 R.id.notif_pitcher_line, R.id.notif_batter_line, R.id.notif_info_line,
             ).forEach { rv.setTextColor(it, ink) }
             intArrayOf(

@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.25` (`versionCode` **2025**) |
+| **버전** | `2.0.26` (`versionCode` **2026**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.netlify.app/) |
@@ -237,7 +237,7 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.25` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.26` |
 | `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2025` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
@@ -288,6 +288,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.26** | 라이브 바 카드를 큰 로고·점수 레이아웃으로 통일. 경기 중·후는 승률 바 대신 스코어보드(R/H/E), 경기 전은 승률 유지, 투구수·BSO 유지 |
 | **2.0.25** | 라이브 바 전면 개편: 삼성 `chronometerRemoteView` 슬롯으로 팀 로고 카드(원정 왼쪽·홈 오른쪽), 경기 전 선발·순위·승률, 경기 중 다이아몬드·B/S/O·이닝별 점수표, 경기 후 결과·다음 경기, 잠금화면 알약 윗줄, 설정 미리보기 |
 | **2.0.24** | 라이브 스코어 FGS `dataSync`→`specialUse`(하루 6시간 한도 초과 강제종료 수정), 라이브 바를 Now Bar 표준 템플릿으로 개편(진행 바 제거, 루상·아웃·볼카운트), 점수마다 알림 cancel 하던 깜빡임 제거, 결과·선수 목록 키 중복 크래시 방지 |
 | **2.0.23** | 실시간 알림 팀 로고 캐시 선로딩(재설치 후 이니셜 표시 수정), CI `setup-android` 오류 수정으로 `latest` 자동 배포 복구 |
