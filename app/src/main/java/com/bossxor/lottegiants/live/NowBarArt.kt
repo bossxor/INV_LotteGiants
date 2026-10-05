@@ -24,30 +24,30 @@ object NowBarArt {
     }
 
     /**
-     * 상태바 칩 아이콘용. 정사각에 원정로고·점수·홈로고를 크게 채워
-     * 칩 슬롯으로 줄어들어도 읽을 수 있게 한다.
+     * 상태바 칩용 가로 스트립. 원정로고 · 점수 · 홈로고 (글자 칩과 같이 쓰면 로고로고+점수가 된다).
      */
     fun scoreStrip(left: Bitmap, right: Bitmap, center: String): Bitmap {
-        val size = 288
-        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val w = 720
+        val h = 160
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
-        val cy = size / 2f
-        val r = 72f
-        drawLogo(c, left, 8f + r, cy, r)
-        drawLogo(c, right, size - 8f - r, cy, r)
+        val cy = h / 2f
+        val r = 68f
+        drawLogo(c, left, 12f + r, cy, r)
+        drawLogo(c, right, w - 12f - r, cy, r)
         val label = center.ifBlank { "vs" }
         val t = paint {
             color = 0xFFFFFFFF.toInt()
             typeface = Typeface.DEFAULT_BOLD
             textSize = when {
-                label.length <= 3 -> 72f
-                label.length <= 5 -> 58f
-                else -> 44f
+                label.length <= 3 -> 96f
+                label.length <= 5 -> 80f
+                else -> 60f
             }
             textAlign = Paint.Align.CENTER
-            setShadowLayer(6f, 0f, 2f, 0xCC000000.toInt())
+            setShadowLayer(8f, 0f, 2f, 0xCC000000.toInt())
         }
-        c.drawText(label, size / 2f, cy - (t.descent() + t.ascent()) / 2f, t)
+        c.drawText(label, w / 2f, cy - (t.descent() + t.ascent()) / 2f, t)
         return bmp
     }
 
