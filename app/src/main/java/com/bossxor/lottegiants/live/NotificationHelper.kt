@@ -22,6 +22,7 @@ import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import com.bossxor.lottegiants.MainActivity
 import com.bossxor.lottegiants.R
 import com.bossxor.lottegiants.data.NotificationType
@@ -87,7 +88,7 @@ object NotificationHelper {
     @Volatile private var lastLiveCustom: Boolean? = null
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 31
+    private const val LIVE_NOTIFY_STYLE_REV = 32
     private const val COLOR_LOTTE = 0xFFC8102E.toInt()
     private const val COLOR_CHIP = 0xFF2F6FED.toInt()
     private const val COLOR_LABEL = 0xFF8A8F98.toInt()
@@ -401,7 +402,7 @@ object NotificationHelper {
                 game.status == GameStatus.CANCELED -> "취소"
                 else -> {
                     val sc = cardSides(game)
-                    "${sc.awayScore}  ${sc.homeScore}"
+                    "${sc.awayScore}:${sc.homeScore}"
                 }
             }
             statusChipText = chip
@@ -409,6 +410,16 @@ object NotificationHelper {
                 .setSubText(nowBar.chipSub.ifBlank { null })
                 .setShortCriticalText(chip.ifBlank { "·" })
                 .setRequestPromotedOngoing(true)
+            // 상태바 오른쪽 칸은 액션 아이콘이다. 홈 로고를 거기에 둔다.
+            if (homeBmp != null) {
+                builder.addAction(
+                    NotificationCompat.Action.Builder(
+                        IconCompat.createWithBitmap(homeBmp),
+                        " ",
+                        intent,
+                    ).build(),
+                )
+            }
             val card = game?.let { buildLiveRemoteViews(context, it, winProbSeries, nowBar, pregameProb) }
             applySamsungOngoingExtras(
                 builder = builder,
@@ -595,8 +606,10 @@ object NotificationHelper {
             }
             if (homeIcon != null) {
                 putParcelable("android.ongoingActivityNoti.secondIcon", homeIcon)
+                putParcelable("android.ongoingActivityNoti.chipExpandedIcon", homeIcon)
             }
-            putInt("android.ongoingActivityNoti.actionType", 1)
+            // 0 = 칩 오른쪽을 글자가 아니라 아이콘(홈 로고)으로
+            putInt("android.ongoingActivityNoti.actionType", 0)
             putInt("android.ongoingActivityNoti.actionPrimarySet", 0)
             if (card != null) {
                 putParcelable("android.ongoingActivityNoti.chronometerRemoteView", card)
