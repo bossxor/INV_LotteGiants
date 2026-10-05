@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.38` (`versionCode` **2038**) |
+| **버전** | `2.0.39` (`versionCode` **2039**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.netlify.app/) |
@@ -237,8 +237,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.38` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2038` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.39` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2039` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -288,6 +288,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.39** | 상태바 칩: 원정 로고 + 시스템 글자 `점수  점수` + 홈 로고. 그림 칩은 파란 점으로 줄어듦 |
 | **2.0.38** | 상태바 칩 밀도 보정. 로고·점수·점수·로고가 상태바에서 안 줄어들게 |
 | **2.0.37** | 상태바 칩: 로고·점수·점수·로고(scoreChip 정사각) |
 | **2.0.36** | 상태바 칩: 점수 시스템 글자 + logoDuo(양 팀 로고), 스트립 축소 문제 수정 |
