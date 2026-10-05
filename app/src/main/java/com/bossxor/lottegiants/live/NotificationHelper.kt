@@ -13,11 +13,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.graphics.drawable.BitmapDrawable
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
-import android.text.style.ImageSpan
 import android.text.style.StyleSpan
 import android.text.style.TypefaceSpan
 import android.view.View
@@ -89,7 +87,7 @@ object NotificationHelper {
     @Volatile private var lastLiveCustom: Boolean? = null
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 36
+    private const val LIVE_NOTIFY_STYLE_REV = 37
     private const val COLOR_LOTTE = 0xFFC8102E.toInt()
     private const val COLOR_CHIP = 0xFF2F6FED.toInt()
     private const val COLOR_LABEL = 0xFF8A8F98.toInt()
@@ -387,16 +385,16 @@ object NotificationHelper {
 
         var statusChipText = nowBar.chip
         if (useNowBar) {
-            // [원정로고 chipIcon][점수:점수+홈로고 ImageSpan].
-            // U+FFFC는 OBJ로 보이므로, 폴백 글자(팀코드) 위에 그림을 올린다.
+            // 왼쪽 로고 = chipIcon(아이콘 칸). 글자 칸에는 그림이 안 들어가 HT만 보였음.
+            // 오른쪽 로고 = 알림 액션 아이콘 + actionType=0 (보이스레코더 일시정지와 같은 슬롯).
+            // 액션은 리소스 drawable만 칩에 그려지는 경우가 있어 구장 배지 art를 쓴다.
             val sides = game?.let { nowBarSides(it) }
             val awayBmp = sides?.let {
                 WidgetAssets.loadTeamLogoBitmapCachedOnly(context, it.leftCode, it.leftName)
             }
-            val homeBmp = sides?.let {
-                WidgetAssets.loadTeamLogoBitmapCachedOnly(context, it.rightCode, it.rightName)
-            }
-            val chipPlain = when {
+            val homeCode = sides?.rightCode.orEmpty()
+            val homeArt = teamLauncherArtRes(homeCode)
+            val chip = when {
                 game == null -> nowBar.chip
                 game.isSuspended -> "중단"
                 game.status == GameStatus.BEFORE -> nowBar.chip.ifBlank { "vs" }
@@ -406,25 +404,22 @@ object NotificationHelper {
                     "${sc.awayScore}:${sc.homeScore}"
                 }
             }
-            val homeCode = sides?.rightCode.orEmpty()
-            val chipRich = if (':' in chipPlain && homeBmp != null) {
-                chipTextScoreAndHome(context, chipPlain, homeBmp, homeCode)
-            } else {
-                chipPlain
-            }
-            statusChipText = chipPlain
+            statusChipText = chip
             builder
                 .setSubText(nowBar.chipSub.ifBlank { null })
-                .setShortCriticalText(chipPlain.ifBlank { "·" })
+                .setShortCriticalText(chip.ifBlank { "·" })
                 .setRequestPromotedOngoing(true)
+            // int 리소스 오버로드 — 삼성 칩이 Action.getIcon() 비트맵을 무시하는 경우 대비
+            if (homeArt != 0) {
+                builder.addAction(homeArt, "", intent)
+            }
             val card = game?.let { buildLiveRemoteViews(context, it, winProbSeries, nowBar, pregameProb) }
             applySamsungOngoingExtras(
                 builder = builder,
                 context = context,
-                c = nowBar.copy(chip = chipPlain),
-                chipText = chipRich,
+                c = nowBar.copy(chip = chip),
                 awayLogo = awayBmp,
-                homeLogo = homeBmp,
+                homeArtRes = homeArt,
                 card = card,
             )
             val style = NotificationCompat.BigTextStyle()
@@ -575,76 +570,40 @@ object NotificationHelper {
         return false
     }
 
-    /**
-     * 점수+홈로고 비트맵을 글자 칸에 올린다.
-     * 스팬이 무시되면 같은 자리의 팀코드 글자가 보여 OBJ는 안 나온다.
-     */
-    private fun chipTextScoreAndHome(
-        context: Context,
-        score: String,
-        homeLogo: Bitmap?,
-        homeCode: String,
-    ): CharSequence {
-        if (score.isBlank()) return score
-        val fallback = buildString {
-            append(score)
-            val code = homeCode.trim().uppercase()
-            if (code.isNotBlank()) {
-                append(' ')
-                append(code)
-            }
-        }
-        if (homeLogo == null) return fallback
-        val dpi = context.resources.displayMetrics.densityDpi
-        val sc = score.split(':', limit = 2)
-        val bmp = NowBarArt.scoreAndHome(
-            homeLogo = homeLogo,
-            awayScore = sc.getOrElse(0) { "-" },
-            homeScore = sc.getOrElse(1) { "-" },
-            densityDpi = dpi,
-        )
-        val d = BitmapDrawable(context.resources, bmp).apply {
-            setBounds(0, 0, bmp.width, bmp.height)
-        }
-        // 폴백 문자열 길이 ≈ 그림 폭이 되도록 전각 공백으로 맞춤
-        val em = '\u3000'
-        val approx = ((bmp.width / (15f * context.resources.displayMetrics.density)).toInt())
-            .coerceIn(fallback.length, 12)
-        val holder = buildString {
-            append(fallback)
-            while (length < approx) append(em)
-        }
-        val sb = SpannableStringBuilder(holder)
-        sb.setSpan(
-            ImageSpan(d, ImageSpan.ALIGN_CENTER),
-            0,
-            sb.length,
-            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
-        )
-        return sb
+    /** 칩 오른쪽 액션용. 삼성 칩 액션은 비트맵보다 리소스 아이콘이 안전하다. */
+    private fun teamLauncherArtRes(teamCode: String): Int = when (teamCode.trim().uppercase()) {
+        "LT" -> R.drawable.ic_launcher_art_lt
+        "OB" -> R.drawable.ic_launcher_art_ob
+        "LG" -> R.drawable.ic_launcher_art_lg
+        "SS" -> R.drawable.ic_launcher_art_ss
+        "HH" -> R.drawable.ic_launcher_art_hh
+        "KT" -> R.drawable.ic_launcher_art_kt
+        "HT" -> R.drawable.ic_launcher_art_ht
+        "NC" -> R.drawable.ic_launcher_art_nc
+        "SK" -> R.drawable.ic_launcher_art_sk
+        "WO" -> R.drawable.ic_launcher_art_wo
+        else -> 0
     }
 
-    /** 상태바: [원정 로고][점수:점수 홈로고]. */
+    /** 상태바: [원정 로고 chipIcon][점수:점수][홈 로고 액션]. */
     private fun applySamsungOngoingExtras(
         builder: NotificationCompat.Builder,
         context: Context,
         c: NowBarContent,
-        chipText: CharSequence,
         awayLogo: Bitmap?,
-        homeLogo: Bitmap?,
+        homeArtRes: Int,
         card: RemoteViews?,
     ) {
         val appIcon = Icon.createWithResource(context, R.drawable.ic_notification)
         val awayIcon = awayLogo?.let { Icon.createWithBitmap(it) }
-        val homeIcon = homeLogo?.let { Icon.createWithBitmap(it) }
+        val homeIcon = if (homeArtRes != 0) Icon.createWithResource(context, homeArtRes) else null
         val extras = Bundle().apply {
             putInt("android.ongoingActivityNoti.style", 1)
             putString("android.ongoingActivityNoti.primaryInfo", c.title)
             putInt("android.ongoingActivityNoti.chipBgColor", COLOR_CHIP)
             putParcelable("android.ongoingActivityNoti.chipIcon", awayIcon ?: appIcon)
-            // CharSequence 유지해야 ImageSpan이 전달된다. putString 하면 OBJ/폴백만 남음.
-            putCharSequence("android.ongoingActivityNoti.chipExpandedText", chipText)
-            putCharSequence("android.ongoingActivityNoti.nowbarPrimaryInfo", chipText)
+            putString("android.ongoingActivityNoti.chipExpandedText", c.chip)
+            putString("android.ongoingActivityNoti.nowbarPrimaryInfo", c.chip)
             putString("android.ongoingActivityNoti.nowbarSecondaryInfo", c.chipSub)
             if (awayIcon != null) {
                 putParcelable("android.ongoingActivityNoti.firstIcon", awayIcon)
@@ -652,8 +611,10 @@ object NotificationHelper {
             }
             if (homeIcon != null) {
                 putParcelable("android.ongoingActivityNoti.secondIcon", homeIcon)
+                putParcelable("android.ongoingActivityNoti.chipExpandedIcon", homeIcon)
             }
-            putInt("android.ongoingActivityNoti.actionType", 1)
+            // 0 = 칩 오른쪽에 첫 액션 아이콘 (리소스)
+            putInt("android.ongoingActivityNoti.actionType", 0)
             putInt("android.ongoingActivityNoti.actionPrimarySet", 0)
             if (card != null) {
                 putParcelable("android.ongoingActivityNoti.chronometerRemoteView", card)
