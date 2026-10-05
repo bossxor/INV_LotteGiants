@@ -87,7 +87,7 @@ object NotificationHelper {
     @Volatile private var lastLiveCustom: Boolean? = null
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 19
+    private const val LIVE_NOTIFY_STYLE_REV = 20
     private const val COLOR_LOTTE = 0xFFC8102E.toInt()
     private const val COLOR_CHIP = 0xFF2F6FED.toInt()
     private const val COLOR_LABEL = 0xFF8A8F98.toInt()
@@ -771,8 +771,16 @@ object NotificationHelper {
         val awayLogoUrl = side.awayLogoUrl
         val homeLogoUrl = side.homeLogoUrl
 
-        rv.setTextViewText(R.id.notif_away_place, "원정")
-        rv.setTextViewText(R.id.notif_home_place, "홈")
+        val awayRank = if (game.isHome) game.opponentRank else game.lotteRank
+        val homeRank = if (game.isHome) game.lotteRank else game.opponentRank
+        rv.setTextViewText(
+            R.id.notif_away_place,
+            if (awayRank > 0) "${awayRank}위" else "원정",
+        )
+        rv.setTextViewText(
+            R.id.notif_home_place,
+            if (homeRank > 0) "${homeRank}위" else "홈",
+        )
         rv.setTextViewText(R.id.notif_away_name, awayName)
         rv.setTextViewText(R.id.notif_home_name, homeName)
         rv.setTextViewText(R.id.notif_away_score, "${side.awayScore}")
@@ -872,11 +880,8 @@ object NotificationHelper {
             rv.setImageViewBitmap(R.id.notif_winprob_bar, bar)
         }
 
-        val info = nowBar?.lines.orEmpty()
-            .filter { it.first == "일시" || it.first == "순위" || it.first == "다음" }
-            .joinToString("\n") { if (it.first == "일시") it.second else "${it.first}  ${it.second}" }
-        rv.setViewVisibility(R.id.notif_info_line, if (info.isNotBlank()) View.VISIBLE else View.GONE)
-        if (info.isNotBlank()) rv.setTextViewText(R.id.notif_info_line, info)
+        // 순위·일시·다음 경기 텍스트 줄은 카드에서 빼고(순위는 로고 위, 일시는 가운데 필·구장).
+        rv.setViewVisibility(R.id.notif_info_line, View.GONE)
         // 라이브 바 경기 중·종료: 이닝별 점수표 + R/H/E (승률 바 대신)
         val showBoard = nowBar != null &&
             (game.status == GameStatus.LIVE || game.status == GameStatus.ENDED)
@@ -888,7 +893,7 @@ object NotificationHelper {
             intArrayOf(
                 R.id.notif_away_name, R.id.notif_home_name,
                 R.id.notif_away_score, R.id.notif_home_score,
-                R.id.notif_pitcher_line, R.id.notif_batter_line, R.id.notif_info_line,
+                R.id.notif_pitcher_line, R.id.notif_batter_line,
             ).forEach { rv.setTextColor(it, ink) }
             intArrayOf(
                 R.id.notif_away_place, R.id.notif_home_place, R.id.notif_venue,

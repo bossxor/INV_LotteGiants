@@ -116,12 +116,7 @@ object NowBarText {
                     val myStarter = game.lotteStartingPitcher.ifBlank { "-" }
                     val oppStarter = game.opponentStartingPitcher.ifBlank { "-" }
                     add("선발" to if (game.isHome) "$awayName $oppStarter · $homeName $myStarter" else "$awayName $myStarter · $homeName $oppStarter")
-                    if (game.lotteRank > 0 && game.opponentRank > 0) {
-                        val aw = if (game.isHome) game.opponentRank else game.lotteRank
-                        val hm = if (game.isHome) game.lotteRank else game.opponentRank
-                        add("순위" to "$awayName ${aw}위 · $homeName ${hm}위")
-                    }
-                    add("일시" to whenWhere(game) + dh)
+                    // 순위·일시는 카드 UI(로고 위 순위, 가운데 구장/시각)로 보여서 텍스트 줄에서 뺀다.
                     if (focusProb != null) {
                         val awayP = ((if (game.isHome) 1 - focusProb else focusProb) * 100).toInt().coerceIn(0, 100)
                         val filled = ((awayP + 5) / 10).coerceIn(0, 10)
@@ -162,7 +157,7 @@ object NowBarText {
                     game.lotteScore < game.opponentScore -> "$me 패배"
                     else -> "무승부"
                 }
-                val nextLine = next?.takeIf { it.gameId != game.gameId }?.let { whenWhere(it) + " · ${it.opponentName}전" }
+                // 다음 경기 텍스트는 카드에 넣지 않는다(승패세·스코어보드만).
                 val lines = buildList {
                     add("" to result)
                     val pitchers = buildList {
@@ -171,12 +166,6 @@ object NowBarText {
                         if (game.savePitcherName.isNotBlank()) add("세 ${game.savePitcherName}")
                     }
                     if (pitchers.isNotEmpty()) add("투수" to pitchers.joinToString(" · "))
-                    if (nextLine != null) {
-                        add("다음" to nextLine)
-                        if (next.lotteStartingPitcher.isNotBlank() || next.opponentStartingPitcher.isNotBlank()) {
-                            add("선발" to "$me ${next.lotteStartingPitcher.ifBlank { "-" }} · ${next.opponentName} ${next.opponentStartingPitcher.ifBlank { "-" }}")
-                        }
-                    }
                 }
                 NowBarContent(
                     scoreTitle,

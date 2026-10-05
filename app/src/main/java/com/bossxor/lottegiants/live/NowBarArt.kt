@@ -99,11 +99,11 @@ object NowBarArt {
         val sub = if (night) 0xFFB5B8BF.toInt() else 0xFF6B6F77.toInt()
         val line = if (night) 0x33FFFFFF else 0x22000000
 
-        val w = 640
-        val rowH = 48f
-        val h = (rowH * 3 + 6).toInt()
-        val labelW = 96f
-        val statW = 44f
+        val w = 900
+        val rowH = 56f
+        val h = (rowH * 3 + 8).toInt()
+        val labelW = 110f
+        val statW = 52f
         val colW = (w - labelW - statW * 3) / n
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
@@ -117,18 +117,18 @@ object NowBarArt {
             val y = row * rowH + rowH / 2f - (p.descent() + p.ascent()) / 2f
             c.drawText(t, cx, y, p)
         }
-        val hdr = text(sub, false, 24f, Paint.Align.CENTER)
-        val hdrNow = text(RED, true, 24f, Paint.Align.CENTER)
+        val hdr = text(sub, false, 28f, Paint.Align.CENTER)
+        val hdrNow = text(RED, true, 28f, Paint.Align.CENTER)
         for (i in 0 until n) {
             cell("${i + 1}", labelW + colW * i + colW / 2f, 0, if (live && i + 1 == g.inning) hdrNow else hdr)
         }
         listOf("R", "H", "E").forEachIndexed { k, t ->
-            cell(t, labelW + colW * n + statW * k + statW / 2f, 0, text(sub, true, 24f, Paint.Align.CENTER))
+            cell(t, labelW + colW * n + statW * k + statW / 2f, 0, text(sub, true, 28f, Paint.Align.CENTER))
         }
         c.drawRect(0f, rowH, w.toFloat(), rowH + 2f, paint { color = line })
-        val nameP = text(ink, true, 26f, Paint.Align.LEFT)
-        val plain = text(ink, false, 28f, Paint.Align.CENTER)
-        val hot = text(RED, true, 28f, Paint.Align.CENTER)
+        val nameP = text(ink, true, 30f, Paint.Align.LEFT)
+        val plain = text(ink, false, 32f, Paint.Align.CENTER)
+        val hot = text(RED, true, 32f, Paint.Align.CENTER)
         val rows = listOf(
             Triple(awayName, away, intArrayOf(awayR, awayH, awayE)),
             Triple(homeName, home, intArrayOf(homeR, homeH, homeE)),
@@ -136,14 +136,14 @@ object NowBarArt {
         rows.forEachIndexed { r, (name, sc, rhe) ->
             val row = r + 1
             val y = row * rowH + rowH / 2f - (nameP.descent() + nameP.ascent()) / 2f
-            c.drawText(name.take(4), 4f, y, nameP)
+            c.drawText(name.take(4), 6f, y, nameP)
             for (i in 0 until n) {
                 val raw = sc.getOrNull(i)?.trim().orEmpty()
                 val t = raw.ifBlank { if (i < sc.size || !live) "-" else "" }
                 cell(t, labelW + colW * i + colW / 2f, row, if ((raw.toIntOrNull() ?: 0) > 0) hot else plain)
             }
             rhe.forEachIndexed { k, v ->
-                cell("$v", labelW + colW * n + statW * k + statW / 2f, row, text(ink, k == 0, 28f, Paint.Align.CENTER))
+                cell("$v", labelW + colW * n + statW * k + statW / 2f, row, text(ink, k == 0, 32f, Paint.Align.CENTER))
             }
         }
         return bmp

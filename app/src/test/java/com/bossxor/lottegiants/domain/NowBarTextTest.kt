@@ -27,13 +27,13 @@ class NowBarTextTest {
         assertEquals("10/03(토) 14:00 · 광주", c.text)
         assertEquals("14:00", c.chip)
         assertEquals("롯데 박세웅 · KIA 네일", c.lines.first { it.first == "선발" }.second)
-        assertEquals("롯데 8위 · KIA 4위", c.lines.first { it.first == "순위" }.second)
+        assertTrue(c.lines.none { it.first == "순위" || it.first == "일시" })
         assertTrue(c.lines.first { it.first == "승리확률" }.second.contains("52%"))
     }
 
     @Test fun beforeWithoutProbOrRankDropsRows() {
         val c = NowBarText.build(game(GameStatus.BEFORE), null, null)
-        assertTrue(c.lines.none { it.first == "순위" || it.first == "승리확률" })
+        assertTrue(c.lines.none { it.first == "순위" || it.first == "승리확률" || it.first == "일시" })
     }
 
     @Test fun live() {
@@ -56,13 +56,13 @@ class NowBarTextTest {
         assertTrue(c.lineScore[0].endsWith("| 3"))
     }
 
-    @Test fun endedShowsNextGame() {
+    @Test fun endedOmitsNextGameText() {
         val g = game(GameStatus.ENDED) { copy(lotteScore = 4, opponentScore = 2, winPitcherName = "박세웅") }
         val next = game(GameStatus.BEFORE) { copy(gameId = "g2", gameDate = "2026-10-04", startTime = "14:00") }
         val c = NowBarText.build(g, next, null)
         assertEquals("종료", c.chipSub)
-        assertTrue(c.lines.first { it.first == "다음" }.second.contains("10/04(일) 14:00 · 광주 · KIA전"))
-        assertNotNull(c.lines.firstOrNull { it.first == "다음" })
+        assertTrue(c.lines.none { it.first == "다음" })
+        assertEquals("승 박세웅", c.lines.first { it.first == "투수" }.second)
     }
 
     @Test fun homeGameKeepsAwayOnLeft() {
