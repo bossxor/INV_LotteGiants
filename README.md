@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.28` (`versionCode` **2028**) |
+| **버전** | `2.0.29` (`versionCode` **2029**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.netlify.app/) |
@@ -237,7 +237,7 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.28` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.29` |
 | `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2025` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
@@ -288,6 +288,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.29** | 라이브 바: 순위→팀명 옆, 투수+구수 한 줄, 스코어보드 확대 |
 | **2.0.28** | 라이브 바 경기 중: 투수·타자 이름을 BSO와 분리해 잘림 방지 |
 | **2.0.27** | 라이브 바: 로고 위 순위, 하단 순위/일시/다음 텍스트 제거, BSO 가로·스코어보드 확대 |
 | **2.0.26** | 라이브 바 카드를 큰 로고·점수 레이아웃으로 통일. 경기 중·후는 승률 바 대신 스코어보드(R/H/E), 경기 전은 승률 유지, 투구수·BSO 유지 |
