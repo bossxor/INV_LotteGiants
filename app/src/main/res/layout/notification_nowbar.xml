@@ -152,7 +152,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- 투수 | B ○○○  S ●●○  O ●○ | 타자  — BSO를 한 줄로 길게 -->
+    <!-- 투수·타자는 가로 절반씩 (BSO와 한 줄에 두면 이름이 잘림) -->
     <LinearLayout
         android:id="@+id/notif_bso_row"
         android:layout_width="match_parent"
@@ -168,107 +168,10 @@
             android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="2"
-            android:paddingEnd="4dp"
+            android:paddingEnd="6dp"
             android:textAppearance="@style/NotifLine"
-            android:textSize="12sp" />
-
-        <LinearLayout
-            android:id="@+id/notif_bso"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingHorizontal="4dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:gravity="center"
-                android:text="B"
-                android:textColor="#2EA35C"
-                android:textSize="11sp"
-                android:textStyle="bold" />
-
-            <ImageView
-                android:id="@+id/notif_b0"
-                android:layout_width="10dp"
-                android:layout_height="10dp"
-                android:layout_marginStart="3dp" />
-
-            <ImageView
-                android:id="@+id/notif_b1"
-                android:layout_width="10dp"
-                android:layout_height="10dp"
-                android:layout_marginStart="2dp" />
-
-            <ImageView
-                android:id="@+id/notif_b2"
-                android:layout_width="10dp"
-                android:layout_height="10dp"
-                android:layout_marginStart="2dp" />
-
-            <ImageView
-                android:id="@+id/notif_b3"
-                android:layout_width="10dp"
-                android:layout_height="10dp"
-                android:layout_marginStart="2dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:gravity="center"
-                android:text="S"
-                android:textColor="#C9A227"
-                android:textSize="11sp"
-                android:textStyle="bold" />
-
-            <ImageView
-                android:id="@+id/notif_s0"
-                android:layout_width="10dp"
-                android:layout_height="10dp"
-                android:layout_marginStart="3dp" />
-
-            <ImageView
-                android:id="@+id/notif_s1"
-                android:layout_width="10dp"
-                android:layout_height="10dp"
-                android:layout_marginStart="2dp" />
-
-            <ImageView
-                android:id="@+id/notif_s2"
-                android:layout_width="10dp"
-                android:layout_height="10dp"
-                android:layout_marginStart="2dp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:gravity="center"
-                android:text="O"
-                android:textColor="#C8102E"
-                android:textSize="11sp"
-                android:textStyle="bold" />
-
-            <ImageView
-                android:id="@+id/notif_o0"
-                android:layout_width="10dp"
-                android:layout_height="10dp"
-                android:layout_marginStart="3dp" />
-
-            <ImageView
-                android:id="@+id/notif_o1"
-                android:layout_width="10dp"
-                android:layout_height="10dp"
-                android:layout_marginStart="2dp" />
-
-            <ImageView
-                android:id="@+id/notif_o2"
-                android:layout_width="10dp"
-                android:layout_height="10dp"
-                android:layout_marginStart="2dp" />
-        </LinearLayout>
+            android:textSize="13sp"
+            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/notif_batter_line"
@@ -278,9 +181,109 @@
             android:ellipsize="end"
             android:gravity="end"
             android:maxLines="2"
-            android:paddingStart="4dp"
+            android:paddingStart="6dp"
             android:textAppearance="@style/NotifLine"
-            android:textSize="12sp" />
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- BSO는 이름 아래 가운데 한 줄 -->
+    <LinearLayout
+        android:id="@+id/notif_bso"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="B"
+            android:textColor="#2EA35C"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/notif_b0"
+            android:layout_width="11dp"
+            android:layout_height="11dp"
+            android:layout_marginStart="4dp" />
+
+        <ImageView
+            android:id="@+id/notif_b1"
+            android:layout_width="11dp"
+            android:layout_height="11dp"
+            android:layout_marginStart="3dp" />
+
+        <ImageView
+            android:id="@+id/notif_b2"
+            android:layout_width="11dp"
+            android:layout_height="11dp"
+            android:layout_marginStart="3dp" />
+
+        <ImageView
+            android:id="@+id/notif_b3"
+            android:layout_width="11dp"
+            android:layout_height="11dp"
+            android:layout_marginStart="3dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:gravity="center"
+            android:text="S"
+            android:textColor="#C9A227"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/notif_s0"
+            android:layout_width="11dp"
+            android:layout_height="11dp"
+            android:layout_marginStart="4dp" />
+
+        <ImageView
+            android:id="@+id/notif_s1"
+            android:layout_width="11dp"
+            android:layout_height="11dp"
+            android:layout_marginStart="3dp" />
+
+        <ImageView
+            android:id="@+id/notif_s2"
+            android:layout_width="11dp"
+            android:layout_height="11dp"
+            android:layout_marginStart="3dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:gravity="center"
+            android:text="O"
+            android:textColor="#C8102E"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/notif_o0"
+            android:layout_width="11dp"
+            android:layout_height="11dp"
+            android:layout_marginStart="4dp" />
+
+        <ImageView
+            android:id="@+id/notif_o1"
+            android:layout_width="11dp"
+            android:layout_height="11dp"
+            android:layout_marginStart="3dp" />
+
+        <ImageView
+            android:id="@+id/notif_o2"
+            android:layout_width="11dp"
+            android:layout_height="11dp"
+            android:layout_marginStart="3dp" />
     </LinearLayout>
 
     <LinearLayout
