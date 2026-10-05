@@ -24,36 +24,49 @@ object NowBarArt {
     }
 
     /**
-     * 상태바 칩용 정사각. 원정로고 · 원정점수 · 홈점수 · 홈로고.
-     * (가로 스트립은 정사각 아이콘 칸에 잘려서 안 보이므로 정사각으로 그린다.)
+     * 상태바 칩. 원정로고 · 원정점수 · 홈점수 · 홈로고.
+     * 밀도 없이 그리면 mdpi로 잡혀 상태바에서 몇 배로 줄어든다. [densityDpi]로 실제 dp 크기를 맞춘다.
      */
-    fun scoreChip(left: Bitmap, right: Bitmap, awayScore: String, homeScore: String): Bitmap {
-        val s = 256
-        val bmp = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888)
-        val c = Canvas(bmp)
-        val cy = s / 2f
-        val r = 40f
-        drawLogo(c, left, 6f + r, cy, r)
-        drawLogo(c, right, s - 6f - r, cy, r)
+    fun scoreChip(
+        left: Bitmap,
+        right: Bitmap,
+        awayScore: String,
+        homeScore: String,
+        densityDpi: Int,
+    ): Bitmap {
+        val dpi = densityDpi.coerceIn(160, 640)
+        val d = dpi / 160f
+        val hPx = (34f * d).toInt().coerceAtLeast(34)
+        val r = 13f * d
+        val pad = 3f * d
+        val gap = 5f * d
+        val a = awayScore.ifBlank { if (homeScore.isBlank()) "vs" else "-" }
+        val h = homeScore
         val scorePaint = paint {
             color = 0xFFFFFFFF.toInt()
             typeface = Typeface.DEFAULT_BOLD
             textAlign = Paint.Align.CENTER
-            setShadowLayer(5f, 0f, 1f, 0x99000000.toInt())
+            setShadowLayer(3f * d, 0f, 1f, 0x99000000.toInt())
         }
-        fun drawScore(text: String, cx: Float, size: Float) {
-            scorePaint.textSize = size
-            c.drawText(text, cx, cy - (scorePaint.descent() + scorePaint.ascent()) / 2f, scorePaint)
-        }
-        when {
-            homeScore.isBlank() -> drawScore(awayScore.ifBlank { "vs" }, s / 2f, 64f)
-            else -> {
-                val a = awayScore.ifBlank { "-" }
-                val h = homeScore.ifBlank { "-" }
-                val sz = if (a.length <= 1 && h.length <= 1) 72f else 56f
-                drawScore(a, s * 0.38f, sz)
-                drawScore(h, s * 0.62f, sz)
-            }
+        scorePaint.textSize = (if (h.isBlank() || a.length > 2) 16f else 20f) * d
+        val aw = scorePaint.measureText(a)
+        val hw = if (h.isBlank()) 0f else scorePaint.measureText(h)
+        val mid = if (h.isBlank()) 0f else 8f * d
+        val wPx = (pad + r * 2 + gap + aw + mid + hw + gap + r * 2 + pad).toInt().coerceAtLeast(hPx)
+        val bmp = Bitmap.createBitmap(wPx, hPx, Bitmap.Config.ARGB_8888)
+        bmp.density = dpi
+        val c = Canvas(bmp)
+        val cy = hPx / 2f
+        drawLogo(c, left, pad + r, cy, r)
+        drawLogo(c, right, wPx - pad - r, cy, r)
+        val base = cy - (scorePaint.descent() + scorePaint.ascent()) / 2f
+        if (h.isBlank()) {
+            c.drawText(a, wPx / 2f, base, scorePaint)
+        } else {
+            val leftScoreCx = pad + r * 2 + gap + aw / 2f
+            val rightScoreCx = leftScoreCx + aw / 2f + mid + hw / 2f
+            c.drawText(a, leftScoreCx, base, scorePaint)
+            c.drawText(h, rightScoreCx, base, scorePaint)
         }
         return bmp
     }
