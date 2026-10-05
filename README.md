@@ -99,6 +99,8 @@
 
 **Now Bar 조건 (2.0.24~)** — Live Update는 `contentView` 커스텀 RemoteViews가 있으면 승격되지 않는다. 그래서 알림 본체는 표준 템플릿(BigText + `setShortCriticalText` + `setRequestPromotedOngoing`)이고, 로고·점수 화면은 삼성 비공개 extras 슬롯 `android.ongoingActivityNoti.chronometerRemoteView`에 `notification_nowbar.xml`을 넣어 그린다. 알약은 이 뷰의 **윗줄만 잘라서** 보여 주므로 윗줄(로고·점수·이닝)을 좁게 유지해야 한다. 이닝별 점수표는 `NowBarArt.scoreboard` 비트맵. 설정의 「미리보기」(경기 전/중/후)로 경기가 없어도 확인한다. 삼성 One UI는 허용 목록 밖 앱을 승격하지 않으므로(`canPostPromotedNotifications()` false) **개발자 옵션 › 「모든 앱의 실시간 정보 보기」**를 켜야 한다. 앱 코드로 우회할 수 없다. 설정의 「개발자 옵션 열기」로 바로 간다.
 
+**상태바 칩 한계 (2.0.47)** — 칩은 `chipIcon`+글자만 된다. `원정로고·점수:점수·홈로고`는 불가(스트립 축소·ImageSpan/액션 미지원). **상태바=왼쪽 로고+점수**, 양 로고는 Now Bar 카드 윗줄.
+
 - 설정한 **경기 시작 N분 전**(30분~4시간, 30분 단위, 기본 2시간)부터 표시
 - 경기 중에는 항상 표시. 종료·취소 카드를 밀어 지우면 같은 경기는 다시 안 올림. **다시 표시**나 새 LIVE만 예외 (1.3.83)
 
