@@ -24,7 +24,29 @@ object NowBarArt {
     }
 
     /**
-     * 가로 2:1. 왼쪽 원정, 오른쪽 홈. 가운데는 `vs`, 경기 중이면 루상 다이아몬드+아웃.
+     * 상태바·Now Bar 칩용. 원정 로고 · 점수 · 홈 로고 (예: 롯데로고 4:1 KT로고).
+     */
+    fun scoreStrip(left: Bitmap, right: Bitmap, center: String): Bitmap {
+        val w = 420
+        val h = 120
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val r = 38f
+        drawLogo(c, left, 8f + r, h / 2f, r)
+        drawLogo(c, right, w - 8f - r, h / 2f, r)
+        val t = paint {
+            color = 0xFFF2F2F2.toInt()
+            typeface = Typeface.DEFAULT_BOLD
+            textSize = if (center.length <= 5) 48f else 36f
+            textAlign = Paint.Align.CENTER
+        }
+        c.drawText(center.ifBlank { "vs" }, w / 2f, h / 2f - (t.descent() + t.ascent()) / 2f, t)
+        return bmp
+    }
+
+    /**
+     * 가로 2:1. 왼쪽 원정, 오른쪽 홈. 가운데는 `vs` 또는 루상 다이아몬드.
+     * 상태바 칩에는 [scoreStrip]을 쓰고, 큰 largeIcon 자리용으로 남긴다.
      */
     fun logoPair(left: Bitmap, right: Bitmap, middle: String, live: LotteGameInfo? = null): Bitmap {
         val w = 384
@@ -99,11 +121,11 @@ object NowBarArt {
         val sub = if (night) 0xFFB5B8BF.toInt() else 0xFF6B6F77.toInt()
         val line = if (night) 0x33FFFFFF else 0x22000000
 
-        val w = 1200
-        val rowH = 72f
-        val h = (rowH * 3 + 10).toInt()
-        val labelW = 130f
-        val statW = 60f
+        val w = 1280
+        val rowH = 80f
+        val h = (rowH * 3 + 12).toInt()
+        val labelW = 136f
+        val statW = 64f
         val colW = (w - labelW - statW * 3) / n
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
@@ -117,18 +139,18 @@ object NowBarArt {
             val y = row * rowH + rowH / 2f - (p.descent() + p.ascent()) / 2f
             c.drawText(t, cx, y, p)
         }
-        val hdr = text(sub, false, 34f, Paint.Align.CENTER)
-        val hdrNow = text(RED, true, 34f, Paint.Align.CENTER)
+        val hdr = text(sub, false, 36f, Paint.Align.CENTER)
+        val hdrNow = text(RED, true, 36f, Paint.Align.CENTER)
         for (i in 0 until n) {
             cell("${i + 1}", labelW + colW * i + colW / 2f, 0, if (live && i + 1 == g.inning) hdrNow else hdr)
         }
         listOf("R", "H", "E").forEachIndexed { k, t ->
-            cell(t, labelW + colW * n + statW * k + statW / 2f, 0, text(sub, true, 34f, Paint.Align.CENTER))
+            cell(t, labelW + colW * n + statW * k + statW / 2f, 0, text(sub, true, 36f, Paint.Align.CENTER))
         }
         c.drawRect(0f, rowH, w.toFloat(), rowH + 2f, paint { color = line })
-        val nameP = text(ink, true, 36f, Paint.Align.LEFT)
-        val plain = text(ink, false, 40f, Paint.Align.CENTER)
-        val hot = text(RED, true, 40f, Paint.Align.CENTER)
+        val nameP = text(ink, true, 38f, Paint.Align.LEFT)
+        val plain = text(ink, false, 44f, Paint.Align.CENTER)
+        val hot = text(RED, true, 44f, Paint.Align.CENTER)
         val rows = listOf(
             Triple(awayName, away, intArrayOf(awayR, awayH, awayE)),
             Triple(homeName, home, intArrayOf(homeR, homeH, homeE)),
@@ -143,7 +165,7 @@ object NowBarArt {
                 cell(t, labelW + colW * i + colW / 2f, row, if ((raw.toIntOrNull() ?: 0) > 0) hot else plain)
             }
             rhe.forEachIndexed { k, v ->
-                cell("$v", labelW + colW * n + statW * k + statW / 2f, row, text(ink, k == 0, 40f, Paint.Align.CENTER))
+                cell("$v", labelW + colW * n + statW * k + statW / 2f, row, text(ink, k == 0, 44f, Paint.Align.CENTER))
             }
         }
         return bmp

@@ -57,7 +57,7 @@ object KboPlayerSearchParser {
         var html = get(URL)
         val out = linkedMapOf<String, EntryPlayer>() // playerCode → player
         var eventTarget = TEAM_EVENT
-        repeat(maxPages) { pageIdx ->
+        for (pageIdx in 0 until maxPages) {
             val fields = hiddenFields(html)
             html = post(
                 eventTarget = eventTarget,
@@ -69,17 +69,18 @@ object KboPlayerSearchParser {
                     ?: fields["__hfPage"].orEmpty(),
             )
             val pagePlayers = parsePlayers(html)
-            if (pagePlayers.isEmpty()) return@repeat
+            // 빈 페이지면 더 이상 없음 — return@repeat(continue)가 아니라 종료
+            if (pagePlayers.isEmpty()) break
             var added = 0
             for (p in pagePlayers) {
                 val key = p.playerCode.ifBlank { "${p.name}|${p.backNumber}" }
                 if (out.putIfAbsent(key, p) == null) added++
             }
-            if (pageIdx > 0 && added == 0) return@repeat
+            if (pageIdx > 0 && added == 0) break
             val hasNext = html.contains("ucPager\$btnNext") ||
                 html.contains("ucPager&#39;\$btnNext") ||
                 (html.contains("ucPager") && html.contains("btnNext"))
-            if (!hasNext) return@repeat
+            if (!hasNext) break
             eventTarget = NEXT_EVENT
         }
         return out.values

@@ -87,7 +87,7 @@ object NotificationHelper {
     @Volatile private var lastLiveCustom: Boolean? = null
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 22
+    private const val LIVE_NOTIFY_STYLE_REV = 23
     private const val COLOR_LOTTE = 0xFFC8102E.toInt()
     private const val COLOR_CHIP = 0xFF2F6FED.toInt()
     private const val COLOR_LABEL = 0xFF8A8F98.toInt()
@@ -384,28 +384,39 @@ object NotificationHelper {
         )
 
         if (useNowBar) {
-            val chip = nowBar.chip
+            // 점수·vs는 chipIcon(scoreStrip)에 넣고, 글자 칩은 비워 중복을 막는다.
             builder
                 .setSubText(nowBar.chipSub.ifBlank { null })
-                .setShortCriticalText(chip)
+                .setShortCriticalText("")
                 .setRequestPromotedOngoing(true)
-            val pair = if (game != null) {
-                val s = nowBarSides(game)
+            val sides = game?.let { nowBarSides(it) }
+            val chipArt = sides?.let { s ->
+                val center = when {
+                    game!!.isSuspended -> "중단"
+                    game.status == GameStatus.BEFORE -> "vs"
+                    game.status == GameStatus.CANCELED -> "취소"
+                    else -> nowBar.chip
+                }
+                NowBarArt.scoreStrip(
+                    WidgetAssets.loadTeamLogoBitmapCachedOnly(context, s.leftCode, s.leftName),
+                    WidgetAssets.loadTeamLogoBitmapCachedOnly(context, s.rightCode, s.rightName),
+                    center,
+                )
+            }
+            val large = sides?.let { s ->
                 NowBarArt.logoPair(
                     WidgetAssets.loadTeamLogoBitmapCachedOnly(context, s.leftCode, s.leftName),
                     WidgetAssets.loadTeamLogoBitmapCachedOnly(context, s.rightCode, s.rightName),
-                    if (game.status == GameStatus.BEFORE) "vs" else "",
+                    if (game!!.status == GameStatus.BEFORE) "vs" else "",
                     game.takeIf { it.status == GameStatus.LIVE && !it.isSuspended },
                 )
-            } else {
-                null
             }
             val card = game?.let { buildLiveRemoteViews(context, it, winProbSeries, nowBar, pregameProb) }
-            applySamsungOngoingExtras(builder, context, nowBar, pair, card)
+            applySamsungOngoingExtras(builder, context, nowBar.copy(chip = ""), chipArt, card)
             val style = NotificationCompat.BigTextStyle()
                 .setBigContentTitle(title)
                 .bigText(nowBarBigText(nowBar))
-            if (pair != null) builder.setLargeIcon(pair)
+            if (large != null) builder.setLargeIcon(large)
             // 삼성 카드가 contentText를 카드 아래 글자 한 줄로 따로 그린다. 카드 안에 다 있으므로 뺀다.
             builder.setContentText(null).setStyle(style).setDeleteIntent(hide)
             if (finished) builder.addAction(0, "닫기", hide)
@@ -441,8 +452,9 @@ object NotificationHelper {
         }
 
         val notification = builder.build()
-        if (useNowBar && nowBar.chip.isNotBlank()) {
-            notification.extras.putString("android.shortCriticalText", nowBar.chip)
+        // 점수·vs는 scoreStrip 칩 아이콘에 포함. 글자 칩은 비워 중복 표시를 막는다.
+        if (useNowBar) {
+            notification.extras.putString("android.shortCriticalText", "")
         }
         return notification
     }

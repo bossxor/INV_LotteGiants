@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
@@ -339,32 +340,44 @@ fun SettingsScreen(
         Text("오늘 알림", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         SectionCard {
-            if (todayAlerts.isEmpty()) {
-                Text(
-                    "오늘 보낸 알림이 없습니다",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                todayAlerts.forEachIndexed { i, item ->
-                    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                        Text(item.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                        if (item.text.isNotBlank()) {
+            // SectionCard는 Box라 형제 Composable이 겹친다. Column으로 쌓는다.
+            Column(Modifier.fillMaxWidth()) {
+                if (todayAlerts.isEmpty()) {
+                    Text(
+                        "오늘 보낸 알림이 없습니다",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    todayAlerts.forEachIndexed { i, item ->
+                        Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                             Text(
-                                item.text,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 3,
+                                item.title,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (item.text.isNotBlank()) {
+                                Text(
+                                    item.text,
+                                    fontSize = 12.sp,
+                                    lineHeight = 17.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                        if (i < todayAlerts.lastIndex) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(MaterialTheme.colorScheme.outlineVariant),
                             )
                         }
-                    }
-                    if (i < todayAlerts.lastIndex) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .background(MaterialTheme.colorScheme.outlineVariant),
-                        )
                     }
                 }
             }

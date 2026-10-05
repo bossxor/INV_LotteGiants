@@ -1295,19 +1295,45 @@ class GiantsRepository private constructor(context: Context) {
         if (cachedRaw.isNotEmpty() && cached.isEmpty()) {
             store.setJerseyRoster(code, season, emptyList())
         }
-        val remote = runCatching {
+        val fromSearch = runCatching {
             KboPlayerSearchParser.fetchTeamPlayers(code)
         }.onFailure { e ->
             Log.w("GiantsRepo", "jersey roster search failed: ${e.message}")
-        }.getOrDefault(emptyList()).ifEmpty {
-            // 선수조회 실패 시 1군 등록현황으로 폴백
-            runCatching {
-                val html = KboRegisterAllParser.fetchHtml()
-                KboRegisterAllParser.parseTeamPlayers(html, code)
-            }.onFailure { e ->
-                Log.w("GiantsRepo", "jersey roster registerAll fallback failed: ${e.message}")
-            }.getOrDefault(emptyList())
-        }
+        }.getOrDefault(emptyList())
+        val fromRegister = runCatching {
+            val html = KboRegisterAllParser.fetchHtml()
+            KboRegisterAllParser.parseTeamPlayers(html, code)
+        }.onFailure { e ->
+            Log.w("GiantsRepo", "jersey roster registerAll failed: ${e.message}")
+        }.getOrDefault(emptyList())
+        // 선수조회(1군·퓨처스) + 등록현황을 playerCode 기준으로 합친다.
+        val remote = linkedMapOf<String, EntryPlayer>().apply {
+            for (p in fromSearch + fromRegister) {
+                val key = p.playerCode.ifBlank { "${p.name}|${p.backNumber}" }
+                val prev = this[key]
+                if (prev == null) {
+                    put(key, p)
+                } else {
+                    // 등번호·포지션이 비어 있으면 다른 소스 값으로 채움
+                    put(
+                        key,
+                        prev.copy(
+                            backNumber = prev.backNumber.ifBlank { p.backNumber },
+                            position = prev.position.ifBlank { p.position },
+                            playerCode = prev.playerCode.ifBlank { p.playerCode },
+                            isPitcher = prev.isPitcher || p.isPitcher,
+                        ),
+                    )
+                }
+            }
+        }.values.toList()
+            .sortedWith(
+                compareBy(
+                    { it.backNumber.toIntOrNull() ?: Int.MAX_VALUE },
+                    { it.backNumber },
+                    { it.name },
+                ),
+            )
         if (remote.isEmpty()) {
             if (cached.isNotEmpty()) return@withContext cached
             return@withContext leadersAsJerseyFallback(code)
