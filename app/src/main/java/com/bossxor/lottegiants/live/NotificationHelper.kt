@@ -87,7 +87,7 @@ object NotificationHelper {
     @Volatile private var lastLiveCustom: Boolean? = null
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 23
+    private const val LIVE_NOTIFY_STYLE_REV = 24
     private const val COLOR_LOTTE = 0xFFC8102E.toInt()
     private const val COLOR_CHIP = 0xFF2F6FED.toInt()
     private const val COLOR_LABEL = 0xFF8A8F98.toInt()
@@ -384,10 +384,11 @@ object NotificationHelper {
         )
 
         if (useNowBar) {
-            // 점수·vs는 chipIcon(scoreStrip)에 넣고, 글자 칩은 비워 중복을 막는다.
+            // Live Update 칩 본문은 shortCriticalText. chipIcon은 정사각 scoreStrip(로고·점수·로고).
+            val chip = nowBar.chip
             builder
                 .setSubText(nowBar.chipSub.ifBlank { null })
-                .setShortCriticalText("")
+                .setShortCriticalText(chip)
                 .setRequestPromotedOngoing(true)
             val sides = game?.let { nowBarSides(it) }
             val chipArt = sides?.let { s ->
@@ -395,7 +396,7 @@ object NotificationHelper {
                     game!!.isSuspended -> "중단"
                     game.status == GameStatus.BEFORE -> "vs"
                     game.status == GameStatus.CANCELED -> "취소"
-                    else -> nowBar.chip
+                    else -> chip
                 }
                 NowBarArt.scoreStrip(
                     WidgetAssets.loadTeamLogoBitmapCachedOnly(context, s.leftCode, s.leftName),
@@ -412,7 +413,7 @@ object NotificationHelper {
                 )
             }
             val card = game?.let { buildLiveRemoteViews(context, it, winProbSeries, nowBar, pregameProb) }
-            applySamsungOngoingExtras(builder, context, nowBar.copy(chip = ""), chipArt, card)
+            applySamsungOngoingExtras(builder, context, nowBar, chipArt, card)
             val style = NotificationCompat.BigTextStyle()
                 .setBigContentTitle(title)
                 .bigText(nowBarBigText(nowBar))
@@ -452,9 +453,8 @@ object NotificationHelper {
         }
 
         val notification = builder.build()
-        // 점수·vs는 scoreStrip 칩 아이콘에 포함. 글자 칩은 비워 중복 표시를 막는다.
-        if (useNowBar) {
-            notification.extras.putString("android.shortCriticalText", "")
+        if (useNowBar && nowBar.chip.isNotBlank()) {
+            notification.extras.putString("android.shortCriticalText", nowBar.chip)
         }
         return notification
     }

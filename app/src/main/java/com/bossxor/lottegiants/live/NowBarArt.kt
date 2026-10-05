@@ -24,23 +24,30 @@ object NowBarArt {
     }
 
     /**
-     * 상태바·Now Bar 칩용. 원정 로고 · 점수 · 홈 로고 (예: 롯데로고 4:1 KT로고).
+     * 상태바 칩 아이콘용. 정사각에 원정로고·점수·홈로고를 크게 채워
+     * 칩 슬롯으로 줄어들어도 읽을 수 있게 한다.
      */
     fun scoreStrip(left: Bitmap, right: Bitmap, center: String): Bitmap {
-        val w = 420
-        val h = 120
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val size = 288
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
-        val r = 38f
-        drawLogo(c, left, 8f + r, h / 2f, r)
-        drawLogo(c, right, w - 8f - r, h / 2f, r)
+        val cy = size / 2f
+        val r = 72f
+        drawLogo(c, left, 8f + r, cy, r)
+        drawLogo(c, right, size - 8f - r, cy, r)
+        val label = center.ifBlank { "vs" }
         val t = paint {
-            color = 0xFFF2F2F2.toInt()
+            color = 0xFFFFFFFF.toInt()
             typeface = Typeface.DEFAULT_BOLD
-            textSize = if (center.length <= 5) 48f else 36f
+            textSize = when {
+                label.length <= 3 -> 72f
+                label.length <= 5 -> 58f
+                else -> 44f
+            }
             textAlign = Paint.Align.CENTER
+            setShadowLayer(6f, 0f, 2f, 0xCC000000.toInt())
         }
-        c.drawText(center.ifBlank { "vs" }, w / 2f, h / 2f - (t.descent() + t.ascent()) / 2f, t)
+        c.drawText(label, size / 2f, cy - (t.descent() + t.ascent()) / 2f, t)
         return bmp
     }
 
