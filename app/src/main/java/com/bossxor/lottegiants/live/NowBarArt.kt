@@ -24,29 +24,33 @@ object NowBarArt {
     }
 
     /**
-     * 상태바 칩용 가로 스트립. 원정로고 · 점수 · 홈로고 (글자 칩과 같이 쓰면 로고로고+점수가 된다).
+     * 상태바 칩 전체(가로로 길게). 원정로고 · 점수 · 홈로고.
+     * 시스템 칩은 아이콘+글자 한 칸이라 secondIcon이 잘리므로, 한 장으로 그린다.
      */
     fun scoreStrip(left: Bitmap, right: Bitmap, center: String): Bitmap {
-        val w = 720
-        val h = 160
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        val c = Canvas(bmp)
-        val cy = h / 2f
-        val r = 68f
-        drawLogo(c, left, 12f + r, cy, r)
-        drawLogo(c, right, w - 12f - r, cy, r)
+        val h = 96
+        val r = 38f
+        val pad = 12f
+        val gap = 36f // 로고↔점수 여백 — 칩 전체 길이를 늘림
         val label = center.ifBlank { "vs" }
         val t = paint {
             color = 0xFFFFFFFF.toInt()
             typeface = Typeface.DEFAULT_BOLD
             textSize = when {
-                label.length <= 3 -> 96f
-                label.length <= 5 -> 80f
-                else -> 60f
+                label.length <= 3 -> 54f
+                label.length <= 5 -> 46f
+                else -> 38f
             }
             textAlign = Paint.Align.CENTER
-            setShadowLayer(8f, 0f, 2f, 0xCC000000.toInt())
+            setShadowLayer(4f, 0f, 1f, 0x99000000.toInt())
         }
+        val tw = t.measureText(label).coerceAtLeast(96f)
+        val w = (pad + r * 2 + gap + tw + gap + r * 2 + pad).toInt().coerceAtLeast(560)
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val cy = h / 2f
+        drawLogo(c, left, pad + r, cy, r)
+        drawLogo(c, right, w - pad - r, cy, r)
         c.drawText(label, w / 2f, cy - (t.descent() + t.ascent()) / 2f, t)
         return bmp
     }

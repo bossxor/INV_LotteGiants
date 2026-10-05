@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.34` (`versionCode` **2034**) |
+| **버전** | `2.0.35` (`versionCode` **2035**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.netlify.app/) |
@@ -237,8 +237,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.34` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2034` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.35` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2035` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -288,6 +288,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.35** | 상태바 칩: 가로 scoreStrip(로고·점수·로고), 우측 로고 잘림 수정 |
 | **2.0.34** | 상태바 칩: 구글 스포츠형(점수 글자 + firstIcon/secondIcon 양 팀 로고) |
 | **2.0.33** | 상태바 칩: 원정로고·점수·홈로고 한 장(옆 점수 글자·로고쌍 largeIcon 제거) |
 | **2.0.32** | 등번호 일람 페이저 수정(btnNo·btnLast). 한화 류현진 등 10개 팀 전체 |
