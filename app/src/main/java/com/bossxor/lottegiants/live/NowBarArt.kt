@@ -24,14 +24,25 @@ object NowBarArt {
     }
 
     /**
-     * 상태바 칩 전체(가로로 길게). 원정로고 · 점수 · 홈로고.
-     * 시스템 칩은 아이콘+글자 한 칸이라 secondIcon이 잘리므로, 한 장으로 그린다.
+     * 상태바 칩 아이콘 칸용. 정사각에 원정·홈 로고를 좌우로(점수는 시스템 글자).
+     * 가로 스트립에 점수까지 그리면 칩 아이콘으로 줄어들어 안 보인다.
      */
+    fun logoDuo(left: Bitmap, right: Bitmap): Bitmap {
+        val s = 128
+        val bmp = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val r = 46f
+        drawLogo(c, left, s * 0.28f, s / 2f, r)
+        drawLogo(c, right, s * 0.72f, s / 2f, r)
+        return bmp
+    }
+
+    /** 알림 서랍·미리보기용. 원정로고 · 점수 · 홈로고 (칩 아이콘에는 쓰지 말 것). */
     fun scoreStrip(left: Bitmap, right: Bitmap, center: String): Bitmap {
         val h = 96
         val r = 38f
         val pad = 12f
-        val gap = 36f // 로고↔점수 여백 — 칩 전체 길이를 늘림
+        val gap = 36f
         val label = center.ifBlank { "vs" }
         val t = paint {
             color = 0xFFFFFFFF.toInt()

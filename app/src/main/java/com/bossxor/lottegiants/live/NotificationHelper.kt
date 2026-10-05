@@ -87,7 +87,7 @@ object NotificationHelper {
     @Volatile private var lastLiveCustom: Boolean? = null
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 27
+    private const val LIVE_NOTIFY_STYLE_REV = 28
     private const val COLOR_LOTTE = 0xFFC8102E.toInt()
     private const val COLOR_CHIP = 0xFF2F6FED.toInt()
     private const val COLOR_LABEL = 0xFF8A8F98.toInt()
@@ -383,9 +383,10 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        var statusChipText = nowBar.chip
         if (useNowBar) {
-            // 칩 전체 = 가로로 긴 scoreStrip(로고·점수·로고).
-            // 시스템 칩은 [아이콘][글자]라 secondIcon(우측 로고)이 잘리므로 글자 칸은 비운다.
+            // 점수는 시스템 글자(크게), 양 로고는 칩 아이콘 칸(logoDuo).
+            // 가로 스트립에 점수까지 그리면 아이콘으로 축소돼 안 보인다.
             val chip = when {
                 game == null -> nowBar.chip
                 game.isSuspended -> "중단"
@@ -393,9 +394,10 @@ object NotificationHelper {
                 game.status == GameStatus.CANCELED -> "취소"
                 else -> nowBar.chip
             }
+            statusChipText = chip
             builder
                 .setSubText(nowBar.chipSub.ifBlank { null })
-                .setShortCriticalText(chip.ifBlank { "·" }) // Live Update 승격용, 표시는 extras에서 비움
+                .setShortCriticalText(chip.ifBlank { "·" })
                 .setRequestPromotedOngoing(true)
             val sides = game?.let { nowBarSides(it) }
             val awayBmp = sides?.let {
@@ -404,17 +406,17 @@ object NotificationHelper {
             val homeBmp = sides?.let {
                 WidgetAssets.loadTeamLogoBitmapCachedOnly(context, it.rightCode, it.rightName)
             }
-            val chipStrip = if (awayBmp != null && homeBmp != null) {
-                NowBarArt.scoreStrip(awayBmp, homeBmp, chip)
+            val duo = if (awayBmp != null && homeBmp != null) {
+                NowBarArt.logoDuo(awayBmp, homeBmp)
             } else {
-                null
+                awayBmp
             }
             val card = game?.let { buildLiveRemoteViews(context, it, winProbSeries, nowBar, pregameProb) }
             applySamsungOngoingExtras(
                 builder = builder,
                 context = context,
-                c = nowBar.copy(chip = ""),
-                chipStrip = chipStrip,
+                c = nowBar.copy(chip = chip),
+                chipIconBmp = duo,
                 awayLogo = awayBmp,
                 homeLogo = homeBmp,
                 card = card,
@@ -466,11 +468,8 @@ object NotificationHelper {
         }
 
         val notification = builder.build()
-        if (useNowBar) {
-            // 점수·로고는 chipStrip에만. 글자 칸을 비워야 칩이 가로로 길어지며 우측 로고가 보인다.
-            notification.extras.putString("android.shortCriticalText", "")
-            notification.extras.putString("android.ongoingActivityNoti.chipExpandedText", "")
-            notification.extras.putString("android.ongoingActivityNoti.nowbarPrimaryInfo", "")
+        if (useNowBar && statusChipText.isNotBlank()) {
+            notification.extras.putString("android.shortCriticalText", statusChipText)
         }
         return notification
     }
@@ -581,28 +580,31 @@ object NotificationHelper {
     }
 
     /**
-     * 상태바 칩 = 가로 scoreStrip(chipIcon). 글자 칸을 비워 칩 폭이 스트립을 따라가게 한다.
+     * 상태바 칩 = [로고용 아이콘] + [점수 시스템 글자].
+     * 점수를 비트맵에 넣으면 아이콘 크기로 줄어들어 안 보인다.
      */
     private fun applySamsungOngoingExtras(
         builder: NotificationCompat.Builder,
         context: Context,
         c: NowBarContent,
-        chipStrip: Bitmap?,
+        chipIconBmp: Bitmap?,
         awayLogo: Bitmap?,
         homeLogo: Bitmap?,
         card: RemoteViews?,
     ) {
         val appIcon = Icon.createWithResource(context, R.drawable.ic_notification)
-        val stripIcon = chipStrip?.let { Icon.createWithBitmap(it) }
+        val chipIcon = chipIconBmp?.let { Icon.createWithBitmap(it) }
+            ?: awayLogo?.let { Icon.createWithBitmap(it) }
+            ?: appIcon
         val awayIcon = awayLogo?.let { Icon.createWithBitmap(it) }
         val homeIcon = homeLogo?.let { Icon.createWithBitmap(it) }
         val extras = Bundle().apply {
             putInt("android.ongoingActivityNoti.style", 1)
             putString("android.ongoingActivityNoti.primaryInfo", c.title)
             putInt("android.ongoingActivityNoti.chipBgColor", COLOR_CHIP)
-            putParcelable("android.ongoingActivityNoti.chipIcon", stripIcon ?: awayIcon ?: appIcon)
-            putString("android.ongoingActivityNoti.chipExpandedText", "")
-            putString("android.ongoingActivityNoti.nowbarPrimaryInfo", "")
+            putParcelable("android.ongoingActivityNoti.chipIcon", chipIcon)
+            putString("android.ongoingActivityNoti.chipExpandedText", c.chip)
+            putString("android.ongoingActivityNoti.nowbarPrimaryInfo", c.chip)
             putString("android.ongoingActivityNoti.nowbarSecondaryInfo", c.chipSub)
             if (awayIcon != null) {
                 putParcelable("android.ongoingActivityNoti.firstIcon", awayIcon)
