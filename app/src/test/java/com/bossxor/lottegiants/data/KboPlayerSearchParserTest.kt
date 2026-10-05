@@ -61,4 +61,24 @@ class KboPlayerSearchParserTest {
         assertTrue(players.any { it.name == "박세웅" && it.isPitcher && it.backNumber == "21" })
         assertTrue(players.any { it.name == "무번호" && it.backNumber.isEmpty() })
     }
+
+    @Test
+    fun nextPageNumber_skipsVisitedBtnNo() {
+        val html = """
+            <a href="javascript:__doPostBack('ctl00${'$'}ctl00${'$'}ctl00${'$'}cphContents${'$'}cphContents${'$'}cphContents${'$'}ucPager${'$'}btnNo1','')">1</a>
+            <a href="javascript:__doPostBack('ctl00${'$'}ctl00${'$'}ctl00${'$'}cphContents${'$'}cphContents${'$'}cphContents${'$'}ucPager${'$'}btnNo2','')">2</a>
+            <a href="javascript:__doPostBack('ctl00${'$'}ctl00${'$'}ctl00${'$'}cphContents${'$'}cphContents${'$'}cphContents${'$'}ucPager${'$'}btnNo3','')">3</a>
+        """.trimIndent()
+        assertEquals(2, KboPlayerSearchParser.nextPageNumber(html, setOf(1)))
+        assertEquals(null, KboPlayerSearchParser.nextPageNumber(html, setOf(1, 2, 3)))
+    }
+
+    @Test
+    fun currentPage_prefersHfPageOverOnClass() {
+        val html = """
+            <input type="hidden" id="cphContents_cphContents_cphContents_hfPage" value="6" />
+            <a id="cphContents_cphContents_cphContents_ucPager_btnNo1" class="on" href="#">1</a>
+        """.trimIndent()
+        assertEquals(6, KboPlayerSearchParser.currentPage(html))
+    }
 }

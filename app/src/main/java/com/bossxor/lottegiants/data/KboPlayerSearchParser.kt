@@ -27,8 +27,8 @@ object KboPlayerSearchParser {
         "ctl00\$ctl00\$ctl00\$cphContents\$cphContents\$cphContents\$hfPage"
     private const val TEAM_EVENT =
         "ctl00\$ctl00\$ctl00\$cphContents\$cphContents\$cphContents\$ddlTeam"
-    private const val NEXT_EVENT =
-        "ctl00\$ctl00\$ctl00\$cphContents\$cphContents\$cphContents\$ucPager\$btnNext"
+    private const val PAGER_PREFIX =
+        "ctl00\$ctl00\$ctl00\$cphContents\$cphContents\$cphContents\$ucPager\$"
 
     private val cookieStore = mutableMapOf<String, List<okhttp3.Cookie>>()
 
@@ -51,12 +51,21 @@ object KboPlayerSearchParser {
     private val rowRe = Regex(
         """(?is)<tr>\s*<td[^>]*>\s*([^<]*?)\s*</td>\s*<td[^>]*>\s*<a[^>]+playerId=(\d+)[^>]*>([^<]+)</a>\s*</td>\s*<td[^>]*>\s*([^<]*?)\s*</td>\s*<td[^>]*>\s*([^<]*?)\s*</td>""",
     )
+    /** KBO 페이저는 btnNext가 없고 btnNo1, btnNo2… 숫자 버튼이다. ($는 정규식에서 이스케이프) */
+    private val pageBtnRe = Regex(
+        """ucPager\${'$'}btnNo(\d+)""",
+    )
+    private val pageBtnOnRe = Regex(
+        """id="[^"]*ucPager_btnNo(\d+)"[^>]*class="[^"]*\bon\b""",
+    )
 
-    fun fetchTeamPlayers(teamCode: String, maxPages: Int = 30): List<EntryPlayer> {
+    fun fetchTeamPlayers(teamCode: String, maxPages: Int = 40): List<EntryPlayer> {
         val code = teamCode.ifBlank { LOTTE_TEAM_CODE }.uppercase()
         var html = get(URL)
         val out = linkedMapOf<String, EntryPlayer>() // playerCode → player
+        val visitedPages = linkedSetOf<Int>()
         var eventTarget = TEAM_EVENT
+        var triedLast = false
         for (pageIdx in 0 until maxPages) {
             val fields = hiddenFields(html)
             html = post(
@@ -69,19 +78,27 @@ object KboPlayerSearchParser {
                     ?: fields["__hfPage"].orEmpty(),
             )
             val pagePlayers = parsePlayers(html)
-            // 빈 페이지면 더 이상 없음 — return@repeat(continue)가 아니라 종료
             if (pagePlayers.isEmpty()) break
             var added = 0
             for (p in pagePlayers) {
                 val key = p.playerCode.ifBlank { "${p.name}|${p.backNumber}" }
                 if (out.putIfAbsent(key, p) == null) added++
             }
+            val current = currentPage(html)
+            if (current != null) visitedPages.add(current)
             if (pageIdx > 0 && added == 0) break
-            val hasNext = html.contains("ucPager\$btnNext") ||
-                html.contains("ucPager&#39;\$btnNext") ||
-                (html.contains("ucPager") && html.contains("btnNext"))
-            if (!hasNext) break
-            eventTarget = NEXT_EVENT
+            val nextPage = nextPageNumber(html, visitedPages)
+            if (nextPage != null) {
+                eventTarget = "${PAGER_PREFIX}btnNo$nextPage"
+                continue
+            }
+            // 1~5만 보이는 페이저: 6페이지 이상은 btnLast로 이동 (hfPage 기준)
+            if (!triedLast && html.contains("ucPager\$btnLast")) {
+                triedLast = true
+                eventTarget = "${PAGER_PREFIX}btnLast"
+                continue
+            }
+            break
         }
         return out.values
             .sortedWith(
@@ -91,6 +108,19 @@ object KboPlayerSearchParser {
                     { it.name },
                 ),
             )
+    }
+
+    /** 화면에 보이는 btnNo 중 아직 안 본 가장 작은 페이지. */
+    internal fun nextPageNumber(html: String, visited: Set<Int>): Int? {
+        val available = pageBtnRe.findAll(html).mapNotNull { it.groupValues[1].toIntOrNull() }.toSortedSet()
+        if (available.isEmpty()) return null
+        return available.firstOrNull { it !in visited }
+    }
+
+    /** hfPage가 진실. btnNo class=on 은 6페이지 이상에서 어긋날 수 있다. */
+    internal fun currentPage(html: String): Int? {
+        hiddenFields(html)["cphContents_cphContents_cphContents_hfPage"]?.toIntOrNull()?.let { return it }
+        return pageBtnOnRe.find(html)?.groupValues?.getOrNull(1)?.toIntOrNull()
     }
 
     fun parsePlayers(html: String): List<EntryPlayer> =
