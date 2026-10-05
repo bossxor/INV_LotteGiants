@@ -87,7 +87,7 @@ object NotificationHelper {
     @Volatile private var lastLiveCustom: Boolean? = null
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 25
+    private const val LIVE_NOTIFY_STYLE_REV = 26
     private const val COLOR_LOTTE = 0xFFC8102E.toInt()
     private const val COLOR_CHIP = 0xFF2F6FED.toInt()
     private const val COLOR_LABEL = 0xFF8A8F98.toInt()
@@ -383,42 +383,51 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        var statusChipText = nowBar.chip
         if (useNowBar) {
-            // 상태바 칩 = scoreStrip 한 장(로고·점수·로고). 글자 칩을 붙이면 "로고로고 점수"가 된다.
-            val chip = nowBar.chip
-            val chipCenter = when {
-                game == null -> chip
+            // 구글/네이버 스포츠형: 점수·vs는 시스템 글자, 양 팀 로고는 firstIcon·secondIcon.
+            val chip = when {
+                game == null -> nowBar.chip
                 game.isSuspended -> "중단"
-                game.status == GameStatus.BEFORE -> "vs"
+                game.status == GameStatus.BEFORE -> nowBar.chip.ifBlank { "vs" }
                 game.status == GameStatus.CANCELED -> "취소"
-                else -> chip
+                else -> nowBar.chip
             }
+            statusChipText = chip
             builder
                 .setSubText(nowBar.chipSub.ifBlank { null })
-                // 승격용으로만 두고, 삼성 칩 글자는 extras에서 비운다.
-                .setShortCriticalText(chipCenter.ifBlank { "·" })
+                .setShortCriticalText(chip.ifBlank { "·" })
                 .setRequestPromotedOngoing(true)
             val sides = game?.let { nowBarSides(it) }
-            val chipArt = sides?.let { s ->
-                NowBarArt.scoreStrip(
-                    WidgetAssets.loadTeamLogoBitmapCachedOnly(context, s.leftCode, s.leftName),
-                    WidgetAssets.loadTeamLogoBitmapCachedOnly(context, s.rightCode, s.rightName),
-                    chipCenter,
-                )
+            val awayBmp = sides?.let {
+                WidgetAssets.loadTeamLogoBitmapCachedOnly(context, it.leftCode, it.leftName)
+            }
+            val homeBmp = sides?.let {
+                WidgetAssets.loadTeamLogoBitmapCachedOnly(context, it.rightCode, it.rightName)
             }
             val card = game?.let { buildLiveRemoteViews(context, it, winProbSeries, nowBar, pregameProb) }
-            // largeIcon(로고쌍)을 넣으면 칩이 그걸 써서 로고·로고+점수가 된다 → 넣지 않음
             applySamsungOngoingExtras(
-                builder,
-                context,
-                nowBar.copy(chip = ""), // 칩 옆 점수 글자 제거
-                chipArt,
-                card,
+                builder = builder,
+                context = context,
+                c = nowBar.copy(chip = chip),
+                awayLogo = awayBmp,
+                homeLogo = homeBmp,
+                card = card,
             )
             val style = NotificationCompat.BigTextStyle()
                 .setBigContentTitle(title)
                 .bigText(nowBarBigText(nowBar))
-            if (chipArt != null) builder.setLargeIcon(chipArt)
+            // largeIcon은 알림 서랍용. 칩과 분리해 로고쌍·다이아몬드.
+            if (sides != null) {
+                builder.setLargeIcon(
+                    NowBarArt.logoPair(
+                        awayBmp!!,
+                        homeBmp!!,
+                        if (game!!.status == GameStatus.BEFORE) "vs" else "",
+                        game.takeIf { it.status == GameStatus.LIVE && !it.isSuspended },
+                    ),
+                )
+            }
             // 삼성 카드가 contentText를 카드 아래 글자 한 줄로 따로 그린다. 카드 안에 다 있으므로 뺀다.
             builder.setContentText(null).setStyle(style).setDeleteIntent(hide)
             if (finished) builder.addAction(0, "닫기", hide)
@@ -454,11 +463,8 @@ object NotificationHelper {
         }
 
         val notification = builder.build()
-        if (useNowBar) {
-            // AOSP shortCriticalText / 삼성 칩 글자를 비워 scoreStrip(로고·점수·로고)만 보이게.
-            notification.extras.putString("android.shortCriticalText", "")
-            notification.extras.putString("android.ongoingActivityNoti.chipExpandedText", "")
-            notification.extras.putString("android.ongoingActivityNoti.nowbarPrimaryInfo", "")
+        if (useNowBar && statusChipText.isNotBlank()) {
+            notification.extras.putString("android.shortCriticalText", statusChipText)
         }
         return notification
     }
@@ -569,31 +575,39 @@ object NotificationHelper {
     }
 
     /**
-     * 네이버지도 같은 One UI 7 Ongoing Activity extras.
+     * 구글 스포츠형 칩: firstIcon · 점수글자 · secondIcon (+ shortCriticalText).
      * One UI 8+ 는 Live Update(`setRequestPromotedOngoing`)가 주 경로.
      */
     private fun applySamsungOngoingExtras(
         builder: NotificationCompat.Builder,
         context: Context,
         c: NowBarContent,
-        chipArt: Bitmap?,
+        awayLogo: Bitmap?,
+        homeLogo: Bitmap?,
         card: RemoteViews?,
     ) {
         val appIcon = Icon.createWithResource(context, R.drawable.ic_notification)
-        val chipIcon = chipArt?.let { Icon.createWithBitmap(it) } ?: appIcon
+        val awayIcon = awayLogo?.let { Icon.createWithBitmap(it) }
+        val homeIcon = homeLogo?.let { Icon.createWithBitmap(it) }
         val extras = Bundle().apply {
             putInt("android.ongoingActivityNoti.style", 1)
             putString("android.ongoingActivityNoti.primaryInfo", c.title)
             putInt("android.ongoingActivityNoti.chipBgColor", COLOR_CHIP)
-            putParcelable("android.ongoingActivityNoti.chipIcon", chipIcon)
+            // 칩 앞 아이콘(폴백). 양 팀은 first/secondIcon.
+            putParcelable("android.ongoingActivityNoti.chipIcon", awayIcon ?: appIcon)
             putString("android.ongoingActivityNoti.chipExpandedText", c.chip)
             putString("android.ongoingActivityNoti.nowbarPrimaryInfo", c.chip)
             putString("android.ongoingActivityNoti.nowbarSecondaryInfo", c.chipSub)
-            // 종료 카드의 「닫기」 버튼을 삼성 카드에도 노출 (값의 뜻은 비공개 — 1/0이 동작 확인됨 여부는 실기 확인)
+            if (awayIcon != null) {
+                putParcelable("android.ongoingActivityNoti.firstIcon", awayIcon)
+                putParcelable("android.ongoingActivityNoti.nowbarIcon", awayIcon)
+            }
+            if (homeIcon != null) {
+                putParcelable("android.ongoingActivityNoti.secondIcon", homeIcon)
+            }
             putInt("android.ongoingActivityNoti.actionType", 1)
             putInt("android.ongoingActivityNoti.actionPrimarySet", 0)
             if (card != null) {
-                // 삼성 Live Notification의 커스텀 슬롯. 기본 글자 영역(primary)을 이 뷰로 바꾼다.
                 putParcelable("android.ongoingActivityNoti.chronometerRemoteView", card)
                 putInt("android.ongoingActivityNoti.chronometerRemoteViewPosition", 1)
                 putString("android.ongoingActivityNoti.chronometerRemoteViewTag", "lotte_card")
