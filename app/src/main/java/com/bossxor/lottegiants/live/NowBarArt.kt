@@ -24,51 +24,43 @@ object NowBarArt {
     }
 
     /**
-     * 상태바 칩 아이콘 칸용. 정사각에 원정·홈 로고를 좌우로(점수는 시스템 글자).
-     * 가로 스트립에 점수까지 그리면 칩 아이콘으로 줄어들어 안 보인다.
+     * 상태바 칩용 정사각. 원정로고 · 원정점수 · 홈점수 · 홈로고.
+     * (가로 스트립은 정사각 아이콘 칸에 잘려서 안 보이므로 정사각으로 그린다.)
      */
-    fun logoDuo(left: Bitmap, right: Bitmap): Bitmap {
-        val s = 128
+    fun scoreChip(left: Bitmap, right: Bitmap, awayScore: String, homeScore: String): Bitmap {
+        val s = 256
         val bmp = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
-        val r = 46f
-        drawLogo(c, left, s * 0.28f, s / 2f, r)
-        drawLogo(c, right, s * 0.72f, s / 2f, r)
-        return bmp
-    }
-
-    /** 알림 서랍·미리보기용. 원정로고 · 점수 · 홈로고 (칩 아이콘에는 쓰지 말 것). */
-    fun scoreStrip(left: Bitmap, right: Bitmap, center: String): Bitmap {
-        val h = 96
-        val r = 38f
-        val pad = 12f
-        val gap = 36f
-        val label = center.ifBlank { "vs" }
-        val t = paint {
+        val cy = s / 2f
+        val r = 40f
+        drawLogo(c, left, 6f + r, cy, r)
+        drawLogo(c, right, s - 6f - r, cy, r)
+        val scorePaint = paint {
             color = 0xFFFFFFFF.toInt()
             typeface = Typeface.DEFAULT_BOLD
-            textSize = when {
-                label.length <= 3 -> 54f
-                label.length <= 5 -> 46f
-                else -> 38f
-            }
             textAlign = Paint.Align.CENTER
-            setShadowLayer(4f, 0f, 1f, 0x99000000.toInt())
+            setShadowLayer(5f, 0f, 1f, 0x99000000.toInt())
         }
-        val tw = t.measureText(label).coerceAtLeast(96f)
-        val w = (pad + r * 2 + gap + tw + gap + r * 2 + pad).toInt().coerceAtLeast(560)
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        val c = Canvas(bmp)
-        val cy = h / 2f
-        drawLogo(c, left, pad + r, cy, r)
-        drawLogo(c, right, w - pad - r, cy, r)
-        c.drawText(label, w / 2f, cy - (t.descent() + t.ascent()) / 2f, t)
+        fun drawScore(text: String, cx: Float, size: Float) {
+            scorePaint.textSize = size
+            c.drawText(text, cx, cy - (scorePaint.descent() + scorePaint.ascent()) / 2f, scorePaint)
+        }
+        when {
+            homeScore.isBlank() -> drawScore(awayScore.ifBlank { "vs" }, s / 2f, 64f)
+            else -> {
+                val a = awayScore.ifBlank { "-" }
+                val h = homeScore.ifBlank { "-" }
+                val sz = if (a.length <= 1 && h.length <= 1) 72f else 56f
+                drawScore(a, s * 0.38f, sz)
+                drawScore(h, s * 0.62f, sz)
+            }
+        }
         return bmp
     }
 
     /**
      * 가로 2:1. 왼쪽 원정, 오른쪽 홈. 가운데는 `vs` 또는 루상 다이아몬드.
-     * 상태바 칩에는 [scoreStrip]을 쓰고, 큰 largeIcon 자리용으로 남긴다.
+     * largeIcon·미리보기용.
      */
     fun logoPair(left: Bitmap, right: Bitmap, middle: String, live: LotteGameInfo? = null): Bitmap {
         val w = 384

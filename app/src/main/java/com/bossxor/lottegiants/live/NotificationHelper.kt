@@ -87,7 +87,7 @@ object NotificationHelper {
     @Volatile private var lastLiveCustom: Boolean? = null
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 28
+    private const val LIVE_NOTIFY_STYLE_REV = 29
     private const val COLOR_LOTTE = 0xFFC8102E.toInt()
     private const val COLOR_CHIP = 0xFF2F6FED.toInt()
     private const val COLOR_LABEL = 0xFF8A8F98.toInt()
@@ -383,10 +383,8 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        var statusChipText = nowBar.chip
         if (useNowBar) {
-            // 점수는 시스템 글자(크게), 양 로고는 칩 아이콘 칸(logoDuo).
-            // 가로 스트립에 점수까지 그리면 아이콘으로 축소돼 안 보인다.
+            // 칩 = 정사각 scoreChip(로고·점수·점수·로고). 옆 글자 칸은 비움(중복·잘림 방지).
             val chip = when {
                 game == null -> nowBar.chip
                 game.isSuspended -> "중단"
@@ -394,7 +392,6 @@ object NotificationHelper {
                 game.status == GameStatus.CANCELED -> "취소"
                 else -> nowBar.chip
             }
-            statusChipText = chip
             builder
                 .setSubText(nowBar.chipSub.ifBlank { null })
                 .setShortCriticalText(chip.ifBlank { "·" })
@@ -406,17 +403,26 @@ object NotificationHelper {
             val homeBmp = sides?.let {
                 WidgetAssets.loadTeamLogoBitmapCachedOnly(context, it.rightCode, it.rightName)
             }
-            val duo = if (awayBmp != null && homeBmp != null) {
-                NowBarArt.logoDuo(awayBmp, homeBmp)
+            val chipArt = if (awayBmp != null && homeBmp != null && game != null) {
+                val (awaySc, homeSc) = when {
+                    game.isSuspended -> "-" to "-"
+                    game.status == GameStatus.BEFORE -> "vs" to ""
+                    game.status == GameStatus.CANCELED -> "취소" to ""
+                    else -> {
+                        val sc = cardSides(game)
+                        "${sc.awayScore}" to "${sc.homeScore}"
+                    }
+                }
+                NowBarArt.scoreChip(awayBmp, homeBmp, awaySc, homeSc)
             } else {
-                awayBmp
+                null
             }
             val card = game?.let { buildLiveRemoteViews(context, it, winProbSeries, nowBar, pregameProb) }
             applySamsungOngoingExtras(
                 builder = builder,
                 context = context,
-                c = nowBar.copy(chip = chip),
-                chipIconBmp = duo,
+                c = nowBar.copy(chip = ""),
+                chipIconBmp = chipArt,
                 awayLogo = awayBmp,
                 homeLogo = homeBmp,
                 card = card,
@@ -424,16 +430,7 @@ object NotificationHelper {
             val style = NotificationCompat.BigTextStyle()
                 .setBigContentTitle(title)
                 .bigText(nowBarBigText(nowBar))
-            if (sides != null) {
-                builder.setLargeIcon(
-                    NowBarArt.logoPair(
-                        awayBmp!!,
-                        homeBmp!!,
-                        if (game!!.status == GameStatus.BEFORE) "vs" else "",
-                        game.takeIf { it.status == GameStatus.LIVE && !it.isSuspended },
-                    ),
-                )
-            }
+            if (chipArt != null) builder.setLargeIcon(chipArt)
             builder.setContentText(null).setStyle(style).setDeleteIntent(hide)
             if (finished) builder.addAction(0, "닫기", hide)
         } else if (useScorecard) {
@@ -468,8 +465,10 @@ object NotificationHelper {
         }
 
         val notification = builder.build()
-        if (useNowBar && statusChipText.isNotBlank()) {
-            notification.extras.putString("android.shortCriticalText", statusChipText)
+        if (useNowBar) {
+            notification.extras.putString("android.shortCriticalText", "")
+            notification.extras.putString("android.ongoingActivityNoti.chipExpandedText", "")
+            notification.extras.putString("android.ongoingActivityNoti.nowbarPrimaryInfo", "")
         }
         return notification
     }
@@ -579,10 +578,7 @@ object NotificationHelper {
         return false
     }
 
-    /**
-     * 상태바 칩 = [로고용 아이콘] + [점수 시스템 글자].
-     * 점수를 비트맵에 넣으면 아이콘 크기로 줄어들어 안 보인다.
-     */
+    /** 상태바 칩 = scoreChip 정사각(로고·점수·점수·로고). 글자 칸은 비움. */
     private fun applySamsungOngoingExtras(
         builder: NotificationCompat.Builder,
         context: Context,
@@ -603,8 +599,8 @@ object NotificationHelper {
             putString("android.ongoingActivityNoti.primaryInfo", c.title)
             putInt("android.ongoingActivityNoti.chipBgColor", COLOR_CHIP)
             putParcelable("android.ongoingActivityNoti.chipIcon", chipIcon)
-            putString("android.ongoingActivityNoti.chipExpandedText", c.chip)
-            putString("android.ongoingActivityNoti.nowbarPrimaryInfo", c.chip)
+            putString("android.ongoingActivityNoti.chipExpandedText", "")
+            putString("android.ongoingActivityNoti.nowbarPrimaryInfo", "")
             putString("android.ongoingActivityNoti.nowbarSecondaryInfo", c.chipSub)
             if (awayIcon != null) {
                 putParcelable("android.ongoingActivityNoti.firstIcon", awayIcon)
