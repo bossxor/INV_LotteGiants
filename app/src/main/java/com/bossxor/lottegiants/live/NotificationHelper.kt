@@ -16,13 +16,13 @@ import android.provider.Settings
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
-import android.text.style.ImageSpan
 import android.text.style.StyleSpan
 import android.text.style.TypefaceSpan
 import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import com.bossxor.lottegiants.MainActivity
 import com.bossxor.lottegiants.R
 import com.bossxor.lottegiants.data.NotificationType
@@ -88,7 +88,7 @@ object NotificationHelper {
     @Volatile private var lastLiveCustom: Boolean? = null
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 34
+    private const val LIVE_NOTIFY_STYLE_REV = 35
     private const val COLOR_LOTTE = 0xFFC8102E.toInt()
     private const val COLOR_CHIP = 0xFF2F6FED.toInt()
     private const val COLOR_LABEL = 0xFF8A8F98.toInt()
@@ -386,7 +386,8 @@ object NotificationHelper {
 
         var statusChipText = nowBar.chip
         if (useNowBar) {
-            // [원정로고][점수:점수 홈로고]. 홈 로고는 글자 칸 ImageSpan → 알약이 길어진다.
+            // [원정로고][점수:점수][홈로고]. ImageSpan은 OBJ로만 보이므로 쓰지 않는다.
+            // 알약 폭은 점수 글자로 확보하고, 홈 로고는 오른쪽 액션 아이콘(actionType=0).
             val sides = game?.let { nowBarSides(it) }
             val awayBmp = sides?.let {
                 WidgetAssets.loadTeamLogoBitmapCachedOnly(context, it.leftCode, it.leftName)
@@ -394,28 +395,36 @@ object NotificationHelper {
             val homeBmp = sides?.let {
                 WidgetAssets.loadTeamLogoBitmapCachedOnly(context, it.rightCode, it.rightName)
             }
-            val chipPlain = when {
+            val chip = when {
                 game == null -> nowBar.chip
                 game.isSuspended -> "중단"
                 game.status == GameStatus.BEFORE -> nowBar.chip.ifBlank { "vs" }
                 game.status == GameStatus.CANCELED -> "취소"
                 else -> {
                     val sc = cardSides(game)
-                    "${sc.awayScore}:${sc.homeScore}"
+                    // 알약이 길어지도록 점수 양옆에 여백
+                    " ${sc.awayScore} : ${sc.homeScore} "
                 }
             }
-            val chipRich = chipTextWithHomeLogo(context, chipPlain, homeBmp)
-            statusChipText = chipPlain
+            statusChipText = chip.trim()
             builder
                 .setSubText(nowBar.chipSub.ifBlank { null })
-                .setShortCriticalText(chipPlain.ifBlank { "·" })
+                .setShortCriticalText(chip.trim().ifBlank { "·" })
                 .setRequestPromotedOngoing(true)
+            if (homeBmp != null) {
+                builder.addAction(
+                    NotificationCompat.Action.Builder(
+                        IconCompat.createWithBitmap(homeBmp),
+                        "홈",
+                        intent,
+                    ).build(),
+                )
+            }
             val card = game?.let { buildLiveRemoteViews(context, it, winProbSeries, nowBar, pregameProb) }
             applySamsungOngoingExtras(
                 builder = builder,
                 context = context,
-                c = nowBar.copy(chip = chipPlain),
-                chipText = chipRich,
+                c = nowBar.copy(chip = chip),
                 awayLogo = awayBmp,
                 homeLogo = homeBmp,
                 card = card,
@@ -568,33 +577,14 @@ object NotificationHelper {
         return false
     }
 
-    /** 점수 글자 뒤에 홈 로고를 붙여 알약 폭이 늘어나게 한다. */
-    private fun chipTextWithHomeLogo(context: Context, score: String, homeLogo: Bitmap?): CharSequence {
-        if (homeLogo == null || score.isBlank()) return score
-        val px = (20f * context.resources.displayMetrics.density).toInt().coerceAtLeast(20)
-        val scaled = Bitmap.createScaledBitmap(homeLogo, px, px, true)
-        val sb = SpannableStringBuilder(score)
-        sb.append(' ')
-        val start = sb.length
-        sb.append('\uFFFC')
-        sb.setSpan(
-            ImageSpan(context, scaled, ImageSpan.ALIGN_CENTER),
-            start,
-            sb.length,
-            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
-        )
-        return sb
-    }
-
     /**
-     * 상태바: [원정 로고] + [점수:점수 홈로고(ImageSpan)].
-     * 홈 로고를 글자 칸에 넣어야 알약이 길어진다.
+     * 상태바: [원정 로고][점수 : 점수][홈 로고 액션].
+     * actionType=0 이면 칩 오른쪽이 첫 액션 아이콘(홈 로고).
      */
     private fun applySamsungOngoingExtras(
         builder: NotificationCompat.Builder,
         context: Context,
         c: NowBarContent,
-        chipText: CharSequence,
         awayLogo: Bitmap?,
         homeLogo: Bitmap?,
         card: RemoteViews?,
@@ -607,8 +597,8 @@ object NotificationHelper {
             putString("android.ongoingActivityNoti.primaryInfo", c.title)
             putInt("android.ongoingActivityNoti.chipBgColor", COLOR_CHIP)
             putParcelable("android.ongoingActivityNoti.chipIcon", awayIcon ?: appIcon)
-            putCharSequence("android.ongoingActivityNoti.chipExpandedText", chipText)
-            putCharSequence("android.ongoingActivityNoti.nowbarPrimaryInfo", chipText)
+            putString("android.ongoingActivityNoti.chipExpandedText", c.chip)
+            putString("android.ongoingActivityNoti.nowbarPrimaryInfo", c.chip)
             putString("android.ongoingActivityNoti.nowbarSecondaryInfo", c.chipSub)
             if (awayIcon != null) {
                 putParcelable("android.ongoingActivityNoti.firstIcon", awayIcon)
@@ -616,8 +606,10 @@ object NotificationHelper {
             }
             if (homeIcon != null) {
                 putParcelable("android.ongoingActivityNoti.secondIcon", homeIcon)
+                putParcelable("android.ongoingActivityNoti.chipExpandedIcon", homeIcon)
             }
-            putInt("android.ongoingActivityNoti.actionType", 1)
+            // 0 = 칩 오른쪽을 글자 대신 액션 아이콘으로
+            putInt("android.ongoingActivityNoti.actionType", 0)
             putInt("android.ongoingActivityNoti.actionPrimarySet", 0)
             if (card != null) {
                 putParcelable("android.ongoingActivityNoti.chronometerRemoteView", card)
