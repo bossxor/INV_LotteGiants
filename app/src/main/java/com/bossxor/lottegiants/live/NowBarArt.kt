@@ -24,6 +24,42 @@ object NowBarArt {
     }
 
     /**
+     * 상태바 칩 글자 칸용: `점수:점수` + 홈 로고.
+     * 원정 로고는 chipIcon 칸. 밀도 없이 그리면 mdpi로 줄어든다.
+     */
+    fun scoreAndHome(
+        homeLogo: Bitmap,
+        awayScore: String,
+        homeScore: String,
+        densityDpi: Int,
+    ): Bitmap {
+        val dpi = densityDpi.coerceIn(160, 640)
+        val d = dpi / 160f
+        val hPx = (22f * d).toInt().coerceAtLeast(22)
+        val r = 9f * d
+        val pad = 2f * d
+        val gap = 4f * d
+        val label = "${awayScore.ifBlank { "-" }}:${homeScore.ifBlank { "-" }}"
+        val scorePaint = paint {
+            color = 0xFFFFFFFF.toInt()
+            typeface = Typeface.DEFAULT_BOLD
+            textAlign = Paint.Align.LEFT
+            textSize = 15f * d
+            setShadowLayer(2f * d, 0f, 1f, 0x99000000.toInt())
+        }
+        val tw = scorePaint.measureText(label)
+        val wPx = (pad + tw + gap + r * 2 + pad).toInt().coerceAtLeast(hPx)
+        val bmp = Bitmap.createBitmap(wPx, hPx, Bitmap.Config.ARGB_8888)
+        bmp.density = dpi
+        val c = Canvas(bmp)
+        val cy = hPx / 2f
+        val base = cy - (scorePaint.descent() + scorePaint.ascent()) / 2f
+        c.drawText(label, pad, base, scorePaint)
+        drawLogo(c, homeLogo, wPx - pad - r, cy, r)
+        return bmp
+    }
+
+    /**
      * 상태바 칩. 원정로고 · 원정점수 · 홈점수 · 홈로고.
      * 밀도 없이 그리면 mdpi로 잡혀 상태바에서 몇 배로 줄어든다. [densityDpi]로 실제 dp 크기를 맞춘다.
      */
