@@ -235,7 +235,7 @@ private fun JerseyPlayerRow(player: EntryPlayer, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            player.backNumber.ifBlank { "—" },
+            player.backNumber.ifBlank { "-" },
             modifier = Modifier.width(36.dp),
             fontWeight = FontWeight.Bold,
             fontSize = 16.sp,

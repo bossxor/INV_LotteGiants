@@ -65,7 +65,6 @@ object KboPlayerSearchParser {
         val out = linkedMapOf<String, EntryPlayer>() // playerCode → player
         val visitedPages = linkedSetOf<Int>()
         var eventTarget = TEAM_EVENT
-        var triedLast = false
         for (pageIdx in 0 until maxPages) {
             val fields = hiddenFields(html)
             html = post(
@@ -92,10 +91,9 @@ object KboPlayerSearchParser {
                 eventTarget = "${PAGER_PREFIX}btnNo$nextPage"
                 continue
             }
-            // 1~5만 보이는 페이저: 6페이지 이상은 btnLast로 이동 (hfPage 기준)
-            if (!triedLast && html.contains("ucPager\$btnLast")) {
-                triedLast = true
-                eventTarget = "${PAGER_PREFIX}btnLast"
+            // 보이는 번호를 다 돌았으면 다음 묶음으로(btnNext). 마지막 쪽이면 같은 쪽이 다시 와서 added==0 으로 끝난다.
+            if (html.contains("ucPager\$btnNext")) {
+                eventTarget = "${PAGER_PREFIX}btnNext"
                 continue
             }
             break

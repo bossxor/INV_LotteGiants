@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.53` (`versionCode` **2053**) |
+| **버전** | `2.0.54` (`versionCode` **2054**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.netlify.app/) |
@@ -239,8 +239,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.53` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2053` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.54` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2054` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
