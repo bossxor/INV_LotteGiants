@@ -441,7 +441,8 @@ class GameAlarmReceiver : BroadcastReceiver() {
                             val st = runCatching {
                                 NowBarPreview.State.valueOf(intent?.getStringExtra("state").orEmpty().uppercase())
                             }.getOrDefault(NowBarPreview.State.LIVE)
-                            runBlocking { NowBarPreview.post(context, st) }
+                            val home = intent?.getBooleanExtra("home", false) ?: false
+                            runBlocking { NowBarPreview.post(context, st, home) }
                         }
                         GameSchedulerWorker.ACTION_HIDE_LIVE -> {
                             runBlocking {

@@ -9,14 +9,14 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:paddingHorizontal="4dp"
-    android:paddingTop="4dp"
+    android:paddingTop="0dp"
     android:paddingBottom="6dp">
 
     <!-- 알약은 이 줄의 왼쪽만 자른다. 짧게 두어야 오른쪽 로고까지 들어간다. -->
     <LinearLayout
         android:id="@+id/notif_pill_row"
         android:layout_width="wrap_content"
-        android:layout_height="60dp"
+        android:layout_height="56dp"
         android:layout_gravity="start"
         android:layout_marginStart="14dp"
         android:gravity="center_vertical"
@@ -24,8 +24,8 @@
 
         <ImageView
             android:id="@+id/notif_pill_away_logo"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
             android:contentDescription="@null"
             android:scaleType="fitCenter" />
 
@@ -33,7 +33,7 @@
             android:id="@+id/notif_pill_away_score"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="4dp"
+            android:layout_marginStart="9dp"
             android:shadowColor="#CC000000"
             android:shadowDx="0"
             android:shadowDy="1"
@@ -45,7 +45,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginHorizontal="3dp"
+            android:layout_marginHorizontal="5dp"
             android:text=":"
             android:shadowColor="#CC000000"
             android:shadowDx="0"
@@ -69,9 +69,9 @@
 
         <ImageView
             android:id="@+id/notif_pill_home_logo"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="4dp"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_marginStart="9dp"
             android:contentDescription="@null"
             android:scaleType="fitCenter" />
 

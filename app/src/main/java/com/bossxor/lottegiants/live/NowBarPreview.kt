@@ -21,13 +21,13 @@ object NowBarPreview {
         ),
     )
 
-    suspend fun post(context: Context, state: State) {
+    suspend fun post(context: Context, state: State, home: Boolean = false) {
         val app = context.applicationContext
         NotificationHelper.createChannels(app)
         val next = base(GameStatus.BEFORE).copy(
             gameId = "preview-next", gameDate = "2026-10-04", opponentStartingPitcher = "올러", lotteStartingPitcher = "데이비슨",
         )
-        val game = when (state) {
+        val game0 = when (state) {
             State.BEFORE -> base(GameStatus.BEFORE)
             State.LIVE -> base(GameStatus.LIVE).copy(
                 lotteScore = 3, opponentScore = 2, inning = 7, isTopInning = true, isLotteBatting = false,
@@ -45,6 +45,8 @@ object NowBarPreview {
                 opponentInningScores = listOf("0", "1", "0", "0", "0", "0", "1", "0", "0"),
             )
         }
+        // 롯데가 홈이면 원정=상대(KIA)가 왼쪽에 오는지 확인용.
+        val game = if (home) game0.copy(isHome = true) else game0
         NotificationHelper.warmLiveLogos(app, game)
         val n = NotificationHelper.buildLiveNotification(app, game, LiveDisplayMode.LOCK_NOW, nextGame = next)
         NotificationHelper.notifyLive(app, n, "preview-${state.name}", force = true)
