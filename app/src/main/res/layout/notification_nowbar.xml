@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Now Bar 카드.
-  로고 → 팀명+순위(옆) · 큰 점수 · 루상/이닝
-  투수 이름 N구 · 타자 / BSO 가로 / 큰 스코어보드(중·후) · 승률(전)
+  맨 위 줄 = 알약에 잘려 보이는 로고 점수:점수 로고(왼쪽) + 이닝/시간 알약(오른쪽, 카드에서만 보임)
+  팀명·순위 / 투수 · 루상 다이아몬드 · 타자 / B·S·O / 이닝별 점수표(중·후) · 승률(전)
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -12,239 +12,186 @@
     android:paddingTop="0dp"
     android:paddingBottom="6dp">
 
-    <!-- 알약은 이 줄의 왼쪽만 자른다. 짧게 두어야 오른쪽 로고까지 들어간다. -->
-    <LinearLayout
-        android:id="@+id/notif_pill_row"
-        android:layout_width="wrap_content"
-        android:layout_height="56dp"
-        android:layout_gravity="start"
-        android:layout_marginStart="14dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <ImageView
-            android:id="@+id/notif_pill_away_logo"
-            android:layout_width="30dp"
-            android:layout_height="30dp"
-            android:contentDescription="@null"
-            android:scaleType="fitCenter" />
-
-        <TextView
-            android:id="@+id/notif_pill_away_score"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="9dp"
-            android:shadowColor="#CC000000"
-            android:shadowDx="0"
-            android:shadowDy="1"
-            android:shadowRadius="4"
-            android:textColor="#FFFFFFFF"
-            android:textSize="26sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginHorizontal="5dp"
-            android:text=":"
-            android:shadowColor="#CC000000"
-            android:shadowDx="0"
-            android:shadowDy="1"
-            android:shadowRadius="4"
-            android:textColor="#FFFFFFFF"
-            android:textSize="26sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/notif_pill_home_score"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:shadowColor="#CC000000"
-            android:shadowDx="0"
-            android:shadowDy="1"
-            android:shadowRadius="4"
-            android:textColor="#FFFFFFFF"
-            android:textSize="26sp"
-            android:textStyle="bold" />
-
-        <ImageView
-            android:id="@+id/notif_pill_home_logo"
-            android:layout_width="30dp"
-            android:layout_height="30dp"
-            android:layout_marginStart="9dp"
-            android:contentDescription="@null"
-            android:scaleType="fitCenter" />
-
-        <!-- 오른쪽 로고가 잘리지 않게 폭만 살짝 확보 (투명) -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="\u2007\u2007"
-            android:textColor="#00000000"
-            android:textSize="12sp" />
-    </LinearLayout>
-
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
+        <!-- 알약은 이 줄의 왼쪽만 자른다. 짧게 두어야 오른쪽 로고까지 들어간다. -->
+        <LinearLayout
+            android:id="@+id/notif_pill_row"
+            android:layout_width="wrap_content"
+            android:layout_height="56dp"
+            android:layout_gravity="start"
+            android:layout_marginStart="14dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/notif_pill_away_logo"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:contentDescription="@null"
+                android:scaleType="fitCenter" />
+
+            <TextView
+                android:id="@+id/notif_pill_away_score"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="9dp"
+                android:shadowColor="#CC000000"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="4"
+                android:textColor="#FFFFFFFF"
+                android:textSize="26sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="5dp"
+                android:text=":"
+                android:shadowColor="#CC000000"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="4"
+                android:textColor="#FFFFFFFF"
+                android:textSize="26sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/notif_pill_home_score"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:shadowColor="#CC000000"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="4"
+                android:textColor="#FFFFFFFF"
+                android:textSize="26sp"
+                android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/notif_pill_home_logo"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_marginStart="9dp"
+                android:contentDescription="@null"
+                android:scaleType="fitCenter" />
+
+            <!-- 오른쪽 로고가 잘리지 않게 폭만 살짝 확보 (투명) -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="\u2007\u2007"
+                android:textColor="#00000000"
+                android:textSize="12sp" />
+        </LinearLayout>
+
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
-
-            <ImageView
-                android:id="@+id/notif_away_logo"
-                android:layout_width="52dp"
-                android:layout_height="52dp"
-                android:contentDescription="@null"
-                android:scaleType="fitCenter" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:gravity="center"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/notif_away_name"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:textAppearance="@style/NotifScore"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/notif_away_place"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:text="원정"
-                    android:textAppearance="@style/NotifMeta"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/notif_away_score"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:minWidth="40dp"
-            android:textAppearance="@style/NotifScore"
-            android:textSize="38sp"
-            android:textStyle="bold" />
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:gravity="center_horizontal"
-            android:minWidth="68dp"
-            android:orientation="vertical"
-            android:paddingHorizontal="2dp">
-
-            <ImageView
-                android:id="@+id/notif_bases"
-                android:layout_width="58dp"
-                android:layout_height="58dp"
-                android:contentDescription="@null"
-                android:scaleType="fitCenter" />
+            android:gravity="end|center_vertical"
+            android:orientation="horizontal"
+            android:paddingEnd="8dp">
 
             <TextView
                 android:id="@+id/notif_inning"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
                 android:background="@drawable/notif_inning_pill"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:paddingHorizontal="8dp"
-                android:paddingVertical="2dp"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="3dp"
                 android:textColor="#FFFFFFFF"
-                android:textSize="11sp"
+                android:textSize="12sp"
                 android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/notif_venue"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="1dp"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textAppearance="@style/NotifMeta"
-                android:textSize="10sp" />
         </LinearLayout>
+    </LinearLayout>
 
-        <TextView
-            android:id="@+id/notif_home_score"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:minWidth="40dp"
-            android:textAppearance="@style/NotifScore"
-            android:textSize="38sp"
-            android:textStyle="bold" />
+    <!-- 팀명 + 순위 (원정 왼쪽 · 홈 오른쪽). 가운데는 구장 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="6dp">
 
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:gravity="center_horizontal"
-            android:orientation="vertical">
+            android:gravity="start|center_vertical"
+            android:orientation="horizontal">
 
-            <ImageView
-                android:id="@+id/notif_home_logo"
-                android:layout_width="52dp"
-                android:layout_height="52dp"
-                android:contentDescription="@null"
-                android:scaleType="fitCenter" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
+            <TextView
+                android:id="@+id/notif_away_name"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:gravity="center"
-                android:orientation="horizontal">
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textAppearance="@style/NotifScore"
+                android:textSize="13sp"
+                android:textStyle="bold" />
 
-                <TextView
-                    android:id="@+id/notif_home_name"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:ellipsize="end"
-                    android:maxLines="1"
-                    android:textAppearance="@style/NotifScore"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
+            <TextView
+                android:id="@+id/notif_away_place"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:textAppearance="@style/NotifMeta"
+                android:textSize="12sp" />
+        </LinearLayout>
 
-                <TextView
-                    android:id="@+id/notif_home_place"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:text="홈"
-                    android:textAppearance="@style/NotifMeta"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
+        <TextView
+            android:id="@+id/notif_venue"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textAppearance="@style/NotifMeta"
+            android:textSize="11sp" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="end|center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/notif_home_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textAppearance="@style/NotifScore"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/notif_home_place"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:textAppearance="@style/NotifMeta"
+                android:textSize="12sp" />
         </LinearLayout>
     </LinearLayout>
 
-    <!-- 투수 이름+구수 | 타자 -->
+    <!-- 투수 | 루상 다이아몬드 | 타자 -->
     <LinearLayout
         android:id="@+id/notif_bso_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:paddingHorizontal="0dp">
 
         <TextView
             android:id="@+id/notif_pitcher_line"
@@ -252,11 +199,17 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:ellipsize="end"
-            android:maxLines="1"
-            android:paddingEnd="4dp"
+            android:maxLines="2"
             android:textAppearance="@style/NotifLine"
             android:textSize="12sp"
             android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/notif_bases"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:contentDescription="@null"
+            android:scaleType="fitCenter" />
 
         <TextView
             android:id="@+id/notif_batter_line"
@@ -265,19 +218,18 @@
             android:layout_weight="1"
             android:ellipsize="end"
             android:gravity="end"
-            android:maxLines="1"
-            android:paddingStart="4dp"
+            android:maxLines="2"
             android:textAppearance="@style/NotifLine"
             android:textSize="12sp"
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- 볼카운트 가로 -->
+    <!-- 볼 3 · 스트라이크 2 · 아웃 2 -->
     <LinearLayout
         android:id="@+id/notif_bso"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
+        android:layout_marginTop="2dp"
         android:gravity="center"
         android:orientation="horizontal">
 
@@ -286,86 +238,68 @@
             android:layout_height="wrap_content"
             android:text="B"
             android:textColor="#2EA35C"
-            android:textSize="11sp"
+            android:textSize="12sp"
             android:textStyle="bold" />
 
         <ImageView
             android:id="@+id/notif_b0"
-            android:layout_width="9dp"
-            android:layout_height="9dp"
-            android:layout_marginStart="3dp" />
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginStart="4dp" />
 
         <ImageView
             android:id="@+id/notif_b1"
-            android:layout_width="9dp"
-            android:layout_height="9dp"
-            android:layout_marginStart="2dp" />
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginStart="3dp" />
 
         <ImageView
             android:id="@+id/notif_b2"
-            android:layout_width="9dp"
-            android:layout_height="9dp"
-            android:layout_marginStart="2dp" />
-
-        <ImageView
-            android:id="@+id/notif_b3"
-            android:layout_width="9dp"
-            android:layout_height="9dp"
-            android:layout_marginStart="2dp" />
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginStart="3dp" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
+            android:layout_marginStart="14dp"
             android:text="S"
             android:textColor="#C9A227"
-            android:textSize="11sp"
+            android:textSize="12sp"
             android:textStyle="bold" />
 
         <ImageView
             android:id="@+id/notif_s0"
-            android:layout_width="9dp"
-            android:layout_height="9dp"
-            android:layout_marginStart="3dp" />
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginStart="4dp" />
 
         <ImageView
             android:id="@+id/notif_s1"
-            android:layout_width="9dp"
-            android:layout_height="9dp"
-            android:layout_marginStart="2dp" />
-
-        <ImageView
-            android:id="@+id/notif_s2"
-            android:layout_width="9dp"
-            android:layout_height="9dp"
-            android:layout_marginStart="2dp" />
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginStart="3dp" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
+            android:layout_marginStart="14dp"
             android:text="O"
             android:textColor="#C8102E"
-            android:textSize="11sp"
+            android:textSize="12sp"
             android:textStyle="bold" />
 
         <ImageView
             android:id="@+id/notif_o0"
-            android:layout_width="9dp"
-            android:layout_height="9dp"
-            android:layout_marginStart="3dp" />
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginStart="4dp" />
 
         <ImageView
             android:id="@+id/notif_o1"
-            android:layout_width="9dp"
-            android:layout_height="9dp"
-            android:layout_marginStart="2dp" />
-
-        <ImageView
-            android:id="@+id/notif_o2"
-            android:layout_width="9dp"
-            android:layout_height="9dp"
-            android:layout_marginStart="2dp" />
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginStart="3dp" />
     </LinearLayout>
 
     <LinearLayout
@@ -374,6 +308,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
         android:orientation="vertical"
+        android:paddingHorizontal="6dp"
         android:visibility="gone">
 
         <LinearLayout
@@ -415,20 +350,68 @@
             android:scaleType="fitXY" />
     </LinearLayout>
 
+    <!-- 경기 전: 일시·구장 / 경기 후: 다음 경기 -->
     <TextView
         android:id="@+id/notif_info_line"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:textAppearance="@style/NotifLine"
+        android:textSize="12sp"
         android:visibility="gone" />
 
     <ImageView
         android:id="@+id/notif_scoreboard"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="6dp"
         android:adjustViewBounds="true"
         android:contentDescription="@null"
         android:minHeight="150dp"
         android:scaleType="fitXY"
+        android:visibility="gone" />
+
+    <!-- 코드가 값을 넣는 옛 id (이 카드에서는 안 쓰므로 숨김) -->
+    <ImageView
+        android:id="@+id/notif_away_logo"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/notif_home_logo"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/notif_away_score"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/notif_home_score"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/notif_b3"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/notif_s2"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/notif_o2"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
         android:visibility="gone" />
 </LinearLayout>

@@ -87,7 +87,7 @@ object NotificationHelper {
     @Volatile private var lastLiveCustom: Boolean? = null
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 43
+    private const val LIVE_NOTIFY_STYLE_REV = 48
     private const val COLOR_LOTTE = 0xFFC8102E.toInt()
     private const val COLOR_CHIP = 0xFF2F6FED.toInt()
     private const val COLOR_LABEL = 0xFF8A8F98.toInt()
@@ -426,7 +426,6 @@ object NotificationHelper {
                 .setBigContentTitle(title)
                 .bigText(nowBarBigText(nowBar))
             builder.setContentText(null).setStyle(style).setDeleteIntent(hide)
-            if (finished) builder.addAction(0, "닫기", hide)
         } else if (useScorecard) {
             val publicNotification = NotificationCompat.Builder(context, channel)
                 .setSmallIcon(R.drawable.ic_notification)
@@ -582,7 +581,6 @@ object NotificationHelper {
     ) {
         val appIcon = Icon.createWithResource(context, R.drawable.ic_notification)
         val awayIcon = awayLogo?.let { Icon.createWithBitmap(it) }
-        val homeIcon = homeLogo?.let { Icon.createWithBitmap(it) }
         val extras = Bundle().apply {
             putInt("android.ongoingActivityNoti.style", 1)
             putString("android.ongoingActivityNoti.primaryInfo", c.title)
@@ -595,11 +593,6 @@ object NotificationHelper {
                 putParcelable("android.ongoingActivityNoti.firstIcon", awayIcon)
                 putParcelable("android.ongoingActivityNoti.nowbarIcon", awayIcon)
             }
-            if (homeIcon != null) {
-                putParcelable("android.ongoingActivityNoti.secondIcon", homeIcon)
-            }
-            putInt("android.ongoingActivityNoti.actionType", 1)
-            putInt("android.ongoingActivityNoti.actionPrimarySet", 0)
             if (card != null) {
                 putParcelable("android.ongoingActivityNoti.chronometerRemoteView", card)
                 putInt("android.ongoingActivityNoti.chronometerRemoteViewPosition", 1)
@@ -796,13 +789,14 @@ object NotificationHelper {
 
         val awayRank = if (game.isHome) game.opponentRank else game.lotteRank
         val homeRank = if (game.isHome) game.lotteRank else game.opponentRank
+        // 라이브 바 카드는 원정/홈 글자 없이 순위만 (없으면 숨김). 상세 알림은 예전처럼 원정/홈.
         rv.setTextViewText(
             R.id.notif_away_place,
-            if (awayRank > 0) "${awayRank}위" else "원정",
+            if (awayRank > 0) "${awayRank}위" else if (nowBar != null) "" else "원정",
         )
         rv.setTextViewText(
             R.id.notif_home_place,
-            if (homeRank > 0) "${homeRank}위" else "홈",
+            if (homeRank > 0) "${homeRank}위" else if (nowBar != null) "" else "홈",
         )
         rv.setTextViewText(R.id.notif_away_name, awayName)
         rv.setTextViewText(R.id.notif_home_name, homeName)
@@ -843,7 +837,7 @@ object NotificationHelper {
         when (game.status) {
             GameStatus.LIVE -> {
                 pitcherLine = buildString {
-                    append("투수 ")
+                    append("투수").append(if (nowBar != null) '\n' else ' ')
                     append(game.currentPitcherName.ifBlank { "-" })
                     if (game.currentPitcherPitchCount > 0) {
                         append(" ")
@@ -852,7 +846,7 @@ object NotificationHelper {
                     }
                 }
                 batterLine = buildString {
-                    append("타자 ")
+                    append("타자").append(if (nowBar != null) '\n' else ' ')
                     if (game.currentBatterOrder > 0) append("${game.currentBatterOrder}번 ")
                     append(game.currentBatterName.ifBlank { "-" })
                 }
@@ -915,8 +909,10 @@ object NotificationHelper {
             rv.setImageViewBitmap(R.id.notif_winprob_bar, bar)
         }
 
-        // 순위·일시·다음 경기 텍스트 줄은 카드에서 빼고(순위는 로고 위, 일시는 가운데 필·구장).
-        rv.setViewVisibility(R.id.notif_info_line, View.GONE)
+        // 라이브 바: 경기 전 일시·구장, 경기 후 다음 경기를 맨 아래 한 줄로. 상세 알림은 없음.
+        val infoText = ""
+        rv.setViewVisibility(R.id.notif_info_line, if (infoText.isNotBlank()) View.VISIBLE else View.GONE)
+        if (infoText.isNotBlank()) rv.setTextViewText(R.id.notif_info_line, infoText)
         // 라이브 바 경기 중·종료: 이닝별 점수표 + R/H/E (승률 바 대신)
         val showBoard = nowBar != null &&
             (game.status == GameStatus.LIVE || game.status == GameStatus.ENDED)
@@ -928,7 +924,7 @@ object NotificationHelper {
             intArrayOf(
                 R.id.notif_away_name, R.id.notif_home_name,
                 R.id.notif_away_score, R.id.notif_home_score,
-                R.id.notif_pitcher_line, R.id.notif_batter_line,
+                R.id.notif_pitcher_line, R.id.notif_batter_line, R.id.notif_info_line,
             ).forEach { rv.setTextColor(it, ink) }
             intArrayOf(
                 R.id.notif_away_place, R.id.notif_home_place, R.id.notif_venue,
