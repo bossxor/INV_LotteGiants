@@ -110,6 +110,21 @@ object KboPlayerSearchParser {
             )
     }
 
+    /**
+     * 선수조회(구단 전체) 기준으로 등록현황을 합친다. 등록현황엔 선수코드가 없어 키로 합치면 1군이 중복된다.
+     * 선수조회가 비면 등록현황 그대로. 이름이 하나뿐인 경우에만 빈 등번호를 채운다(동명이인 오부착 방지).
+     */
+    fun mergeWithRegister(search: List<EntryPlayer>, register: List<EntryPlayer>): List<EntryPlayer> {
+        if (search.isEmpty()) return register
+        val regByName = register.groupBy { it.name }
+        val searchNameCount = search.groupingBy { it.name }.eachCount()
+        return search.map { p ->
+            if (p.backNumber.isNotBlank() || searchNameCount[p.name] != 1) return@map p
+            val back = regByName[p.name]?.singleOrNull()?.backNumber.orEmpty()
+            if (back.isBlank()) p else p.copy(backNumber = back)
+        }
+    }
+
     /** 화면에 보이는 btnNo 중 아직 안 본 가장 작은 페이지. */
     internal fun nextPageNumber(html: String, visited: Set<Int>): Int? {
         val available = pageBtnRe.findAll(html).mapNotNull { it.groupValues[1].toIntOrNull() }.toSortedSet()

@@ -1306,27 +1306,9 @@ class GiantsRepository private constructor(context: Context) {
         }.onFailure { e ->
             Log.w("GiantsRepo", "jersey roster registerAll failed: ${e.message}")
         }.getOrDefault(emptyList())
-        // 선수조회(1군·퓨처스) + 등록현황을 playerCode 기준으로 합친다.
-        val remote = linkedMapOf<String, EntryPlayer>().apply {
-            for (p in fromSearch + fromRegister) {
-                val key = p.playerCode.ifBlank { "${p.name}|${p.backNumber}" }
-                val prev = this[key]
-                if (prev == null) {
-                    put(key, p)
-                } else {
-                    // 등번호·포지션이 비어 있으면 다른 소스 값으로 채움
-                    put(
-                        key,
-                        prev.copy(
-                            backNumber = prev.backNumber.ifBlank { p.backNumber },
-                            position = prev.position.ifBlank { p.position },
-                            playerCode = prev.playerCode.ifBlank { p.playerCode },
-                            isPitcher = prev.isPitcher || p.isPitcher,
-                        ),
-                    )
-                }
-            }
-        }.values.toList()
+        // 선수조회가 1군·퓨처스 전체라 기준. 등록현황은 선수코드가 없어 합치면 1군이 두 번 들어가므로
+        // 등번호가 빈 선수만 채운다(선수조회가 실패했을 때만 등록현황 그대로).
+        val remote = KboPlayerSearchParser.mergeWithRegister(fromSearch, fromRegister)
             .sortedWith(
                 compareBy(
                     { it.backNumber.toIntOrNull() ?: Int.MAX_VALUE },
