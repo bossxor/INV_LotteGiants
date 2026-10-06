@@ -358,3 +358,19 @@ data class OpenMeteoCurrent(
     val weather_code: Int? = null,
     val precipitation_probability: Int? = null,
 )
+
+@Serializable
+data class NaverPlayerResponse(
+    val result: NaverPlayerResult? = null,
+)
+
+@Serializable
+data class NaverPlayerResult(
+    val player: NaverPlayer? = null,
+)
+
+/** backNo 0 은 "번호 없음"으로도 쓰인다. */
+@Serializable
+data class NaverPlayer(
+    val backNo: Int = 0,
+)

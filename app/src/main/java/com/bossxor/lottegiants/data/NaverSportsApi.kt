@@ -30,6 +30,12 @@ interface NaverSportsApi {
     @GET("statistics/categories/kbo/seasons/{season}/teams")
     suspend fun getStandings(@Path("season") season: String): StandingsResponse
 
+    @GET("statistics/categories/kbo/seasons/{season}/players/{playerId}")
+    suspend fun getPlayer(
+        @Path("season") season: String,
+        @Path("playerId") playerId: String,
+    ): NaverPlayerResponse
+
     @GET("schedule/games/{gameId}/preview")
     suspend fun getPreview(@Path("gameId") gameId: String): PreviewResponse
 

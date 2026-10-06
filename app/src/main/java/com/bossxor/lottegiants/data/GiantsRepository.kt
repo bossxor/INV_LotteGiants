@@ -62,6 +62,7 @@ import com.bossxor.lottegiants.domain.weatherSummaryKo
 import com.bossxor.lottegiants.domain.toCell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -1325,15 +1326,38 @@ class GiantsRepository private constructor(context: Context) {
             val pitchers = fetchLeaders(true).filter { it.matchesTeam(code) }
             (batters + pitchers).associate { it.name to it.playerCode }
         }.getOrDefault(emptyMap())
-        val enriched = remote.map { p ->
-            val pc = p.playerCode.ifBlank { codeByName[p.name].orEmpty() }
-            if (pc == p.playerCode) p else p.copy(playerCode = pc)
-        }
+        val enriched = fillBackNumbersFromNaver(
+            remote.map { p ->
+                val pc = p.playerCode.ifBlank { codeByName[p.name].orEmpty() }
+                if (pc == p.playerCode) p else p.copy(playerCode = pc)
+            },
+            season,
+        )
         if (!force && jerseyFingerprint(enriched) == jerseyFingerprint(cached)) {
             return@withContext cached.ifEmpty { enriched }
         }
         store.setJerseyRoster(code, season, enriched)
         enriched
+    }
+
+    /**
+     * KBO가 번호를 안 주는 선수(육성선수 등)만 네이버 선수 API로 채운다. 네이버 backNo 0 은 "없음"이라 버린다.
+     * 호출은 번호가 빈 선수(구단당 4~11명)뿐이고 결과는 로스터 캐시에 들어간다.
+     */
+    private suspend fun fillBackNumbersFromNaver(
+        players: List<EntryPlayer>,
+        season: Int,
+    ): List<EntryPlayer> = coroutineScope {
+        players.map { p ->
+            if (p.backNumber.isNotBlank() || p.playerCode.isBlank()) return@map async { p }
+            async {
+                val no = runCatching { api.getPlayer(season.toString(), p.playerCode).result?.player?.backNo }
+                    .getOrNull() ?: 0
+                if (no > 0) p.copy(backNumber = no.toString()) else p
+            }
+        }.awaitAll().sortedWith(
+            compareBy({ it.backNumber.toIntOrNull() ?: Int.MAX_VALUE }, { it.backNumber }, { it.name }),
+        )
     }
 
     private fun jerseyFingerprint(list: List<EntryPlayer>): String =
