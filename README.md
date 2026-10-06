@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.47` (`versionCode` **2047**) |
+| **버전** | `2.0.48` (`versionCode` **2048**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.netlify.app/) |
@@ -99,7 +99,7 @@
 
 **Now Bar 조건 (2.0.24~)** — Live Update는 `contentView` 커스텀 RemoteViews가 있으면 승격되지 않는다. 그래서 알림 본체는 표준 템플릿(BigText + `setShortCriticalText` + `setRequestPromotedOngoing`)이고, 로고·점수 화면은 삼성 비공개 extras 슬롯 `android.ongoingActivityNoti.chronometerRemoteView`에 `notification_nowbar.xml`을 넣어 그린다. 알약은 이 뷰의 **윗줄만 잘라서** 보여 주므로 윗줄(로고·점수·이닝)을 좁게 유지해야 한다. 이닝별 점수표는 `NowBarArt.scoreboard` 비트맵. 설정의 「미리보기」(경기 전/중/후)로 경기가 없어도 확인한다. 삼성 One UI는 허용 목록 밖 앱을 승격하지 않으므로(`canPostPromotedNotifications()` false) **개발자 옵션 › 「모든 앱의 실시간 정보 보기」**를 켜야 한다. 앱 코드로 우회할 수 없다. 설정의 「개발자 옵션 열기」로 바로 간다.
 
-**상태바 칩 한계 (2.0.47)** — 칩은 `chipIcon`+글자만 된다. `원정로고·점수:점수·홈로고`는 불가(스트립 축소·ImageSpan/액션 미지원). **상태바=왼쪽 로고+점수**, 양 로고는 Now Bar 카드 윗줄.
+**상태바 칩 한계 (2.0.48 실측)** — 칩은 아이콘 상자(≈2:1 고정, 큰 그림은 통째로 축소) 하나 + 글자 하나뿐이고 글자 칸엔 그림이 안 들어간다(알림을 둘 올려도 칩은 하나). 그래서 **상태바 = `[원정 로고] 3:2 홈팀이름`**(글자를 늘리면 칩 길이는 늘어남). 로고 둘은 잠금화면 알약·Now Bar 카드 윗줄에만 나온다.
 
 - 설정한 **경기 시작 N분 전**(30분~4시간, 30분 단위, 기본 2시간)부터 표시
 - 경기 중에는 항상 표시. 종료·취소 카드를 밀어 지우면 같은 경기는 다시 안 올림. **다시 표시**나 새 LIVE만 예외 (1.3.83)
@@ -239,8 +239,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.47` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2047` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.48` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2048` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 

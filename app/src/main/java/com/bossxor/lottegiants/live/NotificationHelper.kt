@@ -400,20 +400,24 @@ object NotificationHelper {
                 game.status == GameStatus.BEFORE -> nowBar.chip.ifBlank { "vs" }
                 game.status == GameStatus.CANCELED -> "취소"
                 else -> {
+                    // 상태바 칩은 아이콘(원정 로고) + 글자뿐. 홈 로고 자리는 홈팀 이름 글자로 둔다.
                     val sc = cardSides(game)
-                    "${sc.awayScore}:${sc.homeScore}"
+                    "${sc.awayScore}:${sc.homeScore} ${sc.homeName}"
                 }
             }
+            val chipIconOverride: Icon? = null
             statusChipText = chip
+            val chipForText = chip
             builder
                 .setSubText(nowBar.chipSub.ifBlank { null })
-                .setShortCriticalText(chip.ifBlank { "·" })
+                .setShortCriticalText(chipForText.ifBlank { "·" })
                 .setRequestPromotedOngoing(true)
             val card = game?.let { buildLiveRemoteViews(context, it, winProbSeries, nowBar, pregameProb) }
             applySamsungOngoingExtras(
                 builder = builder,
                 context = context,
-                c = nowBar.copy(chip = chip),
+                c = nowBar.copy(chip = chipForText),
+                chipIconOverride = chipIconOverride,
                 awayLogo = awayBmp,
                 homeLogo = homeBmp,
                 card = card,
@@ -571,6 +575,7 @@ object NotificationHelper {
         builder: NotificationCompat.Builder,
         context: Context,
         c: NowBarContent,
+        chipIconOverride: Icon?,
         awayLogo: Bitmap?,
         homeLogo: Bitmap?,
         card: RemoteViews?,
@@ -582,7 +587,7 @@ object NotificationHelper {
             putInt("android.ongoingActivityNoti.style", 1)
             putString("android.ongoingActivityNoti.primaryInfo", c.title)
             putInt("android.ongoingActivityNoti.chipBgColor", COLOR_CHIP)
-            putParcelable("android.ongoingActivityNoti.chipIcon", awayIcon ?: appIcon)
+            putParcelable("android.ongoingActivityNoti.chipIcon", chipIconOverride ?: awayIcon ?: appIcon)
             putString("android.ongoingActivityNoti.chipExpandedText", c.chip)
             putString("android.ongoingActivityNoti.nowbarPrimaryInfo", c.chip)
             putString("android.ongoingActivityNoti.nowbarSecondaryInfo", c.chipSub)

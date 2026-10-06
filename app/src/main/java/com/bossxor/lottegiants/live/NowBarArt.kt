@@ -24,46 +24,6 @@ object NowBarArt {
     }
 
     /**
-     * 상태바 칩. 원정로고 · 원정점수 · 홈점수 · 홈로고.
-     * 밀도 없이 그리면 mdpi로 잡혀 상태바에서 몇 배로 줄어든다. [densityDpi]로 실제 dp 크기를 맞춘다.
-     */
-    fun scoreChip(
-        left: Bitmap,
-        right: Bitmap,
-        awayScore: String,
-        homeScore: String,
-        densityDpi: Int,
-    ): Bitmap {
-        val dpi = densityDpi.coerceIn(160, 640)
-        val d = dpi / 160f
-        val hPx = (34f * d).toInt().coerceAtLeast(34)
-        val r = 13f * d
-        val pad = 3f * d
-        val gap = 5f * d
-        val a = awayScore.ifBlank { if (homeScore.isBlank()) "vs" else "-" }
-        val h = homeScore
-        val label = if (h.isBlank()) a else "$a:$h"
-        val scorePaint = paint {
-            color = 0xFFFFFFFF.toInt()
-            typeface = Typeface.DEFAULT_BOLD
-            textAlign = Paint.Align.CENTER
-            setShadowLayer(3f * d, 0f, 1f, 0x99000000.toInt())
-        }
-        scorePaint.textSize = (if (h.isBlank() || a.length > 2) 15f else 18f) * d
-        val tw = scorePaint.measureText(label)
-        val wPx = (pad + r * 2 + gap + tw + gap + r * 2 + pad).toInt().coerceAtLeast(hPx)
-        val bmp = Bitmap.createBitmap(wPx, hPx, Bitmap.Config.ARGB_8888)
-        bmp.density = dpi
-        val c = Canvas(bmp)
-        val cy = hPx / 2f
-        drawLogo(c, left, pad + r, cy, r)
-        drawLogo(c, right, wPx - pad - r, cy, r)
-        val base = cy - (scorePaint.descent() + scorePaint.ascent()) / 2f
-        c.drawText(label, pad + r * 2 + gap + tw / 2f, base, scorePaint)
-        return bmp
-    }
-
-    /**
      * 가로 2:1. 왼쪽 원정, 오른쪽 홈. 가운데는 `vs` 또는 루상 다이아몬드.
      * largeIcon·미리보기용.
      */

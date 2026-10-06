@@ -349,6 +349,8 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         const val ACTION_START_LIVE = "com.bossxor.lottegiants.START_LIVE"
         const val ACTION_PREGAME = "com.bossxor.lottegiants.PREGAME"
         const val ACTION_HIDE_LIVE = "com.bossxor.lottegiants.HIDE_LIVE"
+        /** adb 시험용: `am broadcast -n .../.live.GameAlarmReceiver -a ...PREVIEW_NOWBAR --es state live` */
+        const val ACTION_PREVIEW_NOWBAR = "com.bossxor.lottegiants.PREVIEW_NOWBAR"
         const val ACTION_FAST_POLL = "com.bossxor.lottegiants.FAST_POLL"
         const val ACTION_ROSTER_POLL = "com.bossxor.lottegiants.ROSTER_POLL"
         const val ACTION_KBO_DAY_ROLLOVER = "com.bossxor.lottegiants.KBO_DAY_ROLLOVER"
@@ -434,6 +436,12 @@ class GameAlarmReceiver : BroadcastReceiver() {
                                     )
                                 }
                             }
+                        }
+                        GameSchedulerWorker.ACTION_PREVIEW_NOWBAR -> {
+                            val st = runCatching {
+                                NowBarPreview.State.valueOf(intent?.getStringExtra("state").orEmpty().uppercase())
+                            }.getOrDefault(NowBarPreview.State.LIVE)
+                            runBlocking { NowBarPreview.post(context, st) }
                         }
                         GameSchedulerWorker.ACTION_HIDE_LIVE -> {
                             runBlocking {
