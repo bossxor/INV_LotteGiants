@@ -42,7 +42,8 @@ data class RacePulse(
     val tragic: Int?,
     val magicLabel: String,
 ) {
-    fun fingerprint(): String = "$rank|$slot|${magic ?: -1}|${tragic ?: -1}"
+    // 확정·탈락 뒤 매직/트래직 넘버는 계속 음수가 된다. 값마다 지문이 달라 알림이 반복되지 않도록 0 으로 모으고, -1 은 "없음"으로만 쓴다.
+    fun fingerprint(): String = "$rank|$slot|${magic?.coerceAtLeast(0) ?: -1}|${tragic?.coerceAtLeast(0) ?: -1}"
 }
 
 fun seasonLength(standings: List<TeamStanding>): Int =
@@ -511,8 +512,9 @@ fun parseRacePulse(raw: String): RacePulse? {
     if (p.size < 4) return null
     val rank = p[0].toIntOrNull() ?: return null
     val slot = p[1]
-    val magic = p[2].toIntOrNull()?.takeIf { it >= 0 }
-    val tragic = p[3].toIntOrNull()?.takeIf { it >= 0 }
+    // -1 은 "없음". 그 외 음수(옛 지문의 확정·탈락 이후 값)는 값 그대로 읽어 같은 상태로 본다.
+    val magic = p[2].toIntOrNull()?.takeIf { it != -1 }
+    val tragic = p[3].toIntOrNull()?.takeIf { it != -1 }
     val label = when (rank) {
         1 -> "한국시리즈 직행 매직넘버"
         2 -> "플레이오프 직행 매직넘버"
