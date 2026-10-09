@@ -6,12 +6,12 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.59` (`versionCode` **2059**) |
+| **버전** | `2.0.60` (`versionCode` **2060**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.github.io/works-dashboard/) |
-| **최신 릴리스** | [v2.0.59-261010 · latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·`update.json` 버전 2059, 서명 일치 확인 |
-| **검증** | 단위 테스트 177개·실경기 중계 519개 문구 재생 통과, lintDebug 오류 0, Debug/Release 빌드 성공, S26 울트라에 GitHub 배포 APK 설치 완료 |
+| **최신 릴리스** | [v2.0.60-261010 · latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·`update.json` 버전 2060, 서명 일치 확인 |
+| **검증** | 단위 테스트 205개·실경기 중계 519개 문구 재생 통과, lintDebug 오류 0, Debug/Release 빌드 성공, S26 울트라에 GitHub 배포 APK 설치 완료 |
 
 > 집·회사에서 이어서 작업할 때는 **[작업일지.md](작업일지.md)** 를 본다. 최신이 위. 작업이 끝나면 그 파일을 고치고 push.
 
@@ -172,7 +172,7 @@
 점수는 앱 · 백그라운드 서비스 · 위젯이 **8초 이내 스냅샷을 재사용**한다. 당겨서 새로고침만 강제 fetch.  
 시즌 일정(최근 21일·향후 14일)은 **10분**마다 받고, 연속 실패 시 15초~2분 쉬면서 **마지막 성공 스냅샷**을 유지한다 (1.3.85).  
 앱이 열려 있을 때 LIVE면 10초, 아니면 **45초**마다 받는다. 순위·타이틀·엔트리는 그 탭에 들어갈 때 받는다 (1.3.86).  
-라이브 알림 서비스는 당일 일정·중계만 빠르게 갱신하고 순위·시즌 일정·날씨 조회를 매번 기다리지 않는다. 현재 이닝과 누락된 직전 이닝을 캐시하고, 재시작하면 저장한 이벤트 이닝부터 누락 기록을 복구한다. **중계 탭을 열 때** 전체 이닝을 합친다. 일반 스냅샷 경로의 루타 승률·하이라이트는 **25초**에 한 번.
+라이브 알림 서비스는 당일 일정·중계만 빠르게 갱신하고 순위·시즌 일정·날씨 조회를 매번 기다리지 않는다. 현재 이닝과 누락된 직전 이닝을 캐시하고, 재시작하면 저장한 이벤트 이닝부터 누락 기록을 복구한다. **중계 탭을 열 때** 전체 이닝을 합친다. 자동 LIVE 조회에서는 보조 자료를 최대 **1분** 간격으로 별도 보완한다. 루타 원본 재조회 자체의 최소 간격은 **25초**이며 강제 새로고침과 전체 조회에 적용한다.
 
 득점 사건은 별도로 저장한다. 점수가 먼저 오거나 홈인 문구가 나뉘어 와도 같은 알림을 조용히 보완하고, 임시 알림을 합칠 때 중복 내역을 제거한다. 공식 점수 정정도 반영한다. 대타·대주자·수비 교체는 구분하며 주자가 현재 타자로 표시되지 않도록 검증한다 (2.0.59).
 
@@ -246,8 +246,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.59` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2059` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.60` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2060` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -271,7 +271,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 `main` 푸시 후 CI가 `latest`에 APK를 올리기까지는 수 분이 걸린다. 그 전에는 앱이 새 파일을 볼 수 없다.
 
-2.0.59 배포는 [커밋 7ce8734](https://github.com/bossxor/INV_LotteGiants/commit/7ce87348edbda2090dd9bc3cdf80bc6b685a5e7f)의 [CI 실행 #181](https://github.com/bossxor/INV_LotteGiants/actions/runs/37959536435)에서 완료했다. `latest` 태그는 이 배포 커밋을 가리키며 릴리스는 하나만 유지한다. 배포 APK의 패키지·버전·서명과 `update.json`을 확인한 뒤 S26 울트라에 해당 APK를 ADB로 설치했다.
+2.0.60 배포는 [커밋 0085bb9](https://github.com/bossxor/INV_LotteGiants/commit/0085bb93f634360a7f3f406d35cc33fa021bc4bb)의 [CI 실행 #184](https://github.com/bossxor/INV_LotteGiants/actions/runs/37977615309)에서 완료했다. `latest` 태그는 이 배포 커밋을 가리키며 릴리스는 하나만 유지한다. 배포 APK의 패키지·버전·서명과 `update.json`을 확인한 뒤 S26 울트라에 해당 APK를 ADB로 설치했다.
 
 이미 **다른 키(디버그 키 등)** 로 깔린 기기는 한 번 삭제한 뒤 릴리스 APK로 다시 설치해야 한다.
 
@@ -286,8 +286,8 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 ```json
 {
-  "versionCode": 2059,
-  "versionName": "2.0.59",
+  "versionCode": 2060,
+  "versionName": "2.0.60",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }
@@ -299,6 +299,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.60** | 조회·게시 분리와 중복 요청 공유, 자료별 캐시·담당 클래스, 순수 이벤트 reducer/정책 1회 조회, typed 커서 이행, 선수·일정·엔트리 상태 분리와 취소 보강, 테스트 205개 |
 | **2.0.59** | 대타·대주자 역할/실제 1루타·주자 타순 수정, 득점 지연·분할·정정·재시작 복구, 공시 조회 독립화/가속·실패 구분, DH 라인업 분리, 라이브 경량 갱신, 519개 실경기 중계 재생 검증 |
 | **2.0.58** | 만루·득점권 주자/타석 갱신, 플레이별 득점·타점·홈인 구분, 종료 처리·OPS·lint 수정, 양쪽 로고 상단 칩, 선수 생년월일·만 나이·학력·기간별 경력 |
 | **2.0.57** | 만루 타석 변경 알림이 주자를 API로 덮어쓰던 문제 수정 |
@@ -358,10 +359,11 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 ```
 app/src/main/java/com/bossxor/lottegiants/
-  data/          GiantsRepository, RelayMerge, KboOfficialApi, KboMobileApi, PlayerBiography, SnapshotStore, UpdateChecker …
-  domain/        Models, RelaySituation, LivePlayDetails, ScoreLedger, LiveEventCursor, MagicNumber, WinProb …
+  data/          GiantsRepository, SnapshotCoordinator, Schedule/Relay/Player/Roster/Preview/WeatherSource, SingleFlight, TimedSourceCache, SnapshotStore …
+  domain/        Models, RelaySituation, GameEventReducer, LivePlayDetails, ScoreLedger, typed LiveEventCursor, MagicNumber, WinProb …
+  ui/            MainViewModel, PlayerDetail/PlayerRoster/Calendar/EntryController, LatestRequest
   ui/screens/    라이브, 결과, 선수·선수 상세, 순위, 엔트리, 설정 …
-  live/          EventDetector, LiveScoreService, AlertWatchService, AlertPollCoordinator, AlertPollGate, NotificationHelper …
+  live/          EventDetector, AlertDispatcher/AlertBatch, LiveScoreService, AlertWatchService, AlertPollCoordinator, AlertPollGate, NotificationHelper …
   widget/        LotteWidget, WidgetAssets
 app/src/test/    교체·주자·득점 복구, 공시 응답·독립 조회, 선수 프로필, 중계 분류, 매직·승률 등 단위 테스트
   resources/     2026-10-09 LG–롯데전 공개 중계 519개 문구/상태 재생 자료
@@ -369,3 +371,13 @@ tools/team-icons/ 구장 배지 런처 아이콘 생성기
 scripts/         env.ps1, build.ps1, publish-latest, CI 서명 설정
 .github/workflows/publish-latest.yml
 ```
+
+
+Gradle 모듈은 기존 `app` 하나를 유지하면서 조회·게시·이벤트 계산·발행·화면 요청의 책임을 구분했습니다. 자세한 흐름과 캐시/취소 정책, 검증 범위는 [구조 설명](docs/architecture.md)에 정리했습니다.
+
+- 화면·서비스·위젯의 LIVE 조회를 공유하고, 전체 네트워크 대기와 짧은 게시 잠금을 분리합니다. 늦은 전체 응답과 팀/DH 선택 변경 후 응답은 최신 상태를 덮지 않습니다.
+- 프리뷰(5분)·날씨(15분)와 보조 자료 갱신은 LIVE 점수 경로와 최신성을 구분합니다. 당일 라인업·등말소는 신선 조회를 유지합니다.
+- 이벤트는 순수 reducer가 계산하고, 한 배치의 정책을 한 번 읽어 알림과 내역을 발행합니다. 득점 보완/정정의 무음 갱신과 기존 커서 이행을 유지합니다.
+- 선수·팀·일정·엔트리 선택이 바뀌거나 상세를 닫으면 이전 요청의 결과와 로딩 상태 변경을 무효화합니다.
+
+실제 공시 발행 속도와 Android 절전의 영향, 다음 LIVE 경기의 전체 지연은 현장 확인이 필요합니다. 테스트 통과를 오류가 전혀 없다는 보장으로 해석하지 않습니다.
