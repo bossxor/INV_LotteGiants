@@ -10,8 +10,8 @@
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.github.io/works-dashboard/) |
-| **최신 릴리스** | [v2.0.61-261010 · latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — 2.0.61 배포 진행 중, APK·업데이트 정보 최종 검증 결과는 작업일지에 기록 |
-| **검증** | 단위 테스트 214개·실경기 중계 519개 문구 재생 통과, lintDebug 오류 0, Debug/Release 빌드 성공, S26 울트라에 로컬 2.0.61 릴리스 APK 설치·전적/공시 실기 확인 완료, 프로필/화면 전환/양쪽 로고 칩은 2.0.60에서 확인 |
+| **최신 릴리스** | [v2.0.61-261010 · latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·update.json 버전 2061, 기존 서명 일치·배포 APK 설치 확인 |
+| **검증** | 단위 테스트 214개·실경기 중계 519개 문구 재생 통과, lintDebug 오류 0, Debug/Release 빌드 성공, S26 울트라에 GitHub 배포 APK 2.0.61 설치 완료, 같은 소스의 로컬 릴리스에서 전적/공시 실기 확인, 프로필/화면 전환/양쪽 로고 칩은 2.0.60에서 확인 |
 
 > 집·회사에서 이어서 작업할 때는 **[작업일지.md](작업일지.md)** 를 본다. 최신이 위. 작업이 끝나면 그 파일을 고치고 push.
 
@@ -271,7 +271,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 `main` 푸시 후 CI가 `latest`에 APK를 올리기까지는 수 분이 걸린다. 그 전에는 앱이 새 파일을 볼 수 없다.
 
-2.0.61은 전적 조회 범위 표시와 공식 엔트리 요약을 수정한 버전이다. 최신 배포 검증 결과와 커밋·CI 정보는 작업일지에 기록한다. `latest` 릴리스는 하나만 유지한다.
+2.0.61 배포는 [커밋 6ec6039](https://github.com/bossxor/INV_LotteGiants/commit/6ec6039c39b5495f6a84ca935a6a85080417ba45)의 [CI #185](https://github.com/bossxor/INV_LotteGiants/actions/runs/37980747215)에서 완료했다. 배포 APK와 update.json의 2.0.61/2061, 기존 서명 일치 및 S26 울트라 ADB 설치를 확인했다. latest 태그는 해당 코드 커밋을 가리키며 릴리스는 하나만 유지한다.
 
 이미 **다른 키(디버그 키 등)** 로 깔린 기기는 한 번 삭제한 뒤 릴리스 APK로 다시 설치해야 한다.
 
