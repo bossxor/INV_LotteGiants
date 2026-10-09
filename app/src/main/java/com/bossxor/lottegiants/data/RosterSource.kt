@@ -7,7 +7,9 @@ import com.bossxor.lottegiants.domain.LeaderPlayer
 import com.bossxor.lottegiants.domain.RosterMove
 import com.bossxor.lottegiants.domain.teamKeuboId
 import com.bossxor.lottegiants.domain.matchesTeam
+import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.kboToday
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -35,7 +37,7 @@ internal class RosterSource(
         val code = teamCode.ifBlank { LOTTE_TEAM_CODE }
         val season = date.year.toString()
         val gDt = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-        val (registered, removed) = rosterCache.get(date to code, if (date == kboToday()) 0 else 600_000L) {
+        val (registered, removed) = rosterCache.get(date to code, if (date == LocalDate.now(KBO_ZONE)) 0 else 600_000L) {
             KboRosterParser.parseConfirmed(kboApi.getRoster(KboRosterRequest(season_id = season, g_dt = gDt, t_id = code)))
         }
         val codeByName = if (resolveCodes) {
@@ -75,31 +77,8 @@ internal class RosterSource(
         }
         val kboReg = toPlayers(registered)
         val kboRem = toPlayers(removed)
-        val keuboDay = if (resolveCodes) {
-            runCatching { fetchAllRosterMoves(code) }.getOrDefault(emptyList())
-                .filter { it.moveDate == gDt }
-        } else {
-            emptyList()
-        }
-        fun merge(kbo: List<EntryPlayer>, extras: List<RosterMove>): List<EntryPlayer> {
-            val names = kbo.map { it.name }.toSet()
-            val added = extras.filter { it.playerName.isNotBlank() && it.playerName !in names }.map { m ->
-                val pitcher = m.playerName.let { n ->
-                    codeByName?.second?.containsKey(n) == true
-                }
-                EntryPlayer(
-                    name = m.playerName,
-                    playerCode = m.playerCode.ifBlank { codeFor(m.playerName, pitcher) },
-                    isPitcher = pitcher,
-                )
-            }
-            return kbo + added
-        }
-        return DayEntryChanges(
-            date = gDt,
-            registered = merge(kboReg, keuboDay.filter { it.isRegister }),
-            removed = merge(kboRem, keuboDay.filter { !it.isRegister }),
-        )
+        // 날짜별 인원은 공식 공시가 기준이다. 보조 이력은 선수 코드 연결에만 사용한다.
+        return DayEntryChanges(date = gDt, registered = kboReg, removed = kboRem)
     }
 
     /**
@@ -220,8 +199,9 @@ internal class RosterSource(
 
     /** 오늘부터 최대 lookback일 전까지 공시가 있는 가장 최근 날짜 */
     suspend fun findLatestEntryDate(lookback: Int = 21, teamCode: String = LOTTE_TEAM_CODE): LocalDate {
-        val today = LocalDate.now()
+        val today = LocalDate.now(KBO_ZONE)
         for (i in 0..lookback) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
             val d = today.minusDays(i.toLong())
             val changes = runCatching {
                 fetchDayEntryChanges(d, resolveCodes = false, teamCode = teamCode)
@@ -239,12 +219,10 @@ internal class RosterSource(
         val hits = mutableSetOf<LocalDate>()
         for (day in 1..month.lengthOfMonth()) {
             val d = month.atDay(day)
+            if (d > LocalDate.now(KBO_ZONE)) break
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
             runCatching { fetchDayEntryChanges(d, resolveCodes = false, teamCode = teamCode) }
                 .onSuccess { if (it.hasChanges) hits.add(d) }
-        }
-        runCatching { fetchAllRosterMoves(teamCode) }.getOrDefault(emptyList()).forEach { m ->
-            val d = runCatching { LocalDate.parse(m.moveDate) }.getOrNull() ?: return@forEach
-            if (YearMonth.from(d) == month) hits.add(d)
         }
         return hits
     }

@@ -73,7 +73,7 @@ import com.bossxor.lottegiants.domain.LotteTeamCard
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.focusName
 import com.bossxor.lottegiants.domain.teamCodeToName
-import com.bossxor.lottegiants.domain.RosterMove
+import com.bossxor.lottegiants.domain.EntryDayResult
 import com.bossxor.lottegiants.domain.ThemeMode
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.live.LiveScoreService
@@ -141,7 +141,8 @@ class MainActivity : ComponentActivity() {
                 val entryDate by vm.entryDate.collectAsState()
                 val dayEntry by vm.dayEntry.collectAsState()
                 val entryLoading by vm.entryLoading.collectAsState()
-                val recentMoves by vm.recentMoves.collectAsState()
+                val entryFailed by vm.entryFailed.collectAsState()
+                val recentEntries by vm.recentEntries.collectAsState()
                 val entryChangeDates by vm.entryChangeDates.collectAsState()
                 val teamCard by vm.teamCard.collectAsState()
                 val batterLeaders by vm.batterLeaders.collectAsState()
@@ -308,7 +309,8 @@ class MainActivity : ComponentActivity() {
                     entryDate = entryDate,
                     dayEntry = dayEntry,
                     entryLoading = entryLoading,
-                    recentMoves = recentMoves,
+                    entryFailed = entryFailed,
+                    recentEntries = recentEntries,
                     entryChangeDates = entryChangeDates,
                     onSelectEntryDate = vm::selectEntryDate,
                     onOpenEntrySmart = vm::openEntrySmart,
@@ -467,7 +469,8 @@ private fun AppScaffold(
     entryDate: java.time.LocalDate,
     dayEntry: com.bossxor.lottegiants.domain.DayEntryChanges?,
     entryLoading: Boolean,
-    recentMoves: List<RosterMove>,
+    entryFailed: Boolean,
+    recentEntries: List<EntryDayResult>,
     entryChangeDates: Set<java.time.LocalDate>,
     onSelectEntryDate: (java.time.LocalDate) -> Unit,
     onOpenEntrySmart: () -> Unit,
@@ -637,7 +640,8 @@ private fun AppScaffold(
                     selectedDate = entryDate,
                     dayEntry = dayEntry,
                     loading = entryLoading,
-                    recentMoves = recentMoves,
+                    failed = entryFailed,
+                    recentEntries = recentEntries,
                     changeDates = entryChangeDates,
                     onSelectDate = onSelectEntryDate,
                     onBack = { overlay = Overlay.None },

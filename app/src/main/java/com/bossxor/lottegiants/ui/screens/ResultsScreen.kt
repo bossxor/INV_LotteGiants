@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.sp
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.KBO_TEAMS
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
+import com.bossxor.lottegiants.domain.recordDisplayScope
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.cancelLabel
 import com.bossxor.lottegiants.domain.suspendLabel
@@ -201,6 +202,8 @@ fun ResultsScreen(
                         teamCode = resultsTeamCode,
                         seasonGames = seasonGames,
                         monthGames = monthGames,
+                        calendarMonth = calendarMonth,
+                        seasonLoading = seasonLoading,
                         loading = seasonLoading && seasonGames.isEmpty() && monthGames.none { it.involvesTeam(resultsTeamCode) },
                         onOpenGame = onOpenGame,
                         onRetry = onRefresh,
@@ -332,6 +335,8 @@ private fun TeamSeasonList(
     teamCode: String,
     seasonGames: List<MiniGame>,
     monthGames: List<MiniGame>,
+    calendarMonth: YearMonth,
+    seasonLoading: Boolean,
     loading: Boolean,
     onOpenGame: (String) -> Unit,
     onRetry: () -> Unit,
@@ -343,6 +348,7 @@ private fun TeamSeasonList(
         src.filter { it.involvesTeam(teamCode) }
             .sortedWith(compareByDescending<MiniGame> { it.gameDate }.thenByDescending { it.startTime })
     }
+    val recordScope = recordDisplayScope(teamGames.map { it.gameDate }, seasonGames.isNotEmpty(), calendarMonth)
     val ended = teamGames.filter { it.status == GameStatus.ENDED && !it.isCanceledGame() }
     val wins = ended.count { it.teamWon(teamCode) == true }
     val losses = ended.count { it.teamWon(teamCode) == false }
@@ -351,9 +357,14 @@ private fun TeamSeasonList(
 
     Column(modifier.fillMaxWidth()) {
         Text(
-            "$name 시즌  ${wins}승 ${losses}패 ${draws}무",
+            "$name ${recordScope.label}  ${wins}승 ${losses}패 ${draws}무",
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp,
+        )
+        Text(
+            if (seasonLoading) "시즌 경기 확인 중 · ${recordScope.range}" else recordScope.range,
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(8.dp))
         when {

@@ -46,7 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bossxor.lottegiants.domain.DayEntryChanges
 import com.bossxor.lottegiants.domain.EntryPlayer
-import com.bossxor.lottegiants.domain.RosterMove
+import com.bossxor.lottegiants.domain.EntryDayResult
+import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.ui.LoseRed
 import com.bossxor.lottegiants.ui.WinGreen
 import com.bossxor.lottegiants.ui.components.ScreenTitle
@@ -64,19 +65,20 @@ fun EntryBoardScreen(
     selectedDate: LocalDate,
     dayEntry: DayEntryChanges?,
     loading: Boolean,
-    recentMoves: List<RosterMove>,
+    failed: Boolean,
+    recentEntries: List<EntryDayResult>,
     changeDates: Set<LocalDate>,
     onSelectDate: (LocalDate) -> Unit,
     onBack: () -> Unit,
     onPlayerClick: (EntryPlayer) -> Unit = {},
     teamName: String = "롯데",
 ) {
-    val today = remember { LocalDate.now() }
+    val today = LocalDate.now(KBO_ZONE)
     var month by remember { mutableStateOf(YearMonth.from(selectedDate)) }
     val dates = remember(month) { (1..month.lengthOfMonth()).map { month.atDay(it) } }
     val listState = rememberLazyListState()
     val last7 = remember(today) { (0..6).map { today.minusDays(it.toLong()) } }
-    val movesByDate = remember(recentMoves) { recentMoves.groupBy { it.moveDate } }
+    val movesByDate = remember(recentEntries) { recentEntries.associateBy { it.date } }
     val scope = rememberCoroutineScope()
     var swipeLock by remember { mutableStateOf(false) }
 
@@ -185,6 +187,11 @@ fun EntryBoardScreen(
                     loading -> Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(Modifier.size(28.dp), color = MaterialTheme.colorScheme.primary)
                     }
+                    failed -> EmptyRetry(
+                        message = "공시를 조회하지 못했습니다.",
+                        onRetry = { onSelectDate(selectedDate) },
+                    )
+                    dayEntry == null -> Text("공시 확인 중", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     else -> {
                         val reg = dayEntry?.registered.orEmpty()
                         val rem = dayEntry?.removed.orEmpty()
@@ -209,12 +216,11 @@ fun EntryBoardScreen(
                 Text("최근 7일 변동", fontWeight = FontWeight.Bold, fontSize = 15.sp)
             }
             items(last7, key = { it.toString() }) { day ->
-                val key = day.toString()
-                val dayMoves = movesByDate[key].orEmpty()
-                val reg = dayMoves.filter { it.isRegister }
-                val rem = dayMoves.filter { !it.isRegister }
+                val outcome = movesByDate[day] ?: EntryDayResult(day)
+                val reg = outcome.changes?.registered.orEmpty()
+                val rem = outcome.changes?.removed.orEmpty()
                 SectionCard(padding = 12.dp) {
-                    Column {
+                    Column(Modifier.fillMaxWidth().clickable { onSelectDate(day) }) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 day.format(DateTimeFormatter.ofPattern("MM.dd (E)", Locale.KOREA)),
@@ -222,15 +228,15 @@ fun EntryBoardScreen(
                                 modifier = Modifier.weight(1f),
                             )
                             Text(
-                                if (dayMoves.isEmpty()) "변동 없음" else "등록 ${reg.size} · 말소 ${rem.size}",
+                                outcome.summary,
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        if (dayMoves.isNotEmpty()) {
+                        if (reg.isNotEmpty() || rem.isNotEmpty()) {
                             Spacer(Modifier.height(8.dp))
-                            reg.forEach { MoveLine(it.playerName, true) }
-                            rem.forEach { MoveLine(it.playerName, false) }
+                            reg.forEach { MoveLine(it.name, true) }
+                            rem.forEach { MoveLine(it.name, false) }
                         }
                     }
                 }

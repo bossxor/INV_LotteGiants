@@ -16,6 +16,7 @@ import com.bossxor.lottegiants.domain.LotteTeamCard
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.PitcherLine
 import com.bossxor.lottegiants.domain.PlayerDetail
+import com.bossxor.lottegiants.domain.EntryDayResult
 import com.bossxor.lottegiants.domain.RosterMove
 import com.bossxor.lottegiants.domain.StadiumWeather
 import com.bossxor.lottegiants.domain.TeamStanding
@@ -98,12 +99,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _entryLoading = entryController.loading
     val entryLoading: StateFlow<Boolean> = _entryLoading.asStateFlow()
+    val entryFailed: StateFlow<Boolean> = entryController.failed.asStateFlow()
 
     private val _entryChangeDates = entryController.dates
     val entryChangeDates: StateFlow<Set<LocalDate>> = _entryChangeDates.asStateFlow()
 
-    private val _recentMoves = entryController.recent
-    val recentMoves: StateFlow<List<RosterMove>> = _recentMoves.asStateFlow()
+    private val _recentEntries = entryController.recent
+    val recentEntries: StateFlow<List<EntryDayResult>> = _recentEntries.asStateFlow()
 
     private val _teamCard = MutableStateFlow<LotteTeamCard?>(null)
     val teamCard: StateFlow<LotteTeamCard?> = _teamCard.asStateFlow()
