@@ -10,6 +10,8 @@
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.github.io/works-dashboard/) |
+| **최신 릴리스** | [v2.0.59-261010 · latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·`update.json` 버전 2059, 서명 일치 확인 |
+| **검증** | 단위 테스트 177개·실경기 중계 519개 문구 재생 통과, lintDebug 오류 0, Debug/Release 빌드 성공, S26 울트라에 GitHub 배포 APK 설치 완료 |
 
 > 집·회사에서 이어서 작업할 때는 **[작업일지.md](작업일지.md)** 를 본다. 최신이 위. 작업이 끝나면 그 파일을 고치고 push.
 
@@ -62,6 +64,7 @@
 - 즐겨찾기 목록·검색 추가·삭제 (설정에서 옮김)
 - 팀별 **등번호 일람** (KBO 선수조회 구단 전체·1군·퓨처스 포함, 팀+시즌 캐시 후 차이만 갱신)
 - 이름·등번호·포지션 검색, 당겨서 새로고침
+- 선수 상세에 **생년월일·만 나이·학력·기간별 팀 경력** 표시. KBO 선수코드·이름과 네이버 인물 ID·생일을 대조한다. 학력은 확인된 학교 목록, 경력 기간은 출처 표기를 그대로 사용하며 없는 항목은 생략한다.
 
 ### 순위 · 엔트리
 
@@ -113,7 +116,7 @@
 | 득점 · 홈런 · 역전 | **중계** 탭 | `롯데 득점! 전준우 좌전 적시타 · 2타점 · 5:4` |
 | 득점권 | **중계** 탭 | `주자 1,2루 · 타석 장두성` / 만루 시 루별 주자·타석·이닝 |
 | 라인업 | **라인업** 탭 | — |
-| 엔트리 변동 | **엔트리** 화면 | 등록·말소, 또는 `오늘 등말소 변화 없음` (**14–23시**, 오전 5시 날짜 넘김에는 안 보냄) |
+| 엔트리 변동 | **엔트리** 화면 | 등록·말소 공시는 **08–23시** 감시. `오늘 등말소 변화 없음`은 정상 빈 응답 확인 후 **14–23시** 하루 1회 |
 | 매직/트래직 | **순위** 탭 | `12 → 11 · 롯데, 두산 5:3 승` |
 
 - **역전**: 지고 있던 팀이 앞설 때만 (`3:4 → 5:4`). 동점 선취(`0:0 → 0:1`)는 역전이 아님
@@ -244,7 +247,7 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 | 필드 | 설명 | 현재 |
 |------|------|------|
 | `versionName` | 사용자에게 보이는 버전 | `2.0.59` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2057` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2059` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -268,6 +271,8 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 `main` 푸시 후 CI가 `latest`에 APK를 올리기까지는 수 분이 걸린다. 그 전에는 앱이 새 파일을 볼 수 없다.
 
+2.0.59 배포는 [커밋 7ce8734](https://github.com/bossxor/INV_LotteGiants/commit/7ce87348edbda2090dd9bc3cdf80bc6b685a5e7f)의 [CI 실행 #181](https://github.com/bossxor/INV_LotteGiants/actions/runs/37959536435)에서 완료했다. `latest` 태그는 이 배포 커밋을 가리키며 릴리스는 하나만 유지한다. 배포 APK의 패키지·버전·서명과 `update.json`을 확인한 뒤 S26 울트라에 해당 APK를 ADB로 설치했다.
+
 이미 **다른 키(디버그 키 등)** 로 깔린 기기는 한 번 삭제한 뒤 릴리스 APK로 다시 설치해야 한다.
 
 ### 수동 배포
@@ -281,8 +286,8 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 ```json
 {
-  "versionCode": 2007,
-  "versionName": "2.0.7",
+  "versionCode": 2059,
+  "versionName": "2.0.59",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }
@@ -353,12 +358,13 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 ```
 app/src/main/java/com/bossxor/lottegiants/
-  data/          KboOfficialApi, GiantsRepository, SnapshotStore, UpdateChecker …
-  domain/        Models, MagicNumber, WinProb, 중계 그룹핑, 득점·역전 알림 문구
-  ui/screens/    라이브, 결과, 순위, 엔트리, 설정 …
-  live/          LiveScoreService, AlertWatchService, AlertPollGate, NotificationHelper …
+  data/          GiantsRepository, RelayMerge, KboOfficialApi, KboMobileApi, PlayerBiography, SnapshotStore, UpdateChecker …
+  domain/        Models, RelaySituation, LivePlayDetails, ScoreLedger, LiveEventCursor, MagicNumber, WinProb …
+  ui/screens/    라이브, 결과, 선수·선수 상세, 순위, 엔트리, 설정 …
+  live/          EventDetector, LiveScoreService, AlertWatchService, AlertPollCoordinator, AlertPollGate, NotificationHelper …
   widget/        LotteWidget, WidgetAssets
-app/src/test/    중계 분류, 역전/득점, 매직 사유, 승률 파싱, 알림 폴링 간격 단위 테스트
+app/src/test/    교체·주자·득점 복구, 공시 응답·독립 조회, 선수 프로필, 중계 분류, 매직·승률 등 단위 테스트
+  resources/     2026-10-09 LG–롯데전 공개 중계 519개 문구/상태 재생 자료
 tools/team-icons/ 구장 배지 런처 아이콘 생성기
 scripts/         env.ps1, build.ps1, publish-latest, CI 서명 설정
 .github/workflows/publish-latest.yml
