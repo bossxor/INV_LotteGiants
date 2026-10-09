@@ -336,6 +336,8 @@ data class PreviewSeasonStats(
     val rbi: Int? = null,
     val hr: Int? = null,
     val obp: Double? = null,
+    val slg: Double? = null,
+    val ops: Double? = null,
     val era: String? = null,
     val w: Int? = null,
     val l: Int? = null,
@@ -373,4 +375,14 @@ data class NaverPlayerResult(
 @Serializable
 data class NaverPlayer(
     val backNo: Int = 0,
+    val playerId: String = "",
+    val playerName: String = "",
+    val dateOfBirth: String = "",
+    val height: Int? = null,
+    val weight: Int? = null,
+    val playerPlayType: String = "",
+    val position: String = "",
+    val career: String = "",
+    val osId: String = "",
+    val teamId: String = "",
 )

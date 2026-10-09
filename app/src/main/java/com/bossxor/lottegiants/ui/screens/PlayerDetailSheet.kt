@@ -2,6 +2,8 @@ package com.bossxor.lottegiants.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +38,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.bossxor.lottegiants.domain.PlayerDetail
+import com.bossxor.lottegiants.data.playerAge
+import com.bossxor.lottegiants.data.playerBirthDate
+import androidx.compose.ui.platform.LocalUriHandler
 import com.bossxor.lottegiants.domain.playerPhotoCandidates
 import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.components.HotColdZoneChart
@@ -84,7 +89,7 @@ private fun PlayerDetailContent(
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
 ) {
-    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+    Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PlayerFace(d)
             Spacer(Modifier.width(14.dp))
@@ -114,13 +119,42 @@ private fun PlayerDetailContent(
 
         Spacer(Modifier.height(16.dp))
         val phys = buildList {
-            if (d.birth.isNotBlank()) add(formatBirth(d.birth))
-            if (d.heightCm.isNotBlank()) add("${d.heightCm.trimEnd('0').trimEnd('.')}cm")
-            if (d.weightKg.isNotBlank()) add("${d.weightKg.trimEnd('0').trimEnd('.')}kg")
+            if (d.heightCm.isNotBlank()) add("${formatMeasurement(d.heightCm)}cm")
+            if (d.weightKg.isNotBlank()) add("${formatMeasurement(d.weightKg)}kg")
         }
         if (phys.isNotEmpty()) {
             Text(phys.joinToString("  ·  "), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
+        }
+
+        if (d.birth.isNotBlank()) {
+            Text("생년월일 ${formatBirth(d.birth)}" +
+                (playerAge(d.birth)?.let { " · 만 ${it}세" } ?: ""), fontSize = 13.sp)
+            Spacer(Modifier.height(12.dp))
+        }
+        if (d.education.isNotEmpty()) {
+            Text("학력사항", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(6.dp))
+            Text(d.education.joinToString(" → "), fontSize = 13.sp)
+            Spacer(Modifier.height(14.dp))
+        }
+        if (d.careers.isNotEmpty()) {
+            Text("경력사항", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.height(6.dp))
+            d.careers.forEach { career ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (career.period.isNotBlank()) Text(career.period, fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    Text(career.team, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+        if (d.profileUrl.isNotBlank()) {
+            val uriHandler = LocalUriHandler.current
+            Text("프로필 출처 보기", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { uriHandler.openUri(d.profileUrl) })
+            Spacer(Modifier.height(16.dp))
         }
 
         if (d.todayLine.isNotBlank()) {
@@ -229,8 +263,7 @@ private fun StatBox(label: String, value: String, modifier: Modifier = Modifier)
 }
 
 private fun formatBirth(raw: String): String {
-    if (raw.length == 8) {
-        return "${raw.substring(0, 4)}.${raw.substring(4, 6)}.${raw.substring(6, 8)}"
-    }
-    return raw
+    return playerBirthDate(raw)?.format(java.time.format.DateTimeFormatter.ofPattern("yyyy.MM.dd")) ?: raw
 }
+
+private fun formatMeasurement(raw: String): String = raw.toBigDecimalOrNull()?.stripTrailingZeros()?.toPlainString() ?: raw

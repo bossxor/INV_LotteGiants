@@ -203,7 +203,8 @@ internal fun toPreviewBatter(block: PreviewPlayerBlock?): PreviewBatter {
         hr = stats?.hr ?: 0,
         rbi = stats?.rbi ?: 0,
         games = stats?.gameCount ?: 0,
-        ops = stats?.obp?.let { String.format("%.3f", it) }.orEmpty(),
+        ops = stats?.let { it.ops ?: it.obp?.let { obp -> it.slg?.let { slg -> obp + slg } } }
+            ?.let { String.format(java.util.Locale.US, "%.3f", it) }.orEmpty(),
         recentAvg = recent?.hra.orEmpty(),
         recentHits = recent?.hit ?: 0,
         recentRbi = recent?.rbi ?: 0,

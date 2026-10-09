@@ -9,6 +9,10 @@ import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.PitcherLine
 import com.bossxor.lottegiants.domain.RosterMove
+import com.bossxor.lottegiants.domain.scoringPlays
+import com.bossxor.lottegiants.domain.scoringDetailBody
+import com.bossxor.lottegiants.domain.advanceNamedRunners
+import com.bossxor.lottegiants.domain.onlyOccupied
 import com.bossxor.lottegiants.domain.NamedBases
 import com.bossxor.lottegiants.domain.atBatForChance
 import com.bossxor.lottegiants.domain.basesKey
@@ -25,15 +29,9 @@ import com.bossxor.lottegiants.domain.inferBasesAfterAdvance
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.leadChangeTitle
-import com.bossxor.lottegiants.domain.namedCount
 import com.bossxor.lottegiants.domain.parseBasesKey
-import com.bossxor.lottegiants.domain.pickAdvanceRelay
 import com.bossxor.lottegiants.domain.pickPlayerName
 import com.bossxor.lottegiants.domain.pickScoringRelay
-import com.bossxor.lottegiants.domain.runnersFromRelayTexts
-import com.bossxor.lottegiants.domain.runnersLabel
-import com.bossxor.lottegiants.domain.scoringBody
-import com.bossxor.lottegiants.domain.scoringRelayWindow
 import com.bossxor.lottegiants.domain.shouldEmitAlert
 import com.bossxor.lottegiants.domain.TeamStanding
 import com.bossxor.lottegiants.domain.parseRacePulse
@@ -85,7 +83,8 @@ class EventDetector(private val store: SnapshotStore) {
 
     suspend fun process(context: Context, game: LotteGameInfo?) {
         if (game == null) return
-        emittingForLive = game.status == GameStatus.LIVE
+        emittingForLive = game.status == GameStatus.LIVE ||
+            (game.status == GameStatus.ENDED && lastStatus == GameStatus.LIVE)
 
         if (lastGameId.isNotBlank() && lastGameId != game.gameId) {
             // 새 경기: 인메모리 상태만 리셋 (취소 알림 DataStore 키는 유지)
@@ -99,7 +98,7 @@ class EventDetector(private val store: SnapshotStore) {
             // 스케줄러는 매 실행 새 detector → 이미 끝난/취소된 경기도 DataStore 중복 방지 하에 1회 알림
             if (game.status == GameStatus.CANCELED) {
                 notifyCanceled(context, game)
-            } else if (game.status == GameStatus.ENDED) {
+            } else if (game.status == GameStatus.ENDED && lastStatus != GameStatus.LIVE) {
                 notifyEnded(context, game)
             } else {
                 if (game.status == GameStatus.LIVE) {
@@ -107,14 +106,16 @@ class EventDetector(private val store: SnapshotStore) {
                 }
                 maybeNotifyLineup(context, game)
             }
-            return
+            if (game.status != GameStatus.ENDED || lastStatus != GameStatus.LIVE) return
         }
+        emittingForLive = game.status == GameStatus.LIVE ||
+            (game.status == GameStatus.ENDED && lastStatus == GameStatus.LIVE)
 
         val prevStatus = lastStatus
         if (prevStatus != null && prevStatus != game.status) {
             when (game.status) {
                 GameStatus.LIVE -> maybeNotifyGameStart(context, game)
-                GameStatus.ENDED -> notifyEnded(context, game)
+                GameStatus.ENDED -> {} // 마지막 득점부터 처리한 뒤 종료를 알린다.
                 GameStatus.CANCELED -> notifyCanceled(context, game)
                 else -> {}
             }
@@ -155,57 +156,56 @@ class EventDetector(private val store: SnapshotStore) {
         val lotteScored = lastLotteScore >= 0 && game.lotteScore > lastLotteScore
         val oppScored = lastOppScore >= 0 && game.opponentScore > lastOppScore
         val lotteRunsDelta = if (lotteScored) (game.lotteScore - lastLotteScore).coerceAtLeast(1) else 0
+        val sameHalf = game.inning == lastInning && game.isTopInning == lastTop
+        if (!sameHalf) {
+            lastChanceBases = NamedBases(null, null, null)
+            lastChanceBatter = ""
+            lastBasesKey = ""
+        }
+        val currentBases = resolveChanceBases(namedBasesFromGame(game), newTexts, game, lotteRunsDelta)
         if (lotteScored || oppScored) {
-            val window = scoringRelayWindow(game.recentTexts, newTexts, lastSeqno)
-            val play = pickScoringRelay(window)
-            val text = play?.text.orEmpty()
-            val how = describePlayHow(text)
-            val seq = play?.seqno ?: newTexts.maxOfOrNull { it.seqno } ?: 0
-            val lotteRuns = lotteRunsDelta.coerceAtLeast(1)
-            val oppRuns = (game.opponentScore - lastOppScore).coerceAtLeast(1)
             val score = "${game.lotteScore}:${game.opponentScore}"
-            val lotteWho = pickPlayerName(text, play?.batterTitle.orEmpty(), lotteRosterNames(game))
-            val body = scoringBody(text, lotteWho, how, game.inningLabel)
-            if (lotteScored) {
-                val lotteHr = text.contains("홈런") && isLotteHomerun(game, text)
-                if (lotteHr) {
-                    val runs = parseHrRuns(text) ?: lotteRuns
-                    val title = formatHomerunTitle(lotteWho, runs, score, how, teamName = game.focusName())
-                    maybeNotify(
-                        context, NotificationType.HOMERUN, 3_000_000 + seq, title, body,
-                        gameId = game.gameId, detailTab = "relay",
-                    )
-                    store.setHighlight(title)
-                } else {
-                    val title = formatLotteScoreTitle(lotteWho, lotteRuns, score, how, teamName = game.focusName())
-                    maybeNotify(
-                        context, NotificationType.SCORE, 1_000_000 + seq, title, body,
-                        gameId = game.gameId, detailTab = "relay",
-                    )
+            suspend fun emitScores(focus: Boolean) {
+                val plays = scoringPlays(game.recentTexts, lastSeqno,
+                    if (focus) lastLotteScore else lastOppScore,
+                    if (focus) game.lotteScore else game.opponentScore,
+                    if (focus) game.isHome else !game.isHome,
+                    if (focus) lotteRosterNames(game) else oppRosterNames(game))
+                for (play in plays) {
+                    val attackingNow = if (focus) game.isLotteBatting else !game.isLotteBatting
+                    val isLive = game.status == GameStatus.LIVE && attackingNow &&
+                        (play.inning == 0 || play.inning == game.inning) &&
+                        (play.isTop == null || play.isTop == game.isTopInning)
+                    val atBat = if (isLive) atBatForChance(game.currentBatterName,
+                        game.nextBatterName, play.who, playText = play.how.orEmpty()) else ""
+                    val body = scoringDetailBody(play, atBat,
+                        if (isLive) currentBases else NamedBases(null, null, null),
+                        if (play.inning > 0) "${play.inning}회${if (play.isTop == true) "초" else "말"}" else game.inningLabel)
+                    val hr = play.how?.contains("홈런") == true
+                    val title = when {
+                        !focus -> formatConcedeTitle(play.who, game.opponentName, play.runs, score, play.how)
+                        hr -> formatHomerunTitle(play.who, play.runs, score, play.how, game.focusName())
+                        else -> formatLotteScoreTitle(play.who, play.runs, score, play.how,
+                            game.focusName(), play.rbi)
+                    }
+                    val type = when { !focus -> NotificationType.CONCEDING; hr -> NotificationType.HOMERUN; else -> NotificationType.SCORE }
+                    val baseId = when { !focus -> 2_000_000; hr -> 3_000_000; else -> 1_000_000 }
+                    maybeNotify(context, type, baseId + play.seqno.coerceAtLeast(0), title, body,
+                        gameId = game.gameId, detailTab = "relay")
                     store.setHighlight(title)
                 }
             }
-            if (oppScored) {
-                val oppWho = pickPlayerName(text, play?.batterTitle.orEmpty(), oppRosterNames(game))
-                val title = formatConcedeTitle(oppWho, game.opponentName, oppRuns, score, how)
-                maybeNotify(
-                    context, NotificationType.CONCEDING, 2_000_000 + seq, title,
-                    scoringBody(text, oppWho, how, game.inningLabel),
-                    gameId = game.gameId, detailTab = "relay",
-                )
-                store.setHighlight(title)
+            if (lotteScored) emitScores(true)
+            if (oppScored) emitScores(false)
+            leadChangeTitle(lastLotteScore, lastOppScore, game.lotteScore, game.opponentScore,
+                game.opponentName, game.focusName())?.let { title ->
+                maybeNotify(context, NotificationType.LEAD_CHANGE,
+                    4_000_000 + (newTexts.maxOfOrNull { it.seqno } ?: lastSeqno).coerceAtLeast(0),
+                    title, score, gameId = game.gameId, detailTab = "relay")
             }
-            leadChangeTitle(
-                lastLotteScore, lastOppScore, game.lotteScore, game.opponentScore, game.opponentName,
-                teamName = game.focusName(),
-            )?.let { title ->
-                maybeNotify(
-                    context, NotificationType.LEAD_CHANGE, 4_000_000 + seq,
-                    title, score, gameId = game.gameId, detailTab = "relay",
-                )
-            }
-            seedScores(game)
         }
+        // 득점 정정으로 감소한 점수도 다음 비교에 반영한다.
+        seedScores(game)
         if (newTexts.isNotEmpty()) lastSeqno = newTexts.maxOf { it.seqno }
 
         val newPitcherCode = game.currentPitcherCode
@@ -305,103 +305,36 @@ class EventDetector(private val store: SnapshotStore) {
         lastInning = game.inning
         lastTop = game.isTopInning
 
-        if (game.isSuspended) {
-            // 중단 중 루 플래그 깜빡임으로 득점권 알림이 나가지 않게, 키만 맞춰 둔다.
-            lastBasesKey = basesKey(game.onBase1, game.onBase2, game.onBase3)
-        } else if (game.isLotteBatting) {
-            val key = basesKey(game.onBase1, game.onBase2, game.onBase3)
-            val nowChance = game.onBase2 || game.onBase3
-            val nowLoaded = game.onBase1 && game.onBase2 && game.onBase3
-            val scoringChance = nowChance || nowLoaded
-            val batterName = game.currentBatterName.trim()
-            val apiBases = namedBasesFromGame(game)
-            if (key != lastBasesKey) {
-                val (was1, was2, was3) = parseBasesKey(lastBasesKey)
-                val wasChance = was2 || was3
-                val wasLoaded = was1 && was2 && was3
-                val play = pickAdvanceRelay(newTexts)
-                val who = pickPlayerName(
-                    play?.text.orEmpty(),
-                    play?.batterTitle.orEmpty(),
-                    lotteRosterNames(game),
-                )
-                val bases = resolveChanceBases(apiBases, newTexts, game, lotteRunsDelta)
-                val runners = bases.label()
-                val runnerNames = listOfNotNull(bases.first, bases.second, bases.third)
-                val atBat = atBatForChance(
-                    currentBatter = game.currentBatterName,
-                    nextBatter = game.nextBatterName,
-                    playMaker = who,
-                    runnerNames = runnerNames,
-                    playText = play?.text.orEmpty(),
-                    currentBatterOrder = game.currentBatterOrder,
-                    runnerOn1Order = game.runnerOn1Order,
-                )
-                val alert = formatScoringChanceAlert(
-                    loaded = nowLoaded,
-                    runners = runners,
-                    batterNow = atBat,
-                    inningLabel = game.inningLabel,
-                    outs = game.out,
-                    on1 = game.onBase1,
-                    on2 = game.onBase2,
-                    on3 = game.onBase3,
-                )
-                when {
-                    nowLoaded && !wasLoaded -> maybeNotify(
-                        context, NotificationType.SCORING_CHANCE, 2601,
-                        alert.title, alert.text,
-                        gameId = game.gameId, detailTab = "relay",
-                    )
-                    nowChance && !wasChance -> maybeNotify(
-                        context, NotificationType.SCORING_CHANCE, 2602,
-                        alert.title, alert.text,
-                        gameId = game.gameId, detailTab = "relay",
-                    )
-                }
-                lastBasesKey = key
-                lastChanceBatter = atBat.ifBlank { batterName }
-                lastChanceBases = bases
-            } else if (
-                scoringChance &&
-                batterName.isNotBlank() &&
-                lastChanceBatter.isNotBlank() &&
-                batterName != lastChanceBatter &&
-                store.chanceAtBatChange()
-            ) {
-                // 타석만 바뀜 — 주자는 그대로. API/진루 추정을 다시 돌리면 낡은 이름으로 덮인다.
-                val bases = if (lastChanceBases.namedCount() > 0) lastChanceBases else apiBases
-                val alert = formatScoringChanceAlert(
-                    loaded = nowLoaded,
-                    runners = bases.label(),
-                    batterNow = batterName,
-                    inningLabel = game.inningLabel,
-                    outs = game.out,
-                    on1 = game.onBase1,
-                    on2 = game.onBase2,
-                    on3 = game.onBase3,
-                )
-                maybeNotify(
-                    context, NotificationType.SCORING_CHANCE, 2603,
-                    alert.title, alert.text,
-                    gameId = game.gameId, detailTab = "relay",
-                )
-                lastChanceBatter = batterName
-                lastChanceBases = bases
-            } else if (scoringChance && batterName.isNotBlank() && lastChanceBatter.isBlank()) {
-                lastChanceBatter = batterName
-                lastChanceBases = apiBases
-            } else if (scoringChance && !apiBases.sameOccupants(lastChanceBases) &&
-                (apiBases.first != null || apiBases.second != null || apiBases.third != null)
-            ) {
-                // 점유 루는 같은데 주자 이름만 갱신된 경우 기억만 맞춤 (알림 스팸 방지)
-                lastChanceBases = apiBases
-            }
-        } else {
+        if (game.status != GameStatus.LIVE || !game.isLotteBatting) {
             lastBasesKey = ""
             lastChanceBatter = ""
             lastChanceBases = NamedBases(null, null, null)
+        } else {
+            val key = basesKey(game.onBase1, game.onBase2, game.onBase3)
+            val (was1, was2, was3) = parseBasesKey(lastBasesKey)
+            val nowChance = game.onBase2 || game.onBase3
+            val loaded = game.onBase1 && game.onBase2 && game.onBase3
+            val play = pickScoringRelay(newTexts)
+            val maker = play?.let { pickPlayerName(it.text, it.batterTitle, lotteRosterNames(game)) }
+            val atBat = atBatForChance(game.currentBatterName, game.nextBatterName, maker,
+                listOfNotNull(currentBases.first, currentBases.second, currentBases.third),
+                play?.text.orEmpty(), game.currentBatterOrder, game.runnerOn1Order)
+            val entered = (loaded && !(was1 && was2 && was3)) || (nowChance && !(was2 || was3))
+            val changedBatter = nowChance && atBat.isNotBlank() && lastChanceBatter.isNotBlank() &&
+                atBat != lastChanceBatter && store.chanceAtBatChange()
+            if (!game.isSuspended && (entered || changedBatter)) {
+                val alert = formatScoringChanceAlert(loaded, currentBases.label(), atBat,
+                    game.inningLabel, game.out, game.onBase1, game.onBase2, game.onBase3)
+                maybeNotify(context, NotificationType.SCORING_CHANCE,
+                    if (entered) { if (loaded) 2601 else 2602 } else 2603,
+                    alert.title, alert.text, gameId = game.gameId, detailTab = "relay")
+            }
+            // 점유 루가 같아도 매번 갱신한다. 타석만 바뀐 경우와 득점 플레이를 구분한다.
+            lastBasesKey = key
+            lastChanceBatter = atBat
+            lastChanceBases = currentBases
         }
+        if (game.status == GameStatus.ENDED && prevStatus != GameStatus.ENDED) notifyEnded(context, game)
         persistCursor(game)
     }
 
@@ -738,8 +671,8 @@ class EventDetector(private val store: SnapshotStore) {
                 mutableSetOf()
             }
         }
-        lastInning = game.inning
-        lastTop = game.isTopInning
+        lastInning = if (sameGame) parts.getOrNull(11)?.toIntOrNull() ?: -1 else game.inning
+        lastTop = if (sameGame) parts.getOrNull(12)?.toBooleanStrictOrNull() else game.isTopInning
         eighthNotifiedFor = store.notifiedEighthKey()
         extraNotifiedFor = store.notifiedExtraKey()
     }
@@ -757,6 +690,8 @@ class EventDetector(private val store: SnapshotStore) {
             lastChanceBatter,
             seenPitcherCodes.filter { it.isNotBlank() }.sorted().joinToString(","),
             lastChanceBases.encode(),
+            lastInning.toString(),
+            lastTop?.toString().orEmpty(),
         ).joinToString("|")
         store.setLiveEventCursor(raw)
     }
@@ -767,55 +702,30 @@ class EventDetector(private val store: SnapshotStore) {
         third = runnerName(game, game.onBase3, game.runnerOn3Order, game.runnerOn3Code),
     )
 
-    /**
-     * 주자 이름 우선순위:
-     * 1) API가 직전 기억과 같으면(한 박자 느림) 중계 진루 추정
-     * 2) 중계문 `N루주자 이름` (최근 문구)
-     * 3) 직전 기억(이미 추정·확정한 이름) — API가 더 빈약할 때
-     * 4) API
-     */
+    /** 새로운 API 선수코드와 명시된 중계 진루로 매 폴링 주자를 갱신한다. */
     private fun resolveChanceBases(
         api: NamedBases,
         newTexts: List<com.bossxor.lottegiants.domain.RelayText>,
         game: LotteGameInfo,
         runsJustScored: Int,
     ): NamedBases {
-        val roster = lotteRosterNames(game)
-        val play = pickAdvanceRelay(newTexts) ?: pickScoringRelay(newTexts)
-        val how = describePlayHow(play?.text.orEmpty())
-        val maker = pickPlayerName(
-            play?.text.orEmpty(),
-            play?.batterTitle.orEmpty(),
-            roster,
-        ) ?: lastChanceBatter
-        val inferred = inferBasesAfterAdvance(
-            before = lastChanceBases,
-            batter = maker,
-            how = how,
-            runsScored = runsJustScored,
+        val roster = if (game.isLotteBatting) lotteRosterNames(game) else oppRosterNames(game)
+        val sameSideTexts = newTexts.filter { it.inning == game.inning &&
+            (it.isTopInning == null || it.isTopInning == game.isTopInning) }
+        val before = lastChanceBases
+        val moved = advanceNamedRunners(before, sameSideTexts, roster)
+        val cause = pickScoringRelay(sameSideTexts)
+        val maker = cause?.let { pickPlayerName(it.text, it.batterTitle, roster) }
+        val forced = if (maker != null) inferBasesAfterAdvance(before, maker,
+            describePlayHow(cause?.text.orEmpty()), runsJustScored) else null
+        val remembered = if (!moved.sameOccupants(before)) moved else forced ?: before
+        // 새로운 API 선수코드는 우선한다. 이전 값이면 명시한 진루 기록으로 보정한다.
+        val result = if (api.sameOccupants(before)) remembered else NamedBases(
+            api.first ?: remembered.first,
+            api.second ?: remembered.second,
+            api.third ?: remembered.third,
         )
-        if (inferred != null && api.sameOccupants(lastChanceBases)) return inferred
-
-        val fromRelay = runnersFromRelayTexts(
-            texts = scoringRelayWindow(game.recentTexts, newTexts, lastSeqno),
-            roster = roster,
-        )
-        if (fromRelay != null && fromRelay.namedCount() >= api.namedCount()) {
-            // 점유 루와 맞게 걸러 냄
-            return NamedBases(
-                first = if (game.onBase1) fromRelay.first ?: api.first else null,
-                second = if (game.onBase2) fromRelay.second ?: api.second else null,
-                third = if (game.onBase3) fromRelay.third ?: api.third else null,
-            )
-        }
-
-        if (lastChanceBases.namedCount() > api.namedCount() &&
-            !api.sameOccupants(lastChanceBases)
-        ) {
-            // 추정해 둔 이름이 있는데 API가 더 빈약하면 기억 유지
-            return lastChanceBases
-        }
-        return api
+        return result.onlyOccupied(game.onBase1, game.onBase2, game.onBase3)
     }
 
     private fun seedScores(game: LotteGameInfo) {
@@ -848,10 +758,9 @@ class EventDetector(private val store: SnapshotStore) {
 
     private fun lineupNameByOrder(lineup: List<com.bossxor.lottegiants.domain.LineupSlot>, order: Int): String? {
         if (order <= 0) return null
-        val atOrder = lineup.filter { it.batOrder == order && it.name.isNotBlank() }
-        if (atOrder.isEmpty()) return null
-        // 주자는 선발·출루 선수가 맞고, 같은 타순 대타(타석)를 우선하면 이름이 바뀐다.
-        return (atOrder.firstOrNull { !it.isSubstitute } ?: atOrder.last()).name
+        // 같은 타순에 교체 선수가 있으면 선발 또는 대타를 임의로 고르지 않는다.
+        return lineup.filter { it.batOrder == order && it.name.isNotBlank() }
+            .map { it.name }.distinct().singleOrNull()
     }
 
     private fun lineupNameByCode(
@@ -862,7 +771,7 @@ class EventDetector(private val store: SnapshotStore) {
         return lineup.firstOrNull { it.playerCode == code && it.name.isNotBlank() }?.name
     }
 
-    /** 공격 팀 라인업에서 주자 이름. 선수코드 우선, 없으면 타순(선발 우선). */
+    /** 공격 팀 라인업에서 선수코드로 찾고, 타순만 있을 때는 한 명으로 확정될 때만 사용한다. */
     private fun runnerName(
         game: LotteGameInfo,
         onBase: Boolean,
@@ -870,7 +779,8 @@ class EventDetector(private val store: SnapshotStore) {
         playerCode: String = "",
     ): String? {
         if (!onBase) return null
-        val pool = game.lotteLineup + game.lotteBenchBatters
+        val pool = if (game.isLotteBatting) game.lotteLineup + game.lotteBenchBatters
+            else game.opponentLineup + game.opponentBenchBatters
         lineupNameByCode(pool, playerCode)?.let { return it }
         lineupNameByOrder(pool, order)?.let { return it }
         if (order <= 0 && playerCode.isBlank()) {
@@ -879,21 +789,6 @@ class EventDetector(private val store: SnapshotStore) {
                 "runner on base without code/order (game=${game.gameId})",
             )
         }
-        return null
-    }
-
-    private fun isLotteHomerun(game: LotteGameInfo, text: String): Boolean {
-        if (game.lotteLineup.any { it.name.isNotBlank() && text.contains(it.name) }) return true
-        if (game.lotteBenchBatters.any { it.name.isNotBlank() && text.contains(it.name) }) return true
-        if (text.contains(game.focusName()) && !text.contains(game.opponentName)) return true
-        return game.isLotteBatting && !text.contains(game.opponentName)
-    }
-
-    private fun parseHrRuns(text: String): Int? {
-        if (text.contains("솔로")) return 1
-        if (text.contains("만루") || text.contains("그랜드슬램") || text.contains("그랜드 슬램")) return 4
-        Regex("""(\d)\s*점\s*홈런""").find(text)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
-        Regex("""(\d)\s*타점""").find(text)?.groupValues?.get(1)?.toIntOrNull()?.let { return it }
         return null
     }
 

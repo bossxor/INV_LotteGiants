@@ -32,7 +32,7 @@ private val SCORING_KEYS = listOf("홈런", "득점", "타점", "적시", "희�
 private val ADVANCE_KEYS = listOf(
     "홈런", "3루타", "2루타", "내야안타", "적시", "안타",
     "볼넷", "사구", "몸에 맞는", "고의4구",
-    "도루", "폭투", "패스트볼", "실책", "야수선택",
+    "도루", "폭투", "패스트볼", "보크", "실책", "야수선택",
     "희생", "진루", "밀어내기", "홈인",
 )
 private val PITCH_KEYS = listOf("스트라이크", "볼", "파울")
@@ -41,15 +41,15 @@ private val PLAY_HOW = listOf(
     "3루타", "2루타", "내야안타", "적시타", "안타",
     "희생플라이", "희생번트", "밀어내기",
     "고의4구", "볼넷", "사구", "몸에 맞는 공",
-    "도루", "폭투", "패스트볼", "실책", "야수선택",
+    "도루", "폭투", "패스트볼", "보크", "실책", "야수선택",
 )
 private val PLAY_DIR = listOf("좌월", "우월", "중월", "좌전", "우전", "중전", "좌익", "우익", "중견")
 
 fun pickScoringRelay(texts: List<RelayText>): RelayText? {
+    // 최신 원인을 먼저 고른다. 과거 적시타보다 이번 폭투·실책이 우선이다.
+    val causes = texts.filter { describePlayHow(it.text) != null && !isRunnerMovement(it.text) }
+    if (causes.isNotEmpty()) return causes.maxByOrNull { it.seqno }
     val scored = texts.filter { t -> SCORING_KEYS.any { k -> t.text.contains(k) } }
-    // "홈인"만 있는 문장보다 희생플라이·안타 등 타격 결과 문구를 우선 (타석이 이미 넘어간 경우)
-    val withBatHow = scored.filter { isBattingResultHow(describePlayHow(it.text)) }
-    if (withBatHow.isNotEmpty()) return withBatHow.maxByOrNull { it.seqno }
     if (scored.isNotEmpty()) return scored.maxByOrNull { it.seqno }
     return texts.filterNot { looksLikePitch(it.text) }.maxByOrNull { it.seqno }
         ?: texts.maxByOrNull { it.seqno }
@@ -117,15 +117,14 @@ fun namesInText(text: String, names: List<String>): List<String> {
 fun pickPlayerName(text: String, batterTitle: String, roster: List<String>): String? {
     val how = describePlayHow(text)
     val inText = namesInText(text, roster)
-    if (how in setOf("도루", "폭투", "패스트볼")) {
-        inText.firstOrNull()?.let { return it }
-    }
+    if (how == "도루") return inText.firstOrNull()
+    if (isRunnerMovement(text) || how in setOf("폭투", "패스트볼", "보크")) return null
     val fromTitle = batterNameFromTitle(batterTitle)?.takeIf { it in roster }
     // 타석 제목이 중계문에 없으면 쓰지 않음 — 득점 감지 때 이미 다음 타자 제목인 경우(레이예스 SF → 나승엽) 방지
     if (fromTitle != null && (text.isBlank() || text.contains(fromTitle))) {
         return fromTitle
     }
-    return inText.firstOrNull() ?: fromTitle
+    return inText.firstOrNull()
 }
 
 /** 1·2·3루 주자 이름. null/빈 칸 = 비움 */
@@ -162,26 +161,22 @@ fun inferBasesAfterAdvance(
     val b = batter.trim()
     if (h.contains("희생플라이")) {
         // 3루 득점, 타자 아웃, 나머지 유지
-        if (before.third.isNullOrBlank()) return null
+        if (before.third.isNullOrBlank() || runsScored != 1) return null
         return NamedBases(before.first, before.second, null)
     }
-    val oneBase = h.contains("안타") || h.contains("적시") || h.contains("내야안타") ||
-        h.contains("볼넷") || h.contains("사구") || h.contains("몸에") ||
+    val forced = h.contains("볼넷") || h.contains("사구") || h.contains("몸에") ||
         h.contains("고의") || h.contains("밀어내기")
-    if (!oneBase || h.contains("2루타") || h.contains("3루타") || h.contains("홈런")) return null
+    if (h.contains("홈런")) return NamedBases(null, null, null)
+    // 안타의 주자 진루는 한 루씩이라고 가정할 수 없다. 중계/선수코드를 사용한다.
+    if (!forced) return null
     if (b.isBlank()) return null
-    // 강제 진루 1루씩: 3루→홈, 2→3, 1→2, 타자→1
-    // runsScored≥2 이면 2루 주자도 홈인했다고 보고 3루를 비움
-    val after = NamedBases(
-        first = b,
-        second = before.first,
-        third = before.second,
+    val forceSecond = !before.first.isNullOrBlank()
+    val forceThird = forceSecond && !before.second.isNullOrBlank()
+    return NamedBases(
+        b,
+        if (forceSecond) before.first else before.second,
+        if (forceThird) before.second else before.third,
     )
-    return if (runsScored >= 2) {
-        NamedBases(first = after.first, second = after.second, third = null)
-    } else {
-        after
-    }
 }
 
 /**
@@ -204,6 +199,8 @@ fun runnersFromRelayTexts(texts: List<RelayText>, roster: List<String> = emptyLi
     }
     for (t in texts.sortedByDescending { it.seqno }) {
         val s = t.text
+        // N루주자는 출발 위치다. 홈인/아웃/진루 문구를 현재 위치로 재사용하지 않는다.
+        if (isRunnerMovement(s)) continue
         if (first == null) re1.find(s)?.groupValues?.get(1)?.let { clean(it) }?.let { first = it }
         if (second == null) re2.find(s)?.groupValues?.get(1)?.let { clean(it) }?.let { second = it }
         if (third == null) re3.find(s)?.groupValues?.get(1)?.let { clean(it) }?.let { third = it }
@@ -231,6 +228,7 @@ fun formatLotteScoreTitle(
     score: String,
     how: String? = null,
     teamName: String = "롯데",
+    rbi: Int? = null,
 ): String {
     val n = runs.coerceAtLeast(1)
     val whoPart = who?.trim().orEmpty()
@@ -239,7 +237,9 @@ fun formatLotteScoreTitle(
     return buildString {
         append("${teamName.ifBlank { "롯데" }} 득점!")
         if (play.isNotBlank()) append(" $play")
-        append(" · ${n}타점 · $score")
+        append(" · ")
+        append(if (rbi != null && rbi > 0) "${rbi}타점" else "${n}득점")
+        append(" · $score")
     }
 }
 
@@ -332,6 +332,7 @@ fun formatScoringChanceAlert(
 fun looksLikePlateAppearanceAdvance(text: String): Boolean {
     val t = text.trim()
     if (t.isBlank()) return false
+    if (isRunnerMovement(t)) return false
     if (t.contains("도루") || t.contains("폭투") || t.contains("패스트볼") || t.contains("보크")) return false
     return ADVANCE_KEYS.any { t.contains(it) }
 }

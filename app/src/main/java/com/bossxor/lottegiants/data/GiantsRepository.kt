@@ -1215,10 +1215,10 @@ class GiantsRepository private constructor(context: Context) {
             }.getOrDefault("")
         }
         val hintId = gameIdHint?.takeIf { it.isNotBlank() }
-            ?: api.getGames(
+            ?: runCatching { api.getGames(
                 fromDate = today.minusDays(14).format(fmt),
                 toDate = today.plusDays(3).format(fmt),
-            ).result?.games.orEmpty()
+            ).result?.games.orEmpty() }.getOrDefault(emptyList())
                 .filter { it.categoryId == "kbo" && it.involvesTeam(store.myTeamCode()) }
                 .maxByOrNull { it.gameDateTime }
                 ?.gameId
@@ -1268,7 +1268,7 @@ class GiantsRepository private constructor(context: Context) {
 
         return detail.copy(
             photoUrl = if (detail.playerCode.isNotBlank()) playerPhotoUrl(detail.playerCode) else "",
-        ).let { withKeuboSeasonStats(it) }
+        ).let { withKeuboSeasonStats(it) }.let { PlayerBiographySource.enrich(it, api) }
     }
 
     /** 프리뷰에 없는 선수라도 루타(Keubo) 시즌 스탯으로 보강. 투수/타자 힌트를 존중한다. */

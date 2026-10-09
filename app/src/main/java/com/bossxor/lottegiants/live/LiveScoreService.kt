@@ -146,6 +146,22 @@ class LiveScoreService : Service() {
                         snap?.nextLotteGame,
                     )
                     val notifyKey = NotificationHelper.liveNotificationKey(this@LiveScoreService, game, mode, snap?.nextLotteGame)
+                    // 마지막 득점과 종료 이벤트를 처리한 뒤 서비스를 멈춘다.
+                    if (game?.status == GameStatus.ENDED || game?.status == GameStatus.CANCELED) {
+                        runCatching { detector.process(this@LiveScoreService, game) }
+                        WidgetUpdater.updateAll(this@LiveScoreService)
+                        if (game.status == GameStatus.ENDED) {
+                            runCatching {
+                                detector.processRace(this@LiveScoreService, repo.fetchStandings(),
+                                    com.bossxor.lottegiants.domain.raceRelevantGames(snap))
+                            }
+                        }
+                        if (shouldShowLive(game, lead)) {
+                            NotificationHelper.notifyLive(this@LiveScoreService, live, notifyKey)
+                            detachFinished(live, game)
+                        } else stopSelfSafely(removeNotification = true)
+                        break
+                    }
                     if (game?.status != GameStatus.LIVE || !shouldShowLive(game, lead)) {
                         val pinned = repo.store.isLiveNotificationPinned()
                         if (pinned) {

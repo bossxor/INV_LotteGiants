@@ -288,7 +288,13 @@ internal fun mergeRelayUnsafe(base: LotteGameInfo, relay: TextRelayData): LotteG
     val opponentPitchers = mapPitchers(oppLineupDto)
     val pitchLocations = extractPitchLocations()
 
-    val state = relay.currentGameState
+    val latestTextState = relay.textRelays.filter { it.inn == relay.inn && it.homeOrAway == relay.homeOrAway }
+        .flatMap { it.textOptions }.filter { it.currentGameState != null }.maxByOrNull { it.seqno }?.currentGameState
+    val relayState = relay.currentGameState
+    val state = latestTextState?.takeIf {
+        (it.homeScore.toIntOrNull() ?: -1) >= (relayState?.homeScore?.toIntOrNull() ?: -1) &&
+            (it.awayScore.toIntOrNull() ?: -1) >= (relayState?.awayScore?.toIntOrNull() ?: -1)
+    } ?: relayState
     val isTop = relay.homeOrAway != "1"
     val isLotteBatting = if (isHome) !isTop else isTop
 
@@ -327,6 +333,12 @@ internal fun mergeRelayUnsafe(base: LotteGameInfo, relay: TextRelayData): LotteG
                     ball = st?.ball?.toIntOrNull(),
                     strike = st?.strike?.toIntOrNull(),
                     batterTitle = tr.title.orEmpty().trim(),
+                    batterCode = st?.batter.orEmpty(),
+                    homeScore = st?.homeScore?.toIntOrNull(),
+                    awayScore = st?.awayScore?.toIntOrNull(),
+                    base1Code = st?.base1,
+                    base2Code = st?.base2,
+                    base3Code = st?.base3,
                 )
             }
         }

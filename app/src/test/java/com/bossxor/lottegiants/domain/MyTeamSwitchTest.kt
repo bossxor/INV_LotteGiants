@@ -57,7 +57,7 @@ class MyTeamSwitchTest {
     @Test
     fun scoreAlertsUseTeamName() {
         assertEquals("두산 역전!", leadChangeTitle(3, 4, 5, 4, "KIA", "두산"))
-        assertEquals("두산 득점! · 1타점 · 1:0", formatLotteScoreTitle(null, 1, "1:0", teamName = "두산"))
+        assertEquals("두산 득점! · 1득점 · 1:0", formatLotteScoreTitle(null, 1, "1:0", teamName = "두산"))
         assertEquals("두산 홈런! 1점홈런 · 1:0", formatHomerunTitle(null, 1, "1:0", teamName = "두산"))
     }
 

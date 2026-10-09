@@ -30,9 +30,9 @@ class ScoreAlertsTest {
 
     @Test
     fun scoreTitleShowsWhoHowAndRbi() {
-        assertEquals("롯데 득점! 전준우 좌전 적시타 · 2타점 · 5:4", formatLotteScoreTitle("전준우", 2, "5:4", "좌전 적시타"))
-        assertEquals("롯데 득점! 전준우 · 2타점 · 5:4", formatLotteScoreTitle("전준우", 2, "5:4"))
-        assertEquals("롯데 득점! · 1타점 · 1:0", formatLotteScoreTitle(null, 1, "1:0"))
+        assertEquals("롯데 득점! 전준우 좌전 적시타 · 2타점 · 5:4", formatLotteScoreTitle("전준우", 2, "5:4", "좌전 적시타", rbi = 2))
+        assertEquals("롯데 득점! 전준우 · 2득점 · 5:4", formatLotteScoreTitle("전준우", 2, "5:4"))
+        assertEquals("롯데 득점! · 1득점 · 1:0", formatLotteScoreTitle(null, 1, "1:0"))
         assertEquals("실점! 김도영 적시타 · 1점 · 5:4", formatConcedeTitle("김도영", "KIA", 1, "5:4", "적시타"))
         assertEquals("실점! KIA · 1점 · 0:1", formatConcedeTitle(null, "KIA", 1, "0:1"))
     }
@@ -256,7 +256,7 @@ class ScoreAlertsTest {
     fun inferBasesAfterLoadedSingle() {
         val before = NamedBases(first = "윤동희", second = "조세진", third = "전민재")
         val after = inferBasesAfterAdvance(before, "황성빈", "좌전 안타", runsScored = 1)
-        assertEquals(NamedBases(first = "황성빈", second = "윤동희", third = "조세진"), after)
+        assertNull(after) // 안타는 주자마다 진루 거리가 다를 수 있다.
     }
 
     @Test
@@ -274,7 +274,7 @@ class ScoreAlertsTest {
             RelayText(8, "1루주자 나승엽", 0, 5),
         )
         assertEquals(
-            NamedBases(first = "나승엽", second = "레이예스", third = "윤동희"),
+            NamedBases(first = "나승엽", second = null, third = null),
             runnersFromRelayTexts(texts, listOf("윤동희", "레이예스", "나승엽", "고승민")),
         )
     }

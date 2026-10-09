@@ -253,6 +253,9 @@ data class PlayerDetail(
     val hitType: String = "",
     val position: String = "",
     val birth: String = "",
+    val education: List<String> = emptyList(),
+    val careers: List<PlayerCareer> = emptyList(),
+    val profileUrl: String = "",
     val heightCm: String = "",
     val weightKg: String = "",
     val seasonAvg: String = "",
@@ -286,6 +289,9 @@ data class FavoritePlayer(
     val name: String = "",
     val team: String = "",
 )
+
+@Serializable
+data class PlayerCareer(val period: String = "", val team: String)
 
 fun playerPhotoUrl(playerCode: String): String =
     playerPhotoCandidates(playerCode).firstOrNull().orEmpty()
@@ -971,6 +977,12 @@ data class RelayText(
     val strike: Int? = null,
     /** 네이버 타석 제목. 예: `8번타자 전준우` */
     val batterTitle: String = "",
+    val batterCode: String = "",
+    val homeScore: Int? = null,
+    val awayScore: Int? = null,
+    val base1Code: String? = null,
+    val base2Code: String? = null,
+    val base3Code: String? = null,
 )
 
 /** 위젯/앱이 공유하는 전체 스냅샷 */

@@ -891,7 +891,7 @@ private fun Modifier.swipeChangeDay(
     this
 } else {
     then(
-        pointerInput(Unit) {
+        Modifier.pointerInput(onSwipe) {
             var total = 0f
             detectHorizontalDragGestures(
                 onHorizontalDrag = { _, dragAmount -> total += dragAmount },

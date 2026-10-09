@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.Manifest
 import android.graphics.Bitmap
 import android.graphics.Typeface
 import android.graphics.drawable.Icon
@@ -22,6 +24,7 @@ import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.bossxor.lottegiants.MainActivity
 import com.bossxor.lottegiants.R
 import com.bossxor.lottegiants.data.NotificationType
@@ -87,7 +90,7 @@ object NotificationHelper {
     @Volatile private var lastLiveCustom: Boolean? = null
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 48
+    private const val LIVE_NOTIFY_STYLE_REV = 58
     private const val COLOR_LOTTE = 0xFFC8102E.toInt()
     private const val COLOR_CHIP = 0xFF2F6FED.toInt()
     private const val COLOR_LABEL = 0xFF8A8F98.toInt()
@@ -118,6 +121,17 @@ object NotificationHelper {
             game?.opponentStartingPitcher,
             game?.lotteRank,
             game?.opponentRank,
+            game?.lotteHits,
+            game?.opponentHits,
+            game?.lotteErrors,
+            game?.opponentErrors,
+            game?.lotteInningScores?.joinToString(","),
+            game?.opponentInningScores?.joinToString(","),
+            game?.currentBatterOrder,
+            game?.runnerOn1Code,
+            game?.runnerOn2Code,
+            game?.runnerOn3Code,
+            game?.preview?.opponentStanding?.wra,
             game?.preview?.lotteStanding?.wra,
             game?.winPitcherName,
             game?.losePitcherName,
@@ -386,7 +400,7 @@ object NotificationHelper {
         var statusChipText = nowBar.chip
         if (useNowBar) {
             // 아이콘 칸에 스트립을 넣으면 시계 크기로 줄어 안 보임.
-            // 왼쪽 로고=chipIcon, 점수=시스템 글자. (글자 칸엔 그림 불가)
+            // 기본 chipIcon/글자는 유지하고, 삼성 칩 전용 RemoteViews에 양쪽 로고를 배치한다.
             val sides = game?.let { nowBarSides(it) }
             val awayBmp = sides?.let {
                 WidgetAssets.loadTeamLogoBitmapCachedOnly(context, it.leftCode, it.leftName)
@@ -400,9 +414,9 @@ object NotificationHelper {
                 game.status == GameStatus.BEFORE -> nowBar.chip.ifBlank { "vs" }
                 game.status == GameStatus.CANCELED -> "취소"
                 else -> {
-                    // 상태바 칩은 아이콘(원정 로고) + 글자뿐. 홈 로고 자리는 홈팀 이름 글자로 둔다.
+                    // RemoteViews 가운데에 원정:홈 순서로 점수를 표시한다.
                     val sc = cardSides(game)
-                    "${sc.awayScore}:${sc.homeScore} ${sc.homeName}"
+                    "${sc.awayScore}:${sc.homeScore}"
                 }
             }
             val chipIconOverride: Icon? = null
@@ -413,13 +427,23 @@ object NotificationHelper {
                 .setShortCriticalText(chipForText.ifBlank { "·" })
                 .setRequestPromotedOngoing(true)
             val card = game?.let { buildLiveRemoteViews(context, it, winProbSeries, nowBar, pregameProb) }
+            // One UI 상단 칩 전용 RemoteViews. 알림 본체의 contentView는 설정하지 않는다.
+            if (awayBmp != null && homeBmp != null) {
+                val chipView = RemoteViews(context.packageName, R.layout.notification_status_chip).apply {
+                    setImageViewBitmap(R.id.chip_away_logo, awayBmp)
+                    setImageViewBitmap(R.id.chip_home_logo, homeBmp)
+                    setTextViewText(R.id.chip_score, chipForText)
+                }
+                builder.addExtras(Bundle().apply {
+                    putParcelable("android.ongoingActivityNoti.chipExpandedView", chipView)
+                })
+            }
             applySamsungOngoingExtras(
                 builder = builder,
                 context = context,
                 c = nowBar.copy(chip = chipForText),
                 chipIconOverride = chipIconOverride,
                 awayLogo = awayBmp,
-                homeLogo = homeBmp,
                 card = card,
             )
             val style = NotificationCompat.BigTextStyle()
@@ -559,14 +583,13 @@ object NotificationHelper {
         return false
     }
 
-    /** 상태바: [원정 로고 chipIcon][점수:점수 글자]. 오른쪽 로고는 카드 윗줄(RemoteViews)에. */
+    /** 삼성 Now Bar 카드와 기본 칩 정보. 양쪽 로고 칩은 chipExpandedView로 제공한다. */
     private fun applySamsungOngoingExtras(
         builder: NotificationCompat.Builder,
         context: Context,
         c: NowBarContent,
         chipIconOverride: Icon?,
         awayLogo: Bitmap?,
-        homeLogo: Bitmap?,
         card: RemoteViews?,
     ) {
         val appIcon = Icon.createWithResource(context, R.drawable.ic_notification)
@@ -643,6 +666,9 @@ object NotificationHelper {
         gameId: String = "",
         detailTab: String? = null,
     ) {
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED) return
         val vibrateScoreLead = if (type == NotificationType.SCORE || type == NotificationType.LEAD_CHANGE) {
             kotlinx.coroutines.runBlocking {
                 com.bossxor.lottegiants.data.GiantsRepository.get(context.applicationContext).store.alertVibrate()

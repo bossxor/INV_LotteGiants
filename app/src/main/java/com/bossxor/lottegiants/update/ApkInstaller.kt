@@ -28,9 +28,6 @@ object ApkInstaller {
             if (Build.VERSION.SDK_INT >= 31) {
                 setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
             }
-            if (Build.VERSION.SDK_INT >= 34) {
-                setRequestUpdateOwnership(true)
-            }
         }
         val sessionId = installer.createSession(params)
         val session = installer.openSession(sessionId)
