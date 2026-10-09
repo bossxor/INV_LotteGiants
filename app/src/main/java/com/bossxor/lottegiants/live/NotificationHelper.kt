@@ -670,11 +670,12 @@ object NotificationHelper {
         gameId: String = "",
         detailTab: String? = null,
         silentUpdate: Boolean = false,
+        vibrate: Boolean? = null,
     ) {
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(
                 context, Manifest.permission.POST_NOTIFICATIONS,
             ) != PackageManager.PERMISSION_GRANTED) return
-        val vibrateScoreLead = if (type == NotificationType.SCORE || type == NotificationType.LEAD_CHANGE) {
+        val vibrateScoreLead = vibrate ?: if (type == NotificationType.SCORE || type == NotificationType.LEAD_CHANGE) {
             kotlinx.coroutines.runBlocking {
                 com.bossxor.lottegiants.data.GiantsRepository.get(context.applicationContext).store.alertVibrate()
             }

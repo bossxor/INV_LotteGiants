@@ -128,6 +128,7 @@ fun pickPlayerName(text: String, batterTitle: String, roster: List<String>): Str
 }
 
 /** 1·2·3루 주자 이름. null/빈 칸 = 비움 */
+@kotlinx.serialization.Serializable
 data class NamedBases(val first: String?, val second: String?, val third: String?) {
     fun label(): String = runnersLabel(first, second, third)
 

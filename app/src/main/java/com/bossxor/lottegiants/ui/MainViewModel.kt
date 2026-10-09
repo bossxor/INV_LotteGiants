@@ -26,7 +26,6 @@ import com.bossxor.lottegiants.domain.focusName
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.domain.involvesTeam
 import com.bossxor.lottegiants.domain.kboToday
-import com.bossxor.lottegiants.domain.playerPhotoUrl
 import com.bossxor.lottegiants.domain.teamHomeStadiumName
 import com.bossxor.lottegiants.domain.teamKeuboSlug
 import com.bossxor.lottegiants.domain.teamLogoUrl
@@ -69,10 +68,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val favoriteStats: StateFlow<Map<String, PlayerDetail>> = _favoriteStats.asStateFlow()
     private var favoriteStatsJob: Job? = null
 
-    private val _dayGames = MutableStateFlow<List<MiniGame>>(emptyList())
+    private val calendarController = CalendarController(viewModelScope, repo, ::currentTeamCode) { _error.value = it }
+    private val _dayGames = calendarController.dayGames
     val dayGames: StateFlow<List<MiniGame>> = _dayGames.asStateFlow()
 
-    private val _dayGamesLoading = MutableStateFlow(false)
+    private val _dayGamesLoading = calendarController.loading
     val dayGamesLoading: StateFlow<Boolean> = _dayGamesLoading.asStateFlow()
 
     private val _selectedDate = MutableStateFlow(kboToday())
@@ -80,28 +80,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** 결과 탭에서 날짜를 고르면 false. 오전 5시 경계에 '오늘'을 따라간다. */
     private var followKboToday = true
 
-    private val _monthGames = MutableStateFlow<List<MiniGame>>(emptyList())
+    private val _monthGames = calendarController.monthGames
     val monthGames: StateFlow<List<MiniGame>> = _monthGames.asStateFlow()
 
-    private val _calendarMonth = MutableStateFlow(YearMonth.from(kboToday()))
+    private val _calendarMonth = calendarController.month
     val calendarMonth: StateFlow<YearMonth> = _calendarMonth.asStateFlow()
 
     private val _weather = MutableStateFlow<StadiumWeather?>(null)
     val weather: StateFlow<StadiumWeather?> = _weather.asStateFlow()
 
-    private val _entryDate = MutableStateFlow(kboToday())
+    private val entryController = EntryController(viewModelScope, repo)
+    private val _entryDate = entryController.date
     val entryDate: StateFlow<LocalDate> = _entryDate.asStateFlow()
 
-    private val _dayEntry = MutableStateFlow<DayEntryChanges?>(null)
+    private val _dayEntry = entryController.changes
     val dayEntry: StateFlow<DayEntryChanges?> = _dayEntry.asStateFlow()
 
-    private val _entryLoading = MutableStateFlow(false)
+    private val _entryLoading = entryController.loading
     val entryLoading: StateFlow<Boolean> = _entryLoading.asStateFlow()
 
-    private val _entryChangeDates = MutableStateFlow<Set<LocalDate>>(emptySet())
+    private val _entryChangeDates = entryController.dates
     val entryChangeDates: StateFlow<Set<LocalDate>> = _entryChangeDates.asStateFlow()
 
-    private val _recentMoves = MutableStateFlow<List<RosterMove>>(emptyList())
+    private val _recentMoves = entryController.recent
     val recentMoves: StateFlow<List<RosterMove>> = _recentMoves.asStateFlow()
 
     private val _teamCard = MutableStateFlow<LotteTeamCard?>(null)
@@ -113,10 +114,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _pitcherLeaders = MutableStateFlow<List<LeaderPlayer>>(emptyList())
     val pitcherLeaders: StateFlow<List<LeaderPlayer>> = _pitcherLeaders.asStateFlow()
 
-    private val _playerDetail = MutableStateFlow<PlayerDetail?>(null)
+    private val playerController = PlayerDetailController(viewModelScope, repo) { _snapshot.value?.lotteGame?.gameId }
+    private val _playerDetail = playerController._playerDetail
     val playerDetail: StateFlow<PlayerDetail?> = _playerDetail.asStateFlow()
 
-    private val _playerLoading = MutableStateFlow(false)
+    private val _playerLoading = playerController._playerLoading
     val playerLoading: StateFlow<Boolean> = _playerLoading.asStateFlow()
 
     val favoritePlayers: StateFlow<List<FavoritePlayer>> = repo.store.favoritePlayersFlow
@@ -154,13 +156,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _seasonLoading = MutableStateFlow(false)
     val seasonLoading: StateFlow<Boolean> = _seasonLoading.asStateFlow()
 
-    private val _jerseyPlayers = MutableStateFlow<List<com.bossxor.lottegiants.domain.EntryPlayer>>(emptyList())
+    private val rosterController = PlayerRosterController(viewModelScope, repo)
+    private val _jerseyPlayers = rosterController.players
     val jerseyPlayers: StateFlow<List<com.bossxor.lottegiants.domain.EntryPlayer>> = _jerseyPlayers.asStateFlow()
 
-    private val _jerseyLoading = MutableStateFlow(false)
+    private val _jerseyLoading = rosterController.loading
     val jerseyLoading: StateFlow<Boolean> = _jerseyLoading.asStateFlow()
 
-    private val _playersTeamCode = MutableStateFlow("")
+    private val _playersTeamCode = rosterController.team
     val playersTeamCode: StateFlow<String> = _playersTeamCode.asStateFlow()
 
     private val _overlayTeamCode = MutableStateFlow(LOTTE_TEAM_CODE)
@@ -173,9 +176,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var fullRelayFor: String? = null
 
     private var pollJob: Job? = null
-    private var dayGamesJob: Job? = null
-    private var monthJob: Job? = null
-    private var entryJob: Job? = null
     private var seasonJob: Job? = null
     private var seasonFetchFailed = false
 
@@ -252,33 +252,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         loadJerseyRoster(_playersTeamCode.value.ifBlank { currentTeamCode() }, force = true)
     }
 
-    private fun loadJerseyRoster(
-        teamCode: String,
-        force: Boolean,
-        backgroundOnly: Boolean = false,
-    ) {
-        val code = teamCode.ifBlank { currentTeamCode() }
-        viewModelScope.launch {
-            if (!backgroundOnly) {
-                _jerseyLoading.value = true
-                val season = kboToday().year
-                val cached = runCatching { repo.store.jerseyRoster(code, season) }.getOrDefault(emptyList())
-                if (cached.isNotEmpty()) {
-                    _playersTeamCode.value = code
-                    _jerseyPlayers.value = cached
-                }
-            }
-            try {
-                val list = runCatching { repo.fetchTeamJerseyRoster(code, force = force) }
-                    .getOrDefault(emptyList())
-                if (list.isNotEmpty()) {
-                    _playersTeamCode.value = code
-                    _jerseyPlayers.value = list
-                }
-            } finally {
-                if (!backgroundOnly) _jerseyLoading.value = false
-            }
-        }
+    private fun loadJerseyRoster(teamCode: String, force: Boolean, backgroundOnly: Boolean = false) {
+        rosterController.load(teamCode.ifBlank { currentTeamCode() }, force, backgroundOnly)
     }
 
     fun ensureLeaders() {
@@ -344,126 +319,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
-                dayGamesJob?.cancel()
-                monthJob?.cancel()
                 fetchDayGames(_selectedDate.value)
-                fetchMonthGames(_calendarMonth.value)
+                calendarController.loadMonth(_calendarMonth.value).join()
             } finally {
                 _isRefreshing.value = false
             }
         }
     }
 
-    fun loadPlayerByCode(playerCode: String, name: String = "") {
-        if (playerCode.isBlank()) return
-        viewModelScope.launch {
-            _playerLoading.value = true
-            _playerDetail.value = null
-            val slot = LineupSlot(
-                batOrder = 0,
-                name = name,
-                position = "",
-                playerCode = playerCode,
-            )
-            runCatching { repo.fetchPlayerDetail(playerCode, slot, null) }
-                .onSuccess { _playerDetail.value = it }
-                .onFailure {
-                    _playerDetail.value = PlayerDetail(
-                        playerCode = playerCode,
-                        name = name,
-                        photoUrl = playerPhotoUrl(playerCode),
-                    )
-                }
-            _playerLoading.value = false
-        }
-    }
+    fun loadPlayerByCode(playerCode: String, name: String = "") = playerController.loadPlayerByCode(playerCode, name)
 
-    fun loadPlayerFromLeader(player: LeaderPlayer) {
-        if (player.playerCode.isBlank()) {
-            _playerDetail.value = player.toDetailSeed()
-            return
-        }
-        viewModelScope.launch {
-            _playerLoading.value = true
-            val seeded = player.toDetailSeed()
-            _playerDetail.value = seeded
-            val slot = LineupSlot(
-                batOrder = 0,
-                name = player.name,
-                position = "",
-                playerCode = player.playerCode,
-            )
-            runCatching { repo.fetchPlayerDetail(player.playerCode, slot, null) }
-                .onSuccess { fetched ->
-                    _playerDetail.value = seeded.copy(
-                        backNumber = fetched.backNumber.ifBlank { seeded.backNumber },
-                        hitType = fetched.hitType.ifBlank { seeded.hitType },
-                        position = fetched.position.ifBlank { seeded.position },
-                        birth = fetched.birth.ifBlank { seeded.birth },
-                        education = fetched.education.ifEmpty { seeded.education },
-                        careers = fetched.careers.ifEmpty { seeded.careers },
-                        profileUrl = fetched.profileUrl.ifBlank { seeded.profileUrl },
-                        heightCm = fetched.heightCm.ifBlank { seeded.heightCm },
-                        weightKg = fetched.weightKg.ifBlank { seeded.weightKg },
-                        photoUrl = fetched.photoUrl.ifBlank { seeded.photoUrl },
-                        seasonAvg = seeded.seasonAvg.ifBlank { fetched.seasonAvg },
-                        seasonGames = if (seeded.seasonGames > 0) seeded.seasonGames else fetched.seasonGames,
-                        seasonHits = if (seeded.seasonHits > 0) seeded.seasonHits else fetched.seasonHits,
-                        seasonHr = if (seeded.seasonHr > 0) seeded.seasonHr else fetched.seasonHr,
-                        seasonRbi = if (seeded.seasonRbi > 0) seeded.seasonRbi else fetched.seasonRbi,
-                        seasonObp = seeded.seasonObp.ifBlank { fetched.seasonObp },
-                        seasonOps = seeded.seasonOps.ifBlank { fetched.seasonOps },
-                        seasonSlg = seeded.seasonSlg.ifBlank { fetched.seasonSlg },
-                        seasonSb = if (seeded.seasonSb > 0) seeded.seasonSb else fetched.seasonSb,
-                        pitcherEra = seeded.pitcherEra.ifBlank { fetched.pitcherEra },
-                        pitcherWins = if (seeded.pitcherWins > 0) seeded.pitcherWins else fetched.pitcherWins,
-                        pitcherLosses = if (seeded.pitcherLosses > 0) seeded.pitcherLosses else fetched.pitcherLosses,
-                        pitcherSo = if (seeded.pitcherSo > 0) seeded.pitcherSo else fetched.pitcherSo,
-                        pitcherInn = seeded.pitcherInn.ifBlank { fetched.pitcherInn },
-                        pitcherSaves = if (seeded.pitcherSaves > 0) seeded.pitcherSaves else fetched.pitcherSaves,
-                        pitcherHolds = if (seeded.pitcherHolds > 0) seeded.pitcherHolds else fetched.pitcherHolds,
-                        pitcherWhip = seeded.pitcherWhip.ifBlank { fetched.pitcherWhip },
-                        isPitcher = seeded.isPitcher || fetched.isPitcher,
-                    )
-                }
-            _playerLoading.value = false
-        }
-    }
+    fun loadPlayerFromLeader(player: LeaderPlayer) = playerController.loadPlayerFromLeader(player)
 
-    fun loadPitcherDetail(p: PitcherLine) {
-        if (p.playerCode.isBlank()) return
-        viewModelScope.launch {
-            _playerLoading.value = true
-            _playerDetail.value = PlayerDetail(
-                playerCode = p.playerCode,
-                name = p.name,
-                backNumber = p.backNumber,
-                isPitcher = true,
-                todayLine = listOfNotNull(
-                    p.innings.takeIf { it.isNotBlank() }?.let { "${it}이닝" },
-                    "${p.strikeouts}K",
-                    "${p.hits}H",
-                ).joinToString(" · "),
-                photoUrl = playerPhotoUrl(p.playerCode),
-            )
-            val slot = LineupSlot(
-                batOrder = 0,
-                name = p.name,
-                position = "투수",
-                playerCode = p.playerCode,
-                backNumber = p.backNumber,
-                isPitcher = true,
-            )
-            runCatching { repo.fetchPlayerDetail(p.playerCode, slot, _snapshot.value?.lotteGame?.gameId) }
-                .onSuccess { fetched ->
-                    _playerDetail.value = fetched.copy(
-                        isPitcher = true,
-                        todayLine = _playerDetail.value?.todayLine.orEmpty().ifBlank { fetched.todayLine },
-                    )
-                }
-            _playerLoading.value = false
-        }
-    }
+    fun loadPitcherDetail(p: PitcherLine) = playerController.loadPitcherDetail(p)
 
     fun toggleFavorite(code: String, name: String = "", team: String = "") {
         if (code.isBlank()) return
@@ -513,7 +381,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         val staleGame = _snapshot.value?.lotteGame?.let { !it.belongsToKboToday() } == true
-        runCatching { repo.refreshSnapshot(force || staleGame) }
+        runCatching {
+            if (!force && !staleGame && _snapshot.value?.lotteGame?.status == GameStatus.LIVE) repo.refreshLiveSnapshot()
+            else repo.refreshSnapshot(force || staleGame)
+        }
             .onSuccess {
                 _snapshot.value = it
                 _refreshError.value = null
@@ -634,36 +505,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         loadMonthGames(month)
     }
 
-    fun loadGamesForDate(date: LocalDate) {
-        dayGamesJob?.cancel()
-        dayGamesJob = viewModelScope.launch { fetchDayGames(date) }
-    }
-
-    fun loadMonthGames(month: YearMonth) {
-        monthJob?.cancel()
-        monthJob = viewModelScope.launch { fetchMonthGames(month) }
-    }
-
-    private suspend fun fetchDayGames(date: LocalDate) {
-        _dayGamesLoading.value = true
-        try {
-            runCatching { repo.fetchGamesForDate(date) }
-                .onSuccess { _dayGames.value = sortMyTeamFirst(it, currentTeamCode()) }
-                .onFailure { e ->
-                    if (_dayGames.value.isEmpty()) {
-                        _error.value = e.message ?: "경기 일정을 불러오지 못했습니다."
-                    }
-                }
-        } finally {
-            _dayGamesLoading.value = false
-        }
-    }
-
-    private suspend fun fetchMonthGames(month: YearMonth) {
-        _calendarMonth.value = month
-        runCatching { repo.fetchGamesForMonth(month) }
-            .onSuccess { _monthGames.value = it }
-    }
+    fun loadGamesForDate(date: LocalDate) { calendarController.loadDay(date) }
+    fun loadMonthGames(month: YearMonth) { calendarController.loadMonth(month) }
+    private suspend fun fetchDayGames(date: LocalDate) { calendarController.loadDay(date).join() }
 
     fun setResultsTeam(code: String) {
         _resultsTeamCode.value = code
@@ -714,86 +558,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openEntryForTeam(teamCode: String) {
         val code = teamCode.ifBlank { LOTTE_TEAM_CODE }
-        if (_overlayTeamCode.value != code) {
-            _overlayTeamCode.value = code
-            _entryChangeDates.value = emptySet()
-            _dayEntry.value = null
-            _recentMoves.value = emptyList()
-        } else {
-            _overlayTeamCode.value = code
-        }
-        viewModelScope.launch {
-            _entryLoading.value = true
-            runCatching { repo.fetchRecentRosterMoves(7, code) }.onSuccess { _recentMoves.value = it }
-            val date = runCatching { repo.findLatestEntryDate(21, code) }.getOrDefault(LocalDate.now())
-            _entryDate.value = date
-            loadEntryForDate(date)
-            prefetchEntryDates(YearMonth.from(date))
-        }
+        _overlayTeamCode.value = code
+        entryController.open(code)
     }
-
-    fun selectEntryDate(date: LocalDate) {
-        _entryDate.value = date
-        loadEntryForDate(date)
-        val ym = YearMonth.from(date)
-        if (_entryChangeDates.value.none { YearMonth.from(it) == ym }) {
-            prefetchEntryDates(ym)
-        }
-    }
-
-    fun loadEntryForDate(date: LocalDate) {
-        val code = _overlayTeamCode.value.ifBlank { LOTTE_TEAM_CODE }
-        entryJob?.cancel()
-        entryJob = viewModelScope.launch {
-            _entryLoading.value = true
-            runCatching { repo.fetchDayEntryChanges(date, teamCode = code) }
-                .onSuccess { _dayEntry.value = it }
-                .onFailure { _dayEntry.value = DayEntryChanges(date = date.toString()) }
-            _entryLoading.value = false
-        }
-    }
-
-    private fun prefetchEntryDates(month: YearMonth) {
-        val code = _overlayTeamCode.value.ifBlank { LOTTE_TEAM_CODE }
-        viewModelScope.launch {
-            runCatching { repo.fetchEntryChangeDates(month, code) }
-                .onSuccess { hits ->
-                    _entryChangeDates.value = _entryChangeDates.value + hits
-                }
-        }
-    }
+    fun selectEntryDate(date: LocalDate) = entryController.select(date)
+    fun loadEntryForDate(date: LocalDate) { entryController.load(date) }
 
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch { repo.store.setThemeMode(mode.name) }
     }
 
-    fun loadPlayerDetail(slot: LineupSlot, gameId: String?) {
-        viewModelScope.launch {
-            _playerLoading.value = true
-            _playerDetail.value = null
-            runCatching { repo.fetchPlayerDetail(slot.playerCode, slot, gameId) }
-                .onSuccess { _playerDetail.value = it }
-                .onFailure {
-                    _playerDetail.value = PlayerDetail(
-                        playerCode = slot.playerCode,
-                        name = slot.name,
-                        backNumber = slot.backNumber,
-                        hitType = slot.hitType,
-                        position = slot.position,
-                        isPitcher = slot.isPitcher ||
-                            com.bossxor.lottegiants.domain.isPitcherPosition(slot.position),
-                        seasonAvg = slot.seasonAvg?.let { a -> String.format("%.3f", a) }.orEmpty(),
-                        todayLine = "${slot.todayHits}/${slot.todayAtBats}",
-                        photoUrl = if (slot.playerCode.isNotBlank()) playerPhotoUrl(slot.playerCode) else "",
-                    )
-                }
-            _playerLoading.value = false
-        }
-    }
+    fun loadPlayerDetail(slot: LineupSlot, gameId: String?) = playerController.loadPlayerDetail(slot, gameId)
 
-    fun clearPlayerDetail() {
-        _playerDetail.value = null
-    }
+    fun clearPlayerDetail() = playerController.clearPlayerDetail()
 
     private fun refreshWeatherFromSnapshot(snap: LiveSnapshot?) {
         val stadium = snap?.lotteGame?.stadium
@@ -897,38 +674,3 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         fun sortLotteFirst(games: List<MiniGame>): List<MiniGame> = sortMyTeamFirst(games, LOTTE_TEAM_CODE)
     }
 }
-
-private fun LeaderPlayer.toDetailSeed(): PlayerDetail =
-    if (isPitcher) {
-        PlayerDetail(
-            playerCode = playerCode,
-            name = name,
-            seasonGames = games,
-            pitcherEra = era,
-            pitcherWins = wins,
-            pitcherLosses = losses,
-            pitcherSo = so,
-            pitcherInn = ip,
-            pitcherSaves = saves,
-            pitcherHolds = holds,
-            pitcherWhip = whip,
-            isPitcher = true,
-            photoUrl = if (playerCode.isNotBlank()) playerPhotoUrl(playerCode) else "",
-        )
-    } else {
-        PlayerDetail(
-            playerCode = playerCode,
-            name = name,
-            seasonAvg = avg,
-            seasonGames = games,
-            seasonHits = hits,
-            seasonHr = hr,
-            seasonRbi = rbi,
-            seasonObp = obp,
-            seasonOps = ops,
-            seasonSlg = slg,
-            seasonSb = sb,
-            isPitcher = false,
-            photoUrl = if (playerCode.isNotBlank()) playerPhotoUrl(playerCode) else "",
-        )
-    }

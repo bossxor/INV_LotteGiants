@@ -47,6 +47,31 @@ class SnapshotStore(private val context: Context) {
         }
     }
 
+    /** 선택 검증과 저장을 같은 DataStore 트랜잭션에서 수행한다. */
+    internal suspend fun saveSelectedSnapshot(snapshot: LiveSnapshot, expected: SnapshotIdentity) {
+        context.dataStore.edit { prefs ->
+            val team = normalizeTeamCode(prefs[KEY_MY_TEAM].orEmpty().ifBlank { LOTTE_TEAM_CODE })
+            if (team != expected.team || prefs[KEY_PREFERRED_LIVE].orEmpty() != expected.preferredGame ||
+                com.bossxor.lottegiants.domain.kboToday().toString() != expected.day) {
+                throw kotlinx.coroutines.CancellationException("조회 대상 변경")
+            }
+            prefs[KEY_SNAPSHOT] = json.encodeToString(LiveSnapshot.serializer(), snapshot)
+        }
+    }
+
+    internal suspend fun alertPolicy(): AlertPolicySnapshot {
+        val prefs = context.dataStore.data.first()
+        val favorites = prefs[KEY_FAVORITE_PLAYERS]?.let {
+            runCatching { json.decodeFromString<List<FavoritePlayer>>(it) }.getOrNull()
+        }.orEmpty()
+        return AlertPolicySnapshot(enabled = NotificationType.entries.filterTo(mutableSetOf()) {
+            prefs[booleanPreferencesKey("notif_${it.name}")] ?: true
+        }, liveOnly = prefs[KEY_ALERTS_LIVE_ONLY] ?: false, vibrate = prefs[KEY_ALERT_VIBRATE] ?: true,
+            quietEnabled = prefs[KEY_QUIET_ENABLED] ?: false, quietStart = prefs[KEY_QUIET_START] ?: 23,
+            quietEnd = prefs[KEY_QUIET_END] ?: 8, chanceAtBatChange = prefs[KEY_CHANCE_AT_BAT_CHANGE] ?: true,
+            favorites = favorites)
+    }
+
     fun notificationEnabledFlow(type: NotificationType): Flow<Boolean> =
         context.dataStore.data.map { it[booleanPreferencesKey("notif_${type.name}")] ?: true }
 
