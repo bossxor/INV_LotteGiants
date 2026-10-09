@@ -16,13 +16,28 @@ class SingleFlightTest {
         val waiter = async(start = CoroutineStart.UNDISPATCHED) { f.run("same") { error("duplicate") } }
         waiter.cancelAndJoin(); gate.complete(Unit); assertEquals(7, owner.await())
     }
-    @Test fun ownerCancellationReleasesWaitersAndNextRequestCanRetry() = runBlocking {
+    @Test fun ownerCancellationDoesNotCancelActiveWatcherAndNextRequestCanRetry() = runBlocking {
         val f = SingleFlight<String, Int>(); val gate = CompletableDeferred<Unit>()
         val owner = async(start = CoroutineStart.UNDISPATCHED) { f.run("same") { gate.await(); 7 } }
-        val waiter = async(start = CoroutineStart.UNDISPATCHED) { f.run("same") { error("duplicate") } }
+        val waiter = async(start = CoroutineStart.UNDISPATCHED) { runCatching { f.run("same") { error("duplicate") } } }
         owner.cancelAndJoin()
-        try { withTimeout(1000) { waiter.await() }; fail() } catch (_: CancellationException) { }
+        val failed = withTimeout(1000) { waiter.await() }
+        assertTrue(failed.exceptionOrNull() is SharedFetchCanceledException)
+        assertFalse(waiter.isCancelled)
         assertEquals(9, f.run("same") { 9 })
+    }
+    @Test fun sharedCancellationCannotTerminateContinuousWatcher() = runBlocking {
+        val f = SingleFlight<String, Int>(); val gate = CompletableDeferred<Unit>()
+        val ui = async(start = CoroutineStart.UNDISPATCHED) { f.run("today") { gate.await(); 1 } }
+        var observed = 0
+        val watcher = launch(start = CoroutineStart.UNDISPATCHED) {
+            repeat(2) {
+                try { observed = f.run("today") { 9 } }
+                catch (e: CancellationException) { throw e }
+                catch (_: Exception) { yield() }
+            }
+        }
+        ui.cancelAndJoin(); watcher.join(); assertEquals(9, observed); assertFalse(watcher.isCancelled)
     }
     @Test fun failureIsSharedAndRetryIsNotPoisoned() = runBlocking {
         supervisorScope {
