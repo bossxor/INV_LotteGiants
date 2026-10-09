@@ -174,6 +174,37 @@ class GiantsRepository private constructor(context: Context) {
         }
     }
 
+    /** 라이브 점수/알림 전용. 순위·시즌 일정·날씨·프리뷰를 기다리지 않는다. */
+    suspend fun refreshLiveSnapshot(): LiveSnapshot {
+        val previous = lastKnownSnapshot()
+        if (previous?.lotteGame?.status != GameStatus.LIVE) return refreshSnapshot()
+        return refreshMutex.withLock {
+            val prev = lastKnownSnapshot() ?: previous
+            val today = kboToday()
+            val games = fetchKboGamesFresh(today)
+            val focus = store.myTeamCode()
+            val selected = pickKboLotte(games, store.preferredLiveGameId(), focus)
+                ?: return@withLock prev
+            val old = prev.lotteGame
+            var game = selected.toLotteBase(focus)
+            if (old?.gameId == game.gameId) game = game.copy(preview = old.preview)
+            val cursor = com.bossxor.lottegiants.domain.LiveEventCursor.decode(store.liveEventCursor())
+            val recover = cursor.inning.takeIf { cursor.gameId == game.gameId }
+            val relay = fetchLiveRelay(game.gameId, recover)
+            if (relay != null) game = mergeRelay(game, relay)
+            val snap = prev.copy(updatedAtMillis = System.currentTimeMillis(), lotteGame = game,
+                todayLotteGames = kboToMiniGames(today, games.filter { it.involvesTeam(focus) }),
+                otherGames = kboToMiniGames(today, games.filterNot { it.involvesTeam(focus) }),
+                pitchLocations = game.pitchLocations,
+                winProbSeries = relay?.let { buildWinProbFromRelay(it, game.isHome) }?.takeIf { it.isNotEmpty() }
+                    ?: prev.winProbSeries)
+            store.saveSnapshot(snap)
+            memorySnapshot = snap
+            memorySnapshotAt = System.currentTimeMillis()
+            snap
+        }
+    }
+
     private suspend fun lastKnownSnapshot(): LiveSnapshot? =
         memorySnapshot ?: runCatching { store.loadSnapshot() }.getOrNull()
 
@@ -913,6 +944,7 @@ class GiantsRepository private constructor(context: Context) {
         val res = kboApi.getRoster(
             KboRosterRequest(season_id = season, g_dt = gDt, t_id = code),
         )
+        val (registered, removed) = KboRosterParser.parseConfirmed(res)
         val codeByName = if (resolveCodes) {
             runCatching {
                 val batters = fetchLeaders(false).filter { it.matchesTeam(code) }
@@ -937,7 +969,7 @@ class GiantsRepository private constructor(context: Context) {
                 ?: moveMap[name].orEmpty()
                     .ifBlank { (if (isPitcher) batterMap[name] else pitcherMap[name]).orEmpty() }
         }
-        fun toPlayers(table: String) = KboRosterParser.parsePlayers(table).map {
+        fun toPlayers(players: List<ParsedRosterPlayer>) = players.map {
             val pitcher = it.position.contains("투수")
             EntryPlayer(
                 name = it.name,
@@ -948,8 +980,8 @@ class GiantsRepository private constructor(context: Context) {
                 isPitcher = pitcher,
             )
         }
-        val kboReg = toPlayers(res.tableKboY)
-        val kboRem = toPlayers(res.tableKboN)
+        val kboReg = toPlayers(registered)
+        val kboRem = toPlayers(removed)
         val keuboDay = if (resolveCodes) {
             runCatching { fetchAllRosterMoves(code) }.getOrDefault(emptyList())
                 .filter { it.moveDate == gDt }
@@ -1139,9 +1171,7 @@ class GiantsRepository private constructor(context: Context) {
         val today = kboToday()
         val teamCode = teamCode.ifBlank { store.myTeamCode() }
         val dateStr = today.toString()
-        val changes = runCatching {
-            fetchDayEntryChanges(today, resolveCodes = false, teamCode = teamCode)
-        }.getOrNull() ?: return emptyList()
+        val changes = fetchDayEntryChanges(today, resolveCodes = false, teamCode = teamCode)
         fun EntryPlayer.toMove(register: Boolean) = RosterMove(
             playerCode = playerCode,
             playerName = name,
@@ -1155,20 +1185,30 @@ class GiantsRepository private constructor(context: Context) {
     /**
      * 라인업 알림용 경량 조회 — 당일 KBO 일정 + (필요 시) 네이버 라인업 relay만 본다.
      */
-    suspend fun refreshLineupAlert(): LotteGameInfo? {
+    suspend fun refreshLineupAlert(requestedGameId: String? = null): LotteGameInfo? {
         val today = kboToday()
         val focus = store.myTeamCode()
-        val kboLotte = pickKboLotte(fetchKboGamesFresh(today), store.preferredLiveGameId(), focus)
-            ?: return null
-        var lotteInfo = kboLotte.toLotteBase(focus)
+        val games = try { fetchKboGamesFresh(today) } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { emptyList() }
+        val kboLotte = games.firstOrNull { it.involvesTeam(focus) && it.naverGameId() == requestedGameId }
+            ?: pickKboLotte(games.filter { it.toLotteBase(focus).status == GameStatus.BEFORE }, "", focus)
+            ?: pickKboLotte(games, store.preferredLiveGameId(), focus)
+        var lotteInfo = kboLotte?.toLotteBase(focus) ?: run {
+            val candidates = api.getGames(today.toString(), today.toString()).result?.games.orEmpty()
+                .filter { it.categoryId == "kbo" && it.involvesTeam(focus) }
+            val naver = candidates.firstOrNull { it.gameId == requestedGameId }
+                ?: pickNaverLotte(candidates.filter { it.toLotteBase(focusTeamCode = focus).status == GameStatus.BEFORE }, "")
+                ?: pickNaverLotte(candidates, store.preferredLiveGameId()) ?: return null
+            naver.toLotteBase(focusTeamCode = focus)
+        }
         if (lotteInfo.status == GameStatus.CANCELED || lotteInfo.status == GameStatus.ENDED) {
             return lotteInfo
         }
-        val gameId = kboLotte.naverGameId()
+        val gameId = lotteInfo.gameId
         if (gameId.isNotBlank() &&
             (lotteInfo.lineupAnnounced || lotteInfo.lotteLineup.size < 9)
         ) {
-            runCatching { fetchLineupRelay(gameId) }.getOrNull()?.let { relay ->
+            fetchLineupRelay(gameId)?.let { relay ->
                 if (relayHasLineup(relay) || lotteInfo.lineupAnnounced) {
                     lotteInfo = mergeRelay(lotteInfo, relay)
                 }
@@ -1405,12 +1445,9 @@ class GiantsRepository private constructor(context: Context) {
     /** 알림 폴링용 — 당일 일정 캐시를 무시하고 최신을 받는다. */
     private suspend fun fetchKboGamesFresh(date: LocalDate): List<KboOfficialGame> {
         val key = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-        val games = runCatching {
-            kboOfficialApi.getGameList(date = KboOfficialApi.dateParam(date))
-                .game
-                .filter { it.gameId.isNotBlank() }
-                .forKboDate(date)
-        }.getOrDefault(emptyList())
+        val response = kboOfficialApi.getGameList(date = KboOfficialApi.dateParam(date))
+        check(response.code == "100") { "KBO 일정 조회 실패: ${response.code}" }
+        val games = response.game.filter { it.gameId.isNotBlank() }.forKboDate(date)
         if (games.isNotEmpty()) kboDateCache[key] = System.currentTimeMillis() to games
         return games
     }
@@ -1473,7 +1510,7 @@ class GiantsRepository private constructor(context: Context) {
      * 스냅샷 폴링용. 현재 이닝 1회 + 직전 이닝이 캐시에 없을 때만 1회.
      * 전체 이닝은 [expandFullRelay] (중계 탭)에서 채운다.
      */
-    private suspend fun fetchLiveRelay(gameId: String): TextRelayData? {
+    private suspend fun fetchLiveRelay(gameId: String, recoverFrom: Int? = null): TextRelayData? {
         val base = api.getRelay(gameId).result?.textRelayData ?: return null
         val cache = relayInningCache.getOrPut(gameId) { ConcurrentHashMap() }
         if (base.textRelays.isNotEmpty()) {
@@ -1481,13 +1518,17 @@ class GiantsRepository private constructor(context: Context) {
                 .ifEmpty { base.textRelays }
             cache[base.inn] = currentOnly
         }
-        val prevInn = base.inn - 1
-        val hadHistory = cache.keys.any { it != base.inn }
-        if (hadHistory && prevInn >= 1 && cache[prevInn].isNullOrEmpty()) {
-            val chunk = runCatching {
-                api.getRelay(gameId, inning = prevInn).result?.textRelayData?.textRelays.orEmpty()
-            }.getOrDefault(emptyList())
-            if (chunk.isNotEmpty()) cache[prevInn] = chunk
+        val from = recoverFrom?.coerceIn(1, base.inn.coerceAtLeast(1)) ?: (base.inn - 1).coerceAtLeast(1)
+        val missing = (from until base.inn).filter { cache[it].isNullOrEmpty() }
+        coroutineScope {
+            val limit = kotlinx.coroutines.sync.Semaphore(3)
+            missing.map { inn -> async {
+                limit.acquire()
+                try {
+                    val chunk = api.getRelay(gameId, inning = inn).result?.textRelayData?.textRelays.orEmpty()
+                    if (chunk.isNotEmpty()) cache[inn] = chunk
+                } finally { limit.release() }
+            } }.awaitAll()
         }
         fun scoreKeys(map: Map<String, String>?) =
             map?.keys?.mapNotNull { it.toIntOrNull() }?.maxOrNull() ?: 0

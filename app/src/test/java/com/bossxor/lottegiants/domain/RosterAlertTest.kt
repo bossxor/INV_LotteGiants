@@ -28,7 +28,7 @@ class RosterAlertTest {
     }
 
     @Test
-    fun fiveAmRestampDoesNotRenotify() {
+    fun differentDayRegistrationIsANewOfficialNotice() {
         val yesterday = listOf(
             move("손호영", "2026-09-03"),
             move("조세진", "2026-09-03"),
@@ -38,7 +38,7 @@ class RosterAlertTest {
         val seeded = yesterday.map(::rosterNotifyKey).toSet()
         val restamped = yesterday.map { it.copy(moveDate = "2026-09-04", playerCode = "x") }
         val plan = planRosterNotifications(restamped, seeded, today = "2026-09-04")
-        assertTrue(plan.fresh.isEmpty())
+        assertEquals(4, plan.fresh.size)
     }
 
     @Test
@@ -54,13 +54,13 @@ class RosterAlertTest {
     }
 
     @Test
-    fun firstSeenOnlySeeds() {
+    fun firstSeenTodayIsNotLost() {
         val plan = planRosterNotifications(
             listOf(move("손호영", "2026-09-04")),
             stored = emptySet(),
             today = "2026-09-04",
         )
-        assertTrue(plan.fresh.isEmpty())
+        assertEquals(1, plan.fresh.size)
         assertTrue(plan.stored.contains("2026-09-04:등록:손호영"))
     }
 

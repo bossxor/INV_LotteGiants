@@ -106,6 +106,17 @@ data class KboRosterResponse(
 object KboRosterParser {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
+    /** 실패·응답 누락을 '공시 없음'과 구분한다. 정상 빈 rows만 빈 공시다. */
+    fun parseConfirmed(response: KboRosterResponse): Pair<List<ParsedRosterPlayer>, List<ParsedRosterPlayer>> {
+        check(response.code == "100") { "KBO 공시 조회 실패: ${response.code}" }
+        fun confirmed(table: String): List<ParsedRosterPlayer> {
+            val root = json.parseToJsonElement(table).jsonObject
+            check(root["rows"] is JsonArray) { "KBO 공시 표 누락" }
+            return parsePlayers(table)
+        }
+        return confirmed(response.tableKboY) to confirmed(response.tableKboN)
+    }
+
     fun parsePlayers(tableJson: String): List<ParsedRosterPlayer> {
         if (tableJson.isBlank()) return emptyList()
         val root = runCatching { json.parseToJsonElement(tableJson).jsonObject }.getOrNull() ?: return emptyList()

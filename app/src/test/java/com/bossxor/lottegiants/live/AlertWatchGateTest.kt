@@ -7,9 +7,30 @@ import org.junit.Test
 
 class AlertWatchGateTest {
 
+    @Test fun previousGameConfirmationDoesNotSlowNextLineup() {
+        assertEquals(10_000L, AlertWatchGate.lineupIntervalMs("game2", "game1:full"))
+        assertEquals(10_000L, AlertWatchGate.lineupIntervalMs("game2", "game2:flag"))
+        assertEquals(60_000L, AlertWatchGate.lineupIntervalMs("game2", "game2:full"))
+    }
+
+    @Test fun nextDoubleHeaderLineupIsWatchedWhileFirstGameIsLive() {
+        val first = com.bossxor.lottegiants.domain.LotteGameInfo("game1", "2026-10-09", "14:00", "사직", true, "LG", "LG",
+            status = com.bossxor.lottegiants.domain.GameStatus.LIVE)
+        val second = first.copy(gameId = "game2", startTime = "18:00", status = com.bossxor.lottegiants.domain.GameStatus.BEFORE)
+        assertEquals("game2", AlertWatchGate.watchGame(com.bossxor.lottegiants.domain.LiveSnapshot(
+            lotteGame = first, nextLotteGame = second))?.gameId)
+    }
+
+    @Test fun publicationPeakHasShorterRosterInterval() {
+        assertEquals(30_000L, AlertWatchGate.rosterIntervalMs(8))
+        assertEquals(10_000L, AlertWatchGate.rosterIntervalMs(13))
+        assertEquals(10_000L, AlertWatchGate.rosterIntervalMs(18))
+        assertEquals(30_000L, AlertWatchGate.rosterIntervalMs(19))
+    }
+
     @Test
-    fun rosterOnlyFromTwoPm() {
-        assertFalse(
+    fun rosterWatchStartsInMorning() {
+        assertTrue(
             AlertWatchGate.shouldWatch(
                 nowHour = 10,
                 nowMillis = 1_000L,

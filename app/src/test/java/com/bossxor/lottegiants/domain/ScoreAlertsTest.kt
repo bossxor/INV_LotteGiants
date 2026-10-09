@@ -162,7 +162,7 @@ class ScoreAlertsTest {
     fun atBatUsesNextWhenBatterAlreadyOnBase() {
         // 주자에만 있으면 밀지 않음 — maker 또는 타석 중계가 맞을 때
         assertEquals(
-            "전민재",
+            "",
             atBatForChance(
                 currentBatter = "전민재",
                 nextBatter = "나승엽",

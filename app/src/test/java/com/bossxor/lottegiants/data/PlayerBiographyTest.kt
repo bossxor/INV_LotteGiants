@@ -5,6 +5,15 @@ import org.junit.Test
 import java.time.LocalDate
 
 class PlayerBiographyTest {
+    @Test fun absentOptionalProfileSectionsStayAbsent() {
+        val html = """<section class="_au_people_content_wrap"><a href="?os=124753&amp;x=1" data-title="김태혁"></a>
+            <dl><dt>출생</dt><dd>1988.01.02.</dd></dl></section>"""
+        val p = parseNaverBiography(html, "김태혁", "19880102", "124753")!!
+        assertTrue(p.education.isEmpty())
+        assertTrue(p.careers.isEmpty())
+        assertNull(parseNaverBiography(html, "김태혁", "", "124753"))
+        assertNull(playerAge("19880230"))
+    }
     @Test fun ageUsesBirthdayAndSupportsCompactDate() {
         assertEquals(37, playerAge("19880102", LocalDate.of(2026, 1, 1)))
         assertEquals(38, playerAge("1988-01-02", LocalDate.of(2026, 1, 2)))

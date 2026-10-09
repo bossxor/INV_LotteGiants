@@ -24,8 +24,8 @@ import com.bossxor.lottegiants.domain.parseKboStartMillis
 import kotlin.coroutines.coroutineContext
 
 /**
- * 등말소(14–23시) 또는 라인업 창(경기 6시간 전~시작 후 30분)에만 켠다.
- * 라인업 창 15초 · 그 외 45초. 알람과 겹치면 [AlertPollGate]가 건너뛴다.
+ * 등말소(08–23시) 또는 라인업 창(경기 6시간 전~시작 후 30분)에만 켠다.
+ * 라인업 발표 전 10초 · 발표 후 60초, 등말소 집중 시간 10초 · 그 외 30초. 알람과 겹치면 [AlertPollGate]가 건너뛴다.
  *
  * Android 15+ dataSync FGS 일일 한도를 피하려고 [specialUse] 타입을 쓴다.
  */
@@ -74,31 +74,39 @@ class AlertWatchService : Service() {
         }
     }
 
-    private suspend fun pollLoop() {
+    private suspend fun pollLoop() = kotlinx.coroutines.coroutineScope {
+        // 각 조회가 느려지거나 실패해도 다른 공시를 기다리게 하지 않는다.
+        launch { watchPoll(lineup = true) }
+        launch { watchPoll(lineup = false) }
+    }
+
+    private suspend fun watchPoll(lineup: Boolean) {
         var failStreak = 0
+        val repo = GiantsRepository.get(this@AlertWatchService)
+        val detector = EventDetector(repo.store)
         while (coroutineContext.isActive) {
             try {
-                if (!shouldRun()) {
-                    stopSelfSafely()
-                    break
-                }
-                val repo = GiantsRepository.get(this@AlertWatchService)
-                val detector = EventDetector(repo.store)
-                val ok = runCatching {
-                    GameSchedulerWorker.pollRosterAlerts(this@AlertWatchService, detector, repo)
-                    GameSchedulerWorker.pollLineupAlert(this@AlertWatchService, detector, repo)
-                }.isSuccess
-                failStreak = if (ok) 0 else (failStreak + 1).coerceAtMost(4)
-                val snap = runCatching { repo.store.loadSnapshot() }.getOrNull()
-                val game = snap?.lotteGame ?: snap?.nextLotteGame
+                if (!shouldRun()) { stopSelfSafely(); break }
+                val started = System.nanoTime()
+                val hour = ZonedDateTime.now(KBO_ZONE).hour
+                val game = AlertWatchGate.watchGame(repo.store.loadSnapshot())
                 val start = game?.let { parseKboStartMillis(it.gameDate, it.startTime) }
-                delay(AlertWatchGate.pollIntervalMs(System.currentTimeMillis(), start) + failStreak * 10_000L)
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (t: Throwable) {
-                Log.e(TAG, "alert watch poll failed", t)
-                failStreak = (failStreak + 1).coerceAtMost(4)
-                delay(AlertWatchGate.ROSTER_POLL_MS + failStreak * 10_000L)
+                val inWindow = AlertWatchGate.inLineupWindow(System.currentTimeMillis(), start)
+                val result = if (lineup && inWindow) {
+                    GameSchedulerWorker.queryLineupAlert(this@AlertWatchService, detector, repo)
+                } else if (!lineup && hour in AlertWatchGate.ROSTER_START_HOUR until AlertWatchGate.ROSTER_END_HOUR) {
+                    GameSchedulerWorker.pollRosterAlerts(this@AlertWatchService, detector, repo)
+                } else AlertQueryResult.Skipped
+                failStreak = if (result is AlertQueryResult.Failed) (failStreak + 1).coerceAtMost(4) else 0
+                val interval = if (lineup) {
+                    if (!inWindow) 60_000L else AlertWatchGate.lineupIntervalMs(game?.gameId, repo.store.notifiedLineupState())
+                } else AlertWatchGate.rosterIntervalMs(hour)
+                val elapsed = (System.nanoTime() - started) / 1_000_000L
+                delay((interval - elapsed).coerceAtLeast(1_000L) + failStreak * 5_000L)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (t: Exception) {
+                Log.w(TAG, "${if (lineup) "lineup" else "roster"} watch failed", t)
+                delay(15_000L)
             }
         }
     }
@@ -168,7 +176,7 @@ class AlertWatchService : Service() {
                 store.isNotificationEnabled(NotificationType.FAVORITE_ROSTER)
             if (!lineupOn && !rosterOn) return false
             val snap = store.loadSnapshot()
-            val game = snap?.lotteGame ?: snap?.nextLotteGame
+            val game = AlertWatchGate.watchGame(snap)
             val start = game?.let { parseKboStartMillis(it.gameDate, it.startTime) }
             return AlertWatchGate.shouldWatch(
                 nowHour = ZonedDateTime.now(KBO_ZONE).hour,

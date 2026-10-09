@@ -28,9 +28,9 @@ class RunnerOrderFromRelayTest {
 
     @Test
     fun occupancyFlagKeepsKboOrder() {
-        assertEquals(2, runnerOrderFromRelay("1", batting, names, 2))
+        assertEquals(1, runnerOrderFromRelay("1", batting, names, 2))
         assertEquals(3, runnerOrderFromRelay("Y", batting, names, 3))
-        assertEquals(0, runnerOrderFromRelay("1", batting, names, 0))
+        assertEquals(1, runnerOrderFromRelay("1", batting, names, 0))
     }
 
     @Test

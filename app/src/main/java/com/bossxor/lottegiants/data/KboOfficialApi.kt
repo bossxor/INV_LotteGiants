@@ -109,6 +109,8 @@ interface KboOfficialApi {
 
 @Serializable
 data class KboGameListResponse(
+    val code: String = "",
+    val msg: String = "",
     val game: List<KboOfficialGame> = emptyList(),
 )
 

@@ -348,7 +348,8 @@ fun runnerOrderFromRelay(
     val raw = relayRaw?.trim().orEmpty()
     if (raw.isEmpty()) return kboOrder.takeIf { it > 0 } ?: 0
     if (!runnerOccupied(raw)) return 0
-    // 점유 플래그만 온 경우 (선수코드 아님)
+    // 네이버의 1~9는 주자의 타순이다. Y/T만 점유 플래그다.
+    raw.toIntOrNull()?.takeIf { it in 1..9 }?.let { return it }
     if (raw.length <= 2 && raw.all { it.isDigit() || it.equals('y', true) || it.equals('t', true) }) {
         return kboOrder.takeIf { it > 0 } ?: 0
     }
@@ -697,6 +698,9 @@ data class LotteGameInfo(
     val runnerOn1Code: String = "",
     val runnerOn2Code: String = "",
     val runnerOn3Code: String = "",
+    val runnerOn1Name: String = "",
+    val runnerOn2Name: String = "",
+    val runnerOn3Name: String = "",
     val crowdCount: String = "",
     val gameDuration: String = "",
     /** 포스트시즌·특수경기 라벨 (GAME_SC_NM) */
@@ -722,6 +726,7 @@ data class LotteGameInfo(
     val currentPitcherName: String = "",
     val currentPitcherCode: String = "",
     val currentBatterName: String = "",
+    val currentBatterCode: String = "",
     val currentBatterOrder: Int = 0,
     val nextBatterName: String = "",
     val isLotteBatting: Boolean = false,

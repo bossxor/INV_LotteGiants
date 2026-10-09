@@ -288,6 +288,13 @@ class SnapshotStore(private val context: Context) {
      * 라인업 알림 진행 단계. `"$gameId:flag"`(발표만 확인) → `"$gameId:full"`(타순까지 확인).
      * 스케줄러 워커는 매 실행마다 새 detector를 만들기 때문에 메모리 대신 여기 남겨야 한다.
      */
+    suspend fun notifiedLineupFingerprint(): String =
+        safeFirst(context.dataStore.data.map { it[KEY_LINEUP_FINGERPRINT].orEmpty() }, "")
+
+    suspend fun setNotifiedLineupFingerprint(value: String) {
+        context.dataStore.edit { it[KEY_LINEUP_FINGERPRINT] = value }
+    }
+
     suspend fun notifiedLineupState(): String =
         safeFirst(context.dataStore.data.map { it[KEY_NOTIFIED_LINEUP].orEmpty() }, "")
 
@@ -496,9 +503,22 @@ class SnapshotStore(private val context: Context) {
                     json.decodeFromString(ListSerializer(AlertHistoryItem.serializer()), raw)
                 }.getOrDefault(emptyList())
             }
-            val next = (listOf(item) + cur).take(30)
+            val index = if (item.eventKey.isBlank()) -1 else cur.indexOfFirst { it.eventKey == item.eventKey }
+            val next = if (index >= 0) cur.mapIndexed { i, old ->
+                if (i == index) item.copy(millis = old.millis) else old
+            } else (listOf(item) + cur).take(30)
             prefs[KEY_ALERT_HISTORY] =
                 json.encodeToString(ListSerializer(AlertHistoryItem.serializer()), next)
+        }
+    }
+
+    suspend fun removeAlertHistory(eventKey: String) {
+        context.dataStore.edit { prefs ->
+            val cur = runCatching {
+                json.decodeFromString(ListSerializer(AlertHistoryItem.serializer()), prefs[KEY_ALERT_HISTORY].orEmpty())
+            }.getOrDefault(emptyList())
+            prefs[KEY_ALERT_HISTORY] = json.encodeToString(ListSerializer(AlertHistoryItem.serializer()),
+                cur.filterNot { it.eventKey == eventKey })
         }
     }
 
@@ -621,6 +641,7 @@ class SnapshotStore(private val context: Context) {
         private val KEY_NOTIFIED_ROSTER = stringSetPreferencesKey("notified_roster_keys")
         private val KEY_NOTIFIED_ROSTER_NONE = stringPreferencesKey("notified_roster_none_day")
         private val KEY_LIVE_NOTIFY = stringPreferencesKey("last_live_notify_key")
+        private val KEY_LINEUP_FINGERPRINT = stringPreferencesKey("lineup_fingerprint")
         private val KEY_NOTIFIED_LINEUP = stringPreferencesKey("notified_lineup_state")
         private val KEY_PENDING_UPDATE_APK = stringPreferencesKey("pending_update_apk")
         private val KEY_PENDING_UPDATE_CODE = stringPreferencesKey("pending_update_code")

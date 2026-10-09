@@ -113,12 +113,12 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
 
     companion object {
         const val WORK_NAME = "giants_scheduler"
-        /** 라인업 백업 알람. 감시는 15초, 여기서는 겹치면 건너뛴다. */
+        /** 라인업 백업 알람. 감시는 10초, 여기서는 겹치면 건너뛴다. */
         private const val FAST_POLL_INTERVAL_MS = 25_000L
-        /** 등말소 백업 알람 (14:00~23:00). 감시는 25초. */
+        /** 등말소 백업 알람 (08:00~23:00). 실제 감시는 10~30초. */
         private const val ROSTER_POLL_INTERVAL_MS = 35_000L
         private const val LINEUP_POLL_WINDOW_MS = 6 * 60 * 60_000L
-        private const val ROSTER_POLL_START_HOUR = 14
+        private const val ROSTER_POLL_START_HOUR = AlertWatchGate.ROSTER_START_HOUR
         private const val ROSTER_POLL_END_HOUR = 23
 
         fun enqueue(context: Context) {
@@ -194,7 +194,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             setAlarmSafe(am, nextAt, pi)
         }
 
-        /** 14:00~23:00 KST — KBO 공식 GetRoster로 엔트리 등말소를 검사 */
+        /** 08:00~23:00 KST — KBO 공식 GetRoster로 엔트리 등말소를 검사 */
         fun scheduleRosterPoll(context: Context) {
             val zone = KBO_ZONE
             val now = ZonedDateTime.now(zone)
@@ -219,27 +219,32 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             setAlarmSafe(am, nextAt, pi)
         }
 
-        suspend fun pollLineupAlert(
-            context: Context,
-            detector: EventDetector,
-            repo: GiantsRepository,
-        ): LotteGameInfo? {
-            if (!AlertPollGate.tryBeginLineup()) return null
-            return runCatching {
-                val info = repo.refreshLineupAlert()
-                detector.process(context, info)
-                NotificationHelper.refreshLiveNotificationIfNeeded(context)
+        suspend fun queryLineupAlert(context: Context, detector: EventDetector, repo: GiantsRepository): AlertQueryResult<LotteGameInfo?> {
+            if (!repo.store.isNotificationEnabled(com.bossxor.lottegiants.data.NotificationType.LINEUP)) return AlertQueryResult.Skipped
+            val gameId = AlertWatchGate.watchGame(repo.store.loadSnapshot())?.gameId
+            val gap = AlertWatchGate.lineupIntervalMs(gameId, repo.store.notifiedLineupState())
+            val result = AlertPollCoordinator.query(true, gap) {
+                val info = repo.refreshLineupAlert(gameId)
+                detector.processLineup(context, info)
                 info
-            }.getOrNull()
+            }
+            if (result is AlertQueryResult.Failed) android.util.Log.w("AlertPoll", "lineup: ${result.reason}")
+            return result
         }
 
-        suspend fun pollRosterAlerts(context: Context, detector: EventDetector, repo: GiantsRepository) {
-            if (!AlertPollGate.tryBeginRoster()) return
-            runCatching {
-                val kboMoves = repo.pollRosterMovesForAlert()
-                detector.processRosterMoves(context, kboMoves)
+        suspend fun pollLineupAlert(context: Context, detector: EventDetector, repo: GiantsRepository): LotteGameInfo? =
+            (queryLineupAlert(context, detector, repo) as? AlertQueryResult.Success)?.value
+
+        suspend fun pollRosterAlerts(context: Context, detector: EventDetector, repo: GiantsRepository): AlertQueryResult<Unit> {
+            val enabled = repo.store.isNotificationEnabled(com.bossxor.lottegiants.data.NotificationType.ROSTER) ||
+                repo.store.isNotificationEnabled(com.bossxor.lottegiants.data.NotificationType.FAVORITE_ROSTER)
+            if (!enabled) return AlertQueryResult.Skipped
+            val result = AlertPollCoordinator.query(false, AlertWatchGate.ROSTER_FAST_MS) {
+                val moves = repo.pollRosterMovesForAlert()
+                detector.processRosterMoves(context, moves)
             }
-            runCatching { AlertBootstrap.maybeMorningBrief(context, repo) }
+            if (result is AlertQueryResult.Failed) android.util.Log.w("AlertPoll", "roster: ${result.reason}")
+            return result
         }
 
         fun schedulePregameReminder(
@@ -442,7 +447,9 @@ class GameAlarmReceiver : BroadcastReceiver() {
                                 NowBarPreview.State.valueOf(intent?.getStringExtra("state").orEmpty().uppercase())
                             }.getOrDefault(NowBarPreview.State.LIVE)
                             val home = intent?.getBooleanExtra("home", false) ?: false
-                            runBlocking { NowBarPreview.post(context, st, home) }
+                            val awayScore = intent?.takeIf { it.hasExtra("awayScore") }?.getIntExtra("awayScore", 0)
+                            val homeScore = intent?.takeIf { it.hasExtra("homeScore") }?.getIntExtra("homeScore", 0)
+                            runBlocking { NowBarPreview.post(context, st, home, awayScore, homeScore) }
                         }
                         GameSchedulerWorker.ACTION_HIDE_LIVE -> {
                             runBlocking {

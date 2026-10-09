@@ -40,6 +40,12 @@ import com.bossxor.lottegiants.domain.rosterNotifyKey
 import com.bossxor.lottegiants.domain.raceChangeAlert
 import com.bossxor.lottegiants.domain.racePulse
 import com.bossxor.lottegiants.domain.shouldSendRosterNoneAlert
+import com.bossxor.lottegiants.domain.LiveEventCursor
+import com.bossxor.lottegiants.domain.ScoreLedger
+import com.bossxor.lottegiants.domain.reconcileScores
+import com.bossxor.lottegiants.domain.resolvedAtBat
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalTime
 import java.time.ZonedDateTime
 
@@ -61,6 +67,9 @@ private const val ROSTER_KEY_KEEP_DAYS = 60L
  */
 class EventDetector(private val store: SnapshotStore) {
 
+    private var focusScores = ScoreLedger()
+    private var opponentScores = ScoreLedger()
+
     private var lastSeqno: Int = -1
     private var lastPitcherCode: String = ""
     private var lastLotteScore: Int = -1
@@ -81,7 +90,11 @@ class EventDetector(private val store: SnapshotStore) {
     private var lastChanceBases: NamedBases = NamedBases(null, null, null)
     private var seenPitcherCodes: MutableSet<String> = mutableSetOf()
 
-    suspend fun process(context: Context, game: LotteGameInfo?) {
+    suspend fun process(context: Context, game: LotteGameInfo?) = eventMutex.withLock {
+        processLocked(context, game)
+    }
+
+    private suspend fun processLocked(context: Context, game: LotteGameInfo?) {
         if (game == null) return
         emittingForLive = game.status == GameStatus.LIVE ||
             (game.status == GameStatus.ENDED && lastStatus == GameStatus.LIVE)
@@ -91,6 +104,10 @@ class EventDetector(private val store: SnapshotStore) {
             resetInMemory()
         }
         lastGameId = game.gameId
+        val resume = LiveEventCursor.decode(store.liveEventCursor()).gameId == game.gameId
+        if (initialized && resume) seed(game)
+        if (resume && game.status == GameStatus.LIVE &&
+            game.recentTexts.maxOfOrNull { it.seqno }?.let { it < lastSeqno } == true) return
 
         if (!initialized) {
             seed(game)
@@ -106,7 +123,10 @@ class EventDetector(private val store: SnapshotStore) {
                 }
                 maybeNotifyLineup(context, game)
             }
-            if (game.status != GameStatus.ENDED || lastStatus != GameStatus.LIVE) return
+            if (!resume || (game.status != GameStatus.LIVE && game.status != GameStatus.ENDED)) {
+                persistCursor(game)
+                return
+            }
         }
         emittingForLive = game.status == GameStatus.LIVE ||
             (game.status == GameStatus.ENDED && lastStatus == GameStatus.LIVE)
@@ -133,25 +153,6 @@ class EventDetector(private val store: SnapshotStore) {
 
         val favorites = store.favoritePlayers()
         val favCodes = favorites.map { it.code }.toSet()
-        val batterCode = (game.lotteLineup + game.opponentLineup + game.lotteBenchBatters + game.opponentBenchBatters)
-            .firstOrNull { it.name == game.currentBatterName }?.playerCode.orEmpty()
-            .ifBlank { "" }
-        if (batterCode.isNotBlank() &&
-            batterCode in favCodes &&
-            batterCode != lastFavoriteBatterCode &&
-            game.status == GameStatus.LIVE
-        ) {
-            val favName = favorites.firstOrNull { it.code == batterCode }?.name
-                ?.ifBlank { game.currentBatterName } ?: game.currentBatterName
-            maybeNotify(
-                context, NotificationType.FAVORITE_AT_BAT, 2711,
-                "즐겨찾기 타석", "$favName · ${game.inningLabel}",
-                gameId = game.gameId, detailTab = "relay",
-            )
-        }
-        if (batterCode.isNotBlank()) lastFavoriteBatterCode = batterCode
-        else if (game.currentBatterName.isBlank()) lastFavoriteBatterCode = ""
-
         val newTexts = game.recentTexts.filter { it.seqno > lastSeqno }.sortedBy { it.seqno }
         val lotteScored = lastLotteScore >= 0 && game.lotteScore > lastLotteScore
         val oppScored = lastOppScore >= 0 && game.opponentScore > lastOppScore
@@ -163,21 +164,48 @@ class EventDetector(private val store: SnapshotStore) {
             lastBasesKey = ""
         }
         val currentBases = resolveChanceBases(namedBasesFromGame(game), newTexts, game, lotteRunsDelta)
-        if (lotteScored || oppScored) {
+        val atBatNow = resolvedAtBat(game, currentBases)
+        val batterCode = (game.lotteLineup + game.opponentLineup + game.lotteBenchBatters + game.opponentBenchBatters)
+            .firstOrNull { it.name == atBatNow }?.playerCode.orEmpty()
+            .ifBlank { "" }
+        if (batterCode.isNotBlank() &&
+            batterCode in favCodes &&
+            batterCode != lastFavoriteBatterCode &&
+            game.status == GameStatus.LIVE
+        ) {
+            val favName = favorites.firstOrNull { it.code == batterCode }?.name
+                ?.ifBlank { atBatNow } ?: atBatNow
+            maybeNotify(
+                context, NotificationType.FAVORITE_AT_BAT, 2711,
+                "즐겨찾기 타석", "$favName · ${game.inningLabel}",
+                gameId = game.gameId, detailTab = "relay",
+            )
+        }
+        if (batterCode.isNotBlank()) lastFavoriteBatterCode = batterCode
+        else if (atBatNow.isBlank()) lastFavoriteBatterCode = ""
+
+        run {
             val score = "${game.lotteScore}:${game.opponentScore}"
             suspend fun emitScores(focus: Boolean) {
-                val plays = scoringPlays(game.recentTexts, lastSeqno,
+                val reconciled = reconcileScores(if (focus) focusScores else opponentScores,
+                    game.recentTexts, lastSeqno,
                     if (focus) lastLotteScore else lastOppScore,
                     if (focus) game.lotteScore else game.opponentScore,
                     if (focus) game.isHome else !game.isHome,
                     if (focus) lotteRosterNames(game) else oppRosterNames(game))
-                for (play in plays) {
+                if (focus) focusScores = reconciled.ledger else opponentScores = reconciled.ledger
+                for (id in reconciled.supersededIds) {
+                    NotificationHelper.cancelEvent(context, (if (focus) 1_000_000 else 2_000_000) + id)
+                    store.removeAlertHistory("${game.gameId}:score:$focus:$id")
+                }
+                for (update in reconciled.updates) {
+                    if (update.record.id in reconciled.supersededIds) continue
+                    val play = update.record.play
                     val attackingNow = if (focus) game.isLotteBatting else !game.isLotteBatting
                     val isLive = game.status == GameStatus.LIVE && attackingNow &&
                         (play.inning == 0 || play.inning == game.inning) &&
                         (play.isTop == null || play.isTop == game.isTopInning)
-                    val atBat = if (isLive) atBatForChance(game.currentBatterName,
-                        game.nextBatterName, play.who, playText = play.how.orEmpty()) else ""
+                    val atBat = if (isLive) atBatNow else ""
                     val body = scoringDetailBody(play, atBat,
                         if (isLive) currentBases else NamedBases(null, null, null),
                         if (play.inning > 0) "${play.inning}회${if (play.isTop == true) "초" else "말"}" else game.inningLabel)
@@ -189,14 +217,18 @@ class EventDetector(private val store: SnapshotStore) {
                             game.focusName(), play.rbi)
                     }
                     val type = when { !focus -> NotificationType.CONCEDING; hr -> NotificationType.HOMERUN; else -> NotificationType.SCORE }
-                    val baseId = when { !focus -> 2_000_000; hr -> 3_000_000; else -> 1_000_000 }
-                    maybeNotify(context, type, baseId + play.seqno.coerceAtLeast(0), title, body,
-                        gameId = game.gameId, detailTab = "relay")
-                    store.setHighlight(title)
+                    // ID는 득점 사건에 고정한다. 홈런 근거가 늦게 와도 기존 알림을 갱신한다.
+                    val id = (if (focus) 1_000_000 else 2_000_000) + update.record.id
+                    maybeNotify(context, type, id,
+                        if (update.correction) "득점 정정 · $score" else title,
+                        if (update.correction) "공식 점수가 정정되었습니다 · ${game.inningLabel}" else body,
+                        gameId = game.gameId, detailTab = "relay", silentUpdate = update.silent,
+                        eventKey = "${game.gameId}:score:$focus:${update.record.id}")
+                    store.setHighlight(if (update.correction) "득점 정정 · $score" else title)
                 }
             }
-            if (lotteScored) emitScores(true)
-            if (oppScored) emitScores(false)
+            emitScores(true)
+            emitScores(false)
             leadChangeTitle(lastLotteScore, lastOppScore, game.lotteScore, game.opponentScore,
                 game.opponentName, game.focusName())?.let { title ->
                 maybeNotify(context, NotificationType.LEAD_CHANGE,
@@ -314,11 +346,7 @@ class EventDetector(private val store: SnapshotStore) {
             val (was1, was2, was3) = parseBasesKey(lastBasesKey)
             val nowChance = game.onBase2 || game.onBase3
             val loaded = game.onBase1 && game.onBase2 && game.onBase3
-            val play = pickScoringRelay(newTexts)
-            val maker = play?.let { pickPlayerName(it.text, it.batterTitle, lotteRosterNames(game)) }
-            val atBat = atBatForChance(game.currentBatterName, game.nextBatterName, maker,
-                listOfNotNull(currentBases.first, currentBases.second, currentBases.third),
-                play?.text.orEmpty(), game.currentBatterOrder, game.runnerOn1Order)
+            val atBat = atBatNow
             val entered = (loaded && !(was1 && was2 && was3)) || (nowChance && !(was2 || was3))
             val changedBatter = nowChance && atBat.isNotBlank() && lastChanceBatter.isNotBlank() &&
                 atBat != lastChanceBatter && store.chanceAtBatChange()
@@ -409,6 +437,11 @@ class EventDetector(private val store: SnapshotStore) {
      * 15분 워커가 매번 새 detector를 만들어도 한 번만 알리도록 단계를 DataStore에 남긴다.
      * 발표 여부만 확인된 단계(flag)에서 알린 뒤 타순이 채워지면(full) 한 번 더 알린다.
      */
+    /** 경량 공시 응답은 경기 이벤트 커서를 바꾸지 않는다. DH 다음 경기 공시도 독립 처리한다. */
+    suspend fun processLineup(context: Context, game: LotteGameInfo?) = eventMutex.withLock {
+        if (game != null) maybeNotifyLineup(context, game)
+    }
+
     private suspend fun maybeNotifyLineup(context: Context, game: LotteGameInfo) {
         if (game.status == GameStatus.ENDED || game.status == GameStatus.CANCELED) return
         val today = kboToday().toString()
@@ -423,10 +456,17 @@ class EventDetector(private val store: SnapshotStore) {
 
         val fullKey = "${game.gameId}:$LINEUP_STAGE_FULL"
         val key = if (hasOrder) fullKey else "${game.gameId}:$LINEUP_STAGE_FLAG"
-        if (lineupNotifiedState == key || lineupNotifiedState == fullKey) return
+        val fingerprint = game.gameId + ":" + order.sortedBy { it.batOrder }.joinToString("|") {
+            "${it.batOrder}:${it.playerCode}:${it.name}:${it.position}"
+        }
         val stored = store.notifiedLineupState()
-        if (stored == key || stored == fullKey) {
+        val previousFingerprint = store.notifiedLineupFingerprint()
+        val already = stored == key || stored == fullKey
+        val changed = already && hasOrder && game.status == GameStatus.BEFORE &&
+            previousFingerprint.isNotBlank() && previousFingerprint != fingerprint
+        if (already && !changed) {
             lineupNotifiedState = stored
+            if (hasOrder && previousFingerprint.isBlank()) store.setNotifiedLineupFingerprint(fingerprint)
             return
         }
 
@@ -447,8 +487,9 @@ class EventDetector(private val store: SnapshotStore) {
             }
             maybeNotify(
                 context, NotificationType.LINEUP, ID_LINEUP_FULL,
-                "선발 라인업 등록", "$matchup\n$pitchers\n$lines",
-                gameId = game.gameId, detailTab = "lineup",
+                if (changed) "선발 라인업 변경" else "선발 라인업 등록", "$matchup\n$pitchers\n$lines",
+                gameId = game.gameId, detailTab = "lineup", silentUpdate = changed,
+                eventKey = "${game.gameId}:lineup:full",
             )
         } else {
             maybeNotify(
@@ -459,7 +500,8 @@ class EventDetector(private val store: SnapshotStore) {
         }
         lineupNotifiedState = key
         store.setNotifiedLineupState(key)
-        maybeNotifyRosterNone(context)
+        if (hasOrder) store.setNotifiedLineupFingerprint(fingerprint)
+        // '변화 없음'은 다음 정상 등말소 조회에서만 확정한다.
     }
 
     /**
@@ -538,7 +580,11 @@ class EventDetector(private val store: SnapshotStore) {
      * 등말소 공시 알림. 새 공시만 골라 알리고, 이미 알린 키는 DataStore에 남겨 중복을 막는다.
      * 여러 명이 한꺼번에 공시되면 알림이 쏟아지지 않게 한 건으로 묶는다.
      */
-    suspend fun processRosterMoves(context: Context, moves: List<RosterMove>) {
+    suspend fun processRosterMoves(context: Context, moves: List<RosterMove>) = eventMutex.withLock {
+        processRosterMovesLocked(context, moves)
+    }
+
+    private suspend fun processRosterMovesLocked(context: Context, moves: List<RosterMove>) {
         val today = kboToday().toString()
         if (moves.isEmpty()) {
             // 당일 경기가 없어 라인업이 안 뜨면, 14시 이후 첫 빈 폴링에서 1회
@@ -557,10 +603,11 @@ class EventDetector(private val store: SnapshotStore) {
         val favorites = store.favoritePlayers()
         val byCode = favorites.filter { it.code.isNotBlank() }.associateBy { it.code }
         val byName = favorites.filter { it.name.isNotBlank() }.associateBy { it.name }
+        val favoriteAlertsEnabled = store.isNotificationEnabled(NotificationType.FAVORITE_ROSTER)
         val others = mutableListOf<RosterMove>()
         for (m in fresh) {
             val fav = m.playerCode.takeIf { it.isNotBlank() }?.let { byCode[it] } ?: byName[m.playerName]
-            if (fav == null) {
+            if (fav == null || !favoriteAlertsEnabled) {
                 others.add(m)
                 continue
             }
@@ -611,7 +658,11 @@ class EventDetector(private val store: SnapshotStore) {
         return if (kept.isEmpty()) keys else kept
     }
 
+    companion object { private val eventMutex = Mutex() }
+
     private fun resetInMemory() {
+        focusScores = ScoreLedger()
+        opponentScores = ScoreLedger()
         lastSeqno = -1
         lastPitcherCode = ""
         lastLotteScore = -1
@@ -631,10 +682,12 @@ class EventDetector(private val store: SnapshotStore) {
     }
 
     private suspend fun seed(game: LotteGameInfo) {
-        val cursor = store.liveEventCursor()
-        val parts = cursor.split('|')
+        val cursor = LiveEventCursor.decode(store.liveEventCursor())
+        val parts = cursor.parts
         // gameId|seq|ls|os|bases|pitcher|favBatter|status|chanceBatter|seenPitchersComma
         val sameGame = parts.size >= 8 && parts[0] == game.gameId
+        focusScores = if (sameGame) cursor.focusScores else ScoreLedger(game.lotteScore)
+        opponentScores = if (sameGame) cursor.opponentScores else ScoreLedger(game.opponentScore)
         if (sameGame) {
             lastSeqno = parts[1].toIntOrNull() ?: (game.recentTexts.maxOfOrNull { it.seqno } ?: -1)
             lastLotteScore = parts[2].toIntOrNull() ?: game.lotteScore
@@ -692,14 +745,14 @@ class EventDetector(private val store: SnapshotStore) {
             lastChanceBases.encode(),
             lastInning.toString(),
             lastTop?.toString().orEmpty(),
-        ).joinToString("|")
-        store.setLiveEventCursor(raw)
+        )
+        store.setLiveEventCursor(LiveEventCursor(raw, focusScores, opponentScores).encode())
     }
 
     private fun namedBasesFromGame(game: LotteGameInfo): NamedBases = NamedBases(
-        first = runnerName(game, game.onBase1, game.runnerOn1Order, game.runnerOn1Code),
-        second = runnerName(game, game.onBase2, game.runnerOn2Order, game.runnerOn2Code),
-        third = runnerName(game, game.onBase3, game.runnerOn3Order, game.runnerOn3Code),
+        first = game.runnerOn1Name.takeIf { game.onBase1 && it.isNotBlank() } ?: runnerName(game, game.onBase1, game.runnerOn1Order, game.runnerOn1Code),
+        second = game.runnerOn2Name.takeIf { game.onBase2 && it.isNotBlank() } ?: runnerName(game, game.onBase2, game.runnerOn2Order, game.runnerOn2Code),
+        third = game.runnerOn3Name.takeIf { game.onBase3 && it.isNotBlank() } ?: runnerName(game, game.onBase3, game.runnerOn3Order, game.runnerOn3Code),
     )
 
     /** 새로운 API 선수코드와 명시된 중계 진루로 매 폴링 주자를 갱신한다. */
@@ -800,6 +853,8 @@ class EventDetector(private val store: SnapshotStore) {
         text: String,
         gameId: String = "",
         detailTab: String? = null,
+        silentUpdate: Boolean = false,
+        eventKey: String = "",
     ) {
         val allow = shouldEmitAlert(
             typeEnabled = store.isNotificationEnabled(type),
@@ -812,13 +867,14 @@ class EventDetector(private val store: SnapshotStore) {
             type = type,
         )
         if (allow) {
-            NotificationHelper.notifyEvent(context, type, title, text, id, gameId, detailTab)
+            NotificationHelper.notifyEvent(context, type, title, text, id, gameId, detailTab, silentUpdate)
             store.appendAlertHistory(
                 AlertHistoryItem(
                     millis = System.currentTimeMillis(),
                     type = type.name,
                     title = title,
                     text = text,
+                    eventKey = eventKey,
                 ),
             )
         }

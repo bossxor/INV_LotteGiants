@@ -6,8 +6,8 @@ import java.util.concurrent.atomic.AtomicLong
  * 라인업·등말소 폴링이 알람·감시 서비스·워커에서 겹치지 않게 최소 간격을 강제한다.
  */
 object AlertPollGate {
-    const val LINEUP_MIN_GAP_MS = 15_000L
-    const val ROSTER_MIN_GAP_MS = 25_000L
+    const val LINEUP_MIN_GAP_MS = 10_000L
+    const val ROSTER_MIN_GAP_MS = 10_000L
 
     private val lastLineupAt = AtomicLong(0L)
     private val lastRosterAt = AtomicLong(0L)
@@ -24,10 +24,10 @@ object AlertPollGate {
     }
 
     private fun tryBegin(stamp: AtomicLong, minGapMs: Long): Boolean {
-        val now = System.currentTimeMillis()
+        val now = System.nanoTime() / 1_000_000L
         while (true) {
             val prev = stamp.get()
-            if (now - prev < minGapMs) return false
+            if (prev != 0L && now - prev < minGapMs) return false
             if (stamp.compareAndSet(prev, now)) return true
         }
     }

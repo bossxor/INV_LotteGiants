@@ -29,4 +29,5 @@ data class AlertHistoryItem(
     val type: String,
     val title: String,
     val text: String,
+    val eventKey: String = "",
 )

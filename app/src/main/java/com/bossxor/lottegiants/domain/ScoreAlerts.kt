@@ -30,7 +30,7 @@ fun leadChangeTitle(
 
 private val SCORING_KEYS = listOf("홈런", "득점", "타점", "적시", "희생플라이", "밀어내기", "홈인")
 private val ADVANCE_KEYS = listOf(
-    "홈런", "3루타", "2루타", "내야안타", "적시", "안타",
+    "홈런", "3루타", "2루타", "1루타", "내야안타", "적시", "안타",
     "볼넷", "사구", "몸에 맞는", "고의4구",
     "도루", "폭투", "패스트볼", "보크", "실책", "야수선택",
     "희생", "진루", "밀어내기", "홈인",
@@ -38,12 +38,12 @@ private val ADVANCE_KEYS = listOf(
 private val PITCH_KEYS = listOf("스트라이크", "볼", "파울")
 private val PLAY_HOW = listOf(
     "만루홈런", "그랜드슬램", "3점홈런", "2점홈런", "솔로홈런", "홈런",
-    "3루타", "2루타", "내야안타", "적시타", "안타",
+    "3루타", "2루타", "1루타", "내야안타", "적시타", "안타",
     "희생플라이", "희생번트", "밀어내기",
-    "고의4구", "볼넷", "사구", "몸에 맞는 공",
+    "고의4구", "볼넷", "사구", "몸에 맞는 공", "몸에 맞는 볼",
     "도루", "폭투", "패스트볼", "보크", "실책", "야수선택",
 )
-private val PLAY_DIR = listOf("좌월", "우월", "중월", "좌전", "우전", "중전", "좌익", "우익", "중견")
+private val PLAY_DIR = listOf("좌중간", "우중간", "좌월", "우월", "중월", "좌전", "우전", "중전", "좌익", "우익", "중견")
 
 fun pickScoringRelay(texts: List<RelayText>): RelayText? {
     // 최신 원인을 먼저 고른다. 과거 적시타보다 이번 폭투·실책이 우선이다.
@@ -72,7 +72,7 @@ private fun isBattingResultHow(how: String?): Boolean {
     val h = how?.trim().orEmpty()
     if (h.isBlank()) return false
     if (h in setOf("도루", "폭투", "패스트볼")) return false
-    return h.contains("안타") || h.contains("홈런") || h.contains("희생") ||
+    return h.contains("안타") || h.contains("루타") || h.contains("홈런") || h.contains("희생") ||
         h.contains("볼넷") || h.contains("사구") || h.contains("몸에") ||
         h.contains("밀어") || h.contains("적시") || h.contains("실책") || h.contains("야수")
 }
@@ -217,7 +217,7 @@ fun describePlayHow(text: String): String? {
     if (text.isBlank()) return null
     val kind = PLAY_HOW.firstOrNull { text.contains(it) } ?: return null
     val dir = PLAY_DIR.firstOrNull { text.contains(it) }
-    val hit = kind == "안타" || kind == "적시타" || kind == "2루타" || kind == "3루타" || kind == "홈런" ||
+    val hit = kind == "안타" || kind == "적시타" || kind == "1루타" || kind == "2루타" || kind == "3루타" || kind == "홈런" ||
         kind.endsWith("홈런")
     return if (dir != null && hit) "$dir $kind" else kind
 }
@@ -371,8 +371,9 @@ fun atBatForChance(
         if (orderOk) return nxt
     }
     if (curInPlateText && nxt.isNotBlank()) return preferNext()
+    if (curOnBase) return "" // 대주자를 다음 타자로 임의 승격하지 않는다.
     if (cur.isNotBlank()) return cur
-    return nxt
+    return ""
 }
 
 fun scoringBody(playText: String, who: String?, how: String?, inningLabel: String): String {

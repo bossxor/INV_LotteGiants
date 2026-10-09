@@ -251,7 +251,7 @@ internal fun mergeRelayUnsafe(base: LotteGameInfo, relay: TextRelayData): LotteG
                 // 네이버 일부 경기는 crossPlateY가 고정값(0.7083)으로 깨져 있음 → 궤적 추정값 사용
                 val yBroken = yRaw == null || yRaw < 1.0 || yRaw > 5.0
                 val y = when {
-                    !yBroken && yRaw != null -> yRaw.toFloat()
+                    !yBroken -> yRaw!!.toFloat()
                     yFromPhysics != null -> yFromPhysics
                     else -> return@mapIndexed null
                 }
@@ -291,10 +291,8 @@ internal fun mergeRelayUnsafe(base: LotteGameInfo, relay: TextRelayData): LotteG
     val latestTextState = relay.textRelays.filter { it.inn == relay.inn && it.homeOrAway == relay.homeOrAway }
         .flatMap { it.textOptions }.filter { it.currentGameState != null }.maxByOrNull { it.seqno }?.currentGameState
     val relayState = relay.currentGameState
-    val state = latestTextState?.takeIf {
-        (it.homeScore.toIntOrNull() ?: -1) >= (relayState?.homeScore?.toIntOrNull() ?: -1) &&
-            (it.awayScore.toIntOrNull() ?: -1) >= (relayState?.awayScore?.toIntOrNull() ?: -1)
-    } ?: relayState
+    // textOptions는 과거 사건의 상태다. 현재 타석/카운트/점수 정정을 덮지 않는다.
+    val state = relayState ?: latestTextState
     val isTop = relay.homeOrAway != "1"
     val isLotteBatting = if (isHome) !isTop else isTop
 
@@ -305,7 +303,7 @@ internal fun mergeRelayUnsafe(base: LotteGameInfo, relay: TextRelayData): LotteG
     }
     val battingOrder = battingLineupDto?.currentByOrder().orEmpty()
     val batterCode = state?.batter.orEmpty()
-    val currentBatter = battingOrder.values.firstOrNull { it.pcode == batterCode }
+    val currentBatter = battingLineupDto?.batter.orEmpty().firstOrNull { it.pcode == batterCode }
     val nextOrder = currentBatter?.let { com.bossxor.lottegiants.domain.nextBatOrder(it.batOrder) }
     val nextBatter = nextOrder?.let { battingOrder[it] }
 
@@ -345,6 +343,24 @@ internal fun mergeRelayUnsafe(base: LotteGameInfo, relay: TextRelayData): LotteG
         .filter { it.type != 99 && it.text.isNotBlank() }
         .sortedByDescending { it.seqno }
 
+    fun runnerName(raw: String?): String {
+        if (!runnerOccupied(raw)) return ""
+        val order = raw?.toIntOrNull()?.takeIf { it in 1..9 }
+        if (order != null) return battingOrder[order]?.name.orEmpty()
+        return names[runnerPlayerCodeFromRelay(raw)].orEmpty()
+    }
+    val apiBases = com.bossxor.lottegiants.domain.NamedBases(runnerName(state?.base1).ifBlank { null },
+        runnerName(state?.base2).ifBlank { null }, runnerName(state?.base3).ifBlank { null })
+    // 타순이 유지되는 대주자 교체도 이름을 명시한 문구로 반영한다.
+    val currentHalfTexts = texts.filter { it.inning == relay.inn && (it.isTopInning == null || it.isTopInning == isTop) }
+    val namedBases = com.bossxor.lottegiants.domain.advanceNamedRunners(apiBases,
+        currentHalfTexts.filter {
+            val sub = com.bossxor.lottegiants.domain.parseSubstitution(it.text)
+            val raw = when (sub?.base) { 1 -> state?.base1; 2 -> state?.base2; 3 -> state?.base3; else -> null }
+            val order = battingLineupDto?.batter.orEmpty().firstOrNull { it.name == sub?.outgoing }?.batOrder
+            sub?.role == com.bossxor.lottegiants.domain.SubstitutionRole.RUNNER &&
+                ((order != null && order > 0 && raw?.toIntOrNull() == order) || runnerName(raw) == sub.outgoing || runnerName(raw) == sub.incoming)
+        }, names.values.toList())
     val pitcherCode = state?.pitcher.orEmpty()
     // 종료·취소 후에도 중계 JSON에 마지막 주자/카운트가 남아 다이아몬드가 켜진 채로 보인다.
     val liveSituation = base.status == GameStatus.LIVE
@@ -402,6 +418,10 @@ internal fun mergeRelayUnsafe(base: LotteGameInfo, relay: TextRelayData): LotteG
         currentBatterName = names[batterCode]
             ?: currentBatter?.name
             ?: base.currentBatterName,
+        runnerOn1Name = if (liveSituation) namedBases.first.orEmpty() else "",
+        runnerOn2Name = if (liveSituation) namedBases.second.orEmpty() else "",
+        runnerOn3Name = if (liveSituation) namedBases.third.orEmpty() else "",
+        currentBatterCode = batterCode,
         currentBatterOrder = currentBatter?.batOrder ?: 0,
         nextBatterName = nextBatter?.name.orEmpty(),
         isLotteBatting = if (relay.inn > 0) isLotteBatting else base.isLotteBatting,

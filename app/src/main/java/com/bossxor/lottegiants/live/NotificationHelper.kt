@@ -90,7 +90,7 @@ object NotificationHelper {
     @Volatile private var lastLiveCustom: Boolean? = null
 
     /** 알림 레이아웃·아이콘 변경 시 올려서 기존 알림을 한 번 갱신한다. */
-    private const val LIVE_NOTIFY_STYLE_REV = 58
+    private const val LIVE_NOTIFY_STYLE_REV = 59
     private const val COLOR_LOTTE = 0xFFC8102E.toInt()
     private const val COLOR_CHIP = 0xFF2F6FED.toInt()
     private const val COLOR_LABEL = 0xFF8A8F98.toInt()
@@ -272,6 +272,10 @@ object NotificationHelper {
         }
         snap.lastLotteGame?.takeIf { it.gameDate == today }?.let { return it }
         return null
+    }
+
+    fun cancelEvent(context: Context, id: Int) {
+        context.getSystemService(NotificationManager::class.java).cancel(id)
     }
 
     fun cancelLive(context: Context) {
@@ -665,6 +669,7 @@ object NotificationHelper {
         id: Int,
         gameId: String = "",
         detailTab: String? = null,
+        silentUpdate: Boolean = false,
     ) {
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(
                 context, Manifest.permission.POST_NOTIFICATIONS,
@@ -714,6 +719,8 @@ object NotificationHelper {
             .setContentIntent(content)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setOnlyAlertOnce(silentUpdate)
+            .setSilent(silentUpdate)
             .build()
         NotificationManagerCompat.from(context).notify(id, n)
     }

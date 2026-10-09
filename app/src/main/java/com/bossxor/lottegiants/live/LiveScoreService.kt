@@ -130,7 +130,7 @@ class LiveScoreService : Service() {
                     }
                     val mode = repo.store.liveDisplayMode()
                     val lead = repo.store.liveLeadMinutes()
-                    val snap = runCatching { repo.refreshSnapshot(force = false) }.getOrNull()
+                    val snap = runCatching { repo.refreshLiveSnapshot() }.getOrNull()
                         ?: repo.store.loadSnapshot()
                     if (snap == null) {
                         delay(8_000L)
