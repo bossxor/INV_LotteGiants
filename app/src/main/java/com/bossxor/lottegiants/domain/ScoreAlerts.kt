@@ -184,6 +184,38 @@ fun inferBasesAfterAdvance(
     }
 }
 
+/**
+ * 중계문에 `1루주자 나승엽` / `2루주자 레이예스` / `3루주자 윤동희`가 있으면 뽑는다.
+ * 최신 문구부터 보며, 루마다 처음 나온 이름만 채운다.
+ */
+fun runnersFromRelayTexts(texts: List<RelayText>, roster: List<String> = emptyList()): NamedBases? {
+    if (texts.isEmpty()) return null
+    var first: String? = null
+    var second: String? = null
+    var third: String? = null
+    val re1 = Regex("""1루\s*주자\s+([가-힣A-Za-z·\.]+)""")
+    val re2 = Regex("""2루\s*주자\s+([가-힣A-Za-z·\.]+)""")
+    val re3 = Regex("""3루\s*주자\s+([가-힣A-Za-z·\.]+)""")
+    fun clean(raw: String): String? {
+        val n = raw.trim().removeSuffix("이").removeSuffix("가").trim()
+        if (n.isBlank()) return null
+        if (roster.isEmpty()) return n
+        return roster.firstOrNull { it == n } ?: roster.firstOrNull { n.startsWith(it) || it.startsWith(n) } ?: n
+    }
+    for (t in texts.sortedByDescending { it.seqno }) {
+        val s = t.text
+        if (first == null) re1.find(s)?.groupValues?.get(1)?.let { clean(it) }?.let { first = it }
+        if (second == null) re2.find(s)?.groupValues?.get(1)?.let { clean(it) }?.let { second = it }
+        if (third == null) re3.find(s)?.groupValues?.get(1)?.let { clean(it) }?.let { third = it }
+        if (first != null && second != null && third != null) break
+    }
+    if (first == null && second == null && third == null) return null
+    return NamedBases(first, second, third)
+}
+
+fun NamedBases.namedCount(): Int =
+    listOf(first, second, third).count { !it.isNullOrBlank() }
+
 fun describePlayHow(text: String): String? {
     if (text.isBlank()) return null
     val kind = PLAY_HOW.firstOrNull { text.contains(it) } ?: return null

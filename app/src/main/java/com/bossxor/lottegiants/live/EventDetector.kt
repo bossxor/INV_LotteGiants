@@ -25,10 +25,12 @@ import com.bossxor.lottegiants.domain.inferBasesAfterAdvance
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.leadChangeTitle
+import com.bossxor.lottegiants.domain.namedCount
 import com.bossxor.lottegiants.domain.parseBasesKey
 import com.bossxor.lottegiants.domain.pickAdvanceRelay
 import com.bossxor.lottegiants.domain.pickPlayerName
 import com.bossxor.lottegiants.domain.pickScoringRelay
+import com.bossxor.lottegiants.domain.runnersFromRelayTexts
 import com.bossxor.lottegiants.domain.runnersLabel
 import com.bossxor.lottegiants.domain.scoringBody
 import com.bossxor.lottegiants.domain.scoringRelayWindow
@@ -367,7 +369,8 @@ class EventDetector(private val store: SnapshotStore) {
                 batterName != lastChanceBatter &&
                 store.chanceAtBatChange()
             ) {
-                val bases = resolveChanceBases(apiBases, newTexts, game, lotteRunsDelta)
+                // 타석만 바뀜 — 주자는 그대로. API/진루 추정을 다시 돌리면 낡은 이름으로 덮인다.
+                val bases = if (lastChanceBases.namedCount() > 0) lastChanceBases else apiBases
                 val alert = formatScoringChanceAlert(
                     loaded = nowLoaded,
                     runners = bases.label(),
@@ -764,19 +767,26 @@ class EventDetector(private val store: SnapshotStore) {
         third = runnerName(game, game.onBase3, game.runnerOn3Order, game.runnerOn3Code),
     )
 
-    /** API 주자가 직전 알림과 같으면(한 박자 늦음) 중계 진루로 추정한다. */
+    /**
+     * 주자 이름 우선순위:
+     * 1) API가 직전 기억과 같으면(한 박자 느림) 중계 진루 추정
+     * 2) 중계문 `N루주자 이름` (최근 문구)
+     * 3) 직전 기억(이미 추정·확정한 이름) — API가 더 빈약할 때
+     * 4) API
+     */
     private fun resolveChanceBases(
         api: NamedBases,
         newTexts: List<com.bossxor.lottegiants.domain.RelayText>,
         game: LotteGameInfo,
         runsJustScored: Int,
     ): NamedBases {
+        val roster = lotteRosterNames(game)
         val play = pickAdvanceRelay(newTexts) ?: pickScoringRelay(newTexts)
         val how = describePlayHow(play?.text.orEmpty())
         val maker = pickPlayerName(
             play?.text.orEmpty(),
             play?.batterTitle.orEmpty(),
-            lotteRosterNames(game),
+            roster,
         ) ?: lastChanceBatter
         val inferred = inferBasesAfterAdvance(
             before = lastChanceBases,
@@ -785,6 +795,26 @@ class EventDetector(private val store: SnapshotStore) {
             runsScored = runsJustScored,
         )
         if (inferred != null && api.sameOccupants(lastChanceBases)) return inferred
+
+        val fromRelay = runnersFromRelayTexts(
+            texts = scoringRelayWindow(game.recentTexts, newTexts, lastSeqno),
+            roster = roster,
+        )
+        if (fromRelay != null && fromRelay.namedCount() >= api.namedCount()) {
+            // 점유 루와 맞게 걸러 냄
+            return NamedBases(
+                first = if (game.onBase1) fromRelay.first ?: api.first else null,
+                second = if (game.onBase2) fromRelay.second ?: api.second else null,
+                third = if (game.onBase3) fromRelay.third ?: api.third else null,
+            )
+        }
+
+        if (lastChanceBases.namedCount() > api.namedCount() &&
+            !api.sameOccupants(lastChanceBases)
+        ) {
+            // 추정해 둔 이름이 있는데 API가 더 빈약하면 기억 유지
+            return lastChanceBases
+        }
         return api
     }
 

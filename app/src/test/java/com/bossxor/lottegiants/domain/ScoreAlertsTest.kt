@@ -267,6 +267,19 @@ class ScoreAlertsTest {
     }
 
     @Test
+    fun runnersFromRelayTextsReadsBaseLabels() {
+        val texts = listOf(
+            RelayText(10, "3루주자 윤동희 : 홈인", 1, 5),
+            RelayText(9, "2루주자 레이예스 도루 시도", 0, 5),
+            RelayText(8, "1루주자 나승엽", 0, 5),
+        )
+        assertEquals(
+            NamedBases(first = "나승엽", second = "레이예스", third = "윤동희"),
+            runnersFromRelayTexts(texts, listOf("윤동희", "레이예스", "나승엽", "고승민")),
+        )
+    }
+
+    @Test
     fun notificationOpensRelayTab() {
         assertEquals(3, detailTabIndex("relay"))
         assertEquals(3, detailTabIndex("중계"))
