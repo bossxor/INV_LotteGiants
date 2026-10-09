@@ -61,9 +61,7 @@ class SnapshotStore(private val context: Context) {
 
     internal suspend fun alertPolicy(): AlertPolicySnapshot {
         val prefs = context.dataStore.data.first()
-        val favorites = prefs[KEY_FAVORITE_PLAYERS]?.let {
-            runCatching { json.decodeFromString<List<FavoritePlayer>>(it) }.getOrNull()
-        }.orEmpty()
+        val favorites = favoritePlayersFromPrefs(prefs)
         return AlertPolicySnapshot(enabled = NotificationType.entries.filterTo(mutableSetOf()) {
             prefs[booleanPreferencesKey("notif_${it.name}")] ?: true
         }, liveOnly = prefs[KEY_ALERTS_LIVE_ONLY] ?: false, vibrate = prefs[KEY_ALERT_VIBRATE] ?: true,
