@@ -232,6 +232,41 @@ class ScoreAlertsTest {
     }
 
     @Test
+    fun pickScoringPrefersSacrificeFlyOverBareHomeIn() {
+        val texts = listOf(
+            RelayText(1, "레이예스 : 중견수 희생플라이", 1, 2, batterTitle = "5번타자 레이예스"),
+            RelayText(2, "3루주자 조세진 : 홈인", 1, 2, batterTitle = "6번타자 나승엽"),
+        )
+        assertEquals("레이예스 : 중견수 희생플라이", pickScoringRelay(texts)?.text)
+    }
+
+    @Test
+    fun pickPlayerIgnoresBatterTitleWhenNotInText() {
+        assertEquals(
+            "레이예스",
+            pickPlayerName(
+                "레이예스 : 중견수 희생플라이",
+                "6번타자 나승엽",
+                listOf("레이예스", "나승엽", "조세진"),
+            ),
+        )
+    }
+
+    @Test
+    fun inferBasesAfterLoadedSingle() {
+        val before = NamedBases(first = "윤동희", second = "조세진", third = "전민재")
+        val after = inferBasesAfterAdvance(before, "황성빈", "좌전 안타", runsScored = 1)
+        assertEquals(NamedBases(first = "황성빈", second = "윤동희", third = "조세진"), after)
+    }
+
+    @Test
+    fun inferBasesAfterSacFly() {
+        val before = NamedBases(first = "황성빈", second = "윤동희", third = "조세진")
+        val after = inferBasesAfterAdvance(before, "레이예스", "희생플라이", runsScored = 1)
+        assertEquals(NamedBases(first = "황성빈", second = "윤동희", third = null), after)
+    }
+
+    @Test
     fun notificationOpensRelayTab() {
         assertEquals(3, detailTabIndex("relay"))
         assertEquals(3, detailTabIndex("중계"))

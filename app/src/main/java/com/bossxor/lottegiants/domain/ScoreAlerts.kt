@@ -47,9 +47,34 @@ private val PLAY_DIR = listOf("좌월", "우월", "중월", "좌전", "우전", 
 
 fun pickScoringRelay(texts: List<RelayText>): RelayText? {
     val scored = texts.filter { t -> SCORING_KEYS.any { k -> t.text.contains(k) } }
+    // "홈인"만 있는 문장보다 희생플라이·안타 등 타격 결과 문구를 우선 (타석이 이미 넘어간 경우)
+    val withBatHow = scored.filter { isBattingResultHow(describePlayHow(it.text)) }
+    if (withBatHow.isNotEmpty()) return withBatHow.maxByOrNull { it.seqno }
     if (scored.isNotEmpty()) return scored.maxByOrNull { it.seqno }
     return texts.filterNot { looksLikePitch(it.text) }.maxByOrNull { it.seqno }
         ?: texts.maxByOrNull { it.seqno }
+}
+
+/** 점수 변동 직전 몇 줄까지 포함 — 희생플라이 문구가 점수 갱신보다 한 틱 먼저 오는 경우 */
+fun scoringRelayWindow(
+    all: List<RelayText>,
+    newTexts: List<RelayText>,
+    lastSeqno: Int,
+): List<RelayText> {
+    if (newTexts.isEmpty()) {
+        return all.filter { it.seqno > lastSeqno - 15 }.sortedBy { it.seqno }
+    }
+    val lo = (newTexts.minOf { it.seqno } - 8).coerceAtLeast(0)
+    return all.filter { it.seqno >= lo }.sortedBy { it.seqno }.ifEmpty { newTexts }
+}
+
+private fun isBattingResultHow(how: String?): Boolean {
+    val h = how?.trim().orEmpty()
+    if (h.isBlank()) return false
+    if (h in setOf("도루", "폭투", "패스트볼")) return false
+    return h.contains("안타") || h.contains("홈런") || h.contains("희생") ||
+        h.contains("볼넷") || h.contains("사구") || h.contains("몸에") ||
+        h.contains("밀어") || h.contains("적시") || h.contains("실책") || h.contains("야수")
 }
 
 fun pickAdvanceRelay(texts: List<RelayText>): RelayText? {
@@ -96,8 +121,67 @@ fun pickPlayerName(text: String, batterTitle: String, roster: List<String>): Str
         inText.firstOrNull()?.let { return it }
     }
     val fromTitle = batterNameFromTitle(batterTitle)?.takeIf { it in roster }
-    if (fromTitle != null) return fromTitle
-    return inText.firstOrNull()
+    // 타석 제목이 중계문에 없으면 쓰지 않음 — 득점 감지 때 이미 다음 타자 제목인 경우(레이예스 SF → 나승엽) 방지
+    if (fromTitle != null && (text.isBlank() || text.contains(fromTitle))) {
+        return fromTitle
+    }
+    return inText.firstOrNull() ?: fromTitle
+}
+
+/** 1·2·3루 주자 이름. null/빈 칸 = 비움 */
+data class NamedBases(val first: String?, val second: String?, val third: String?) {
+    fun label(): String = runnersLabel(first, second, third)
+
+    fun sameOccupants(other: NamedBases): Boolean =
+        first.orEmpty() == other.first.orEmpty() &&
+            second.orEmpty() == other.second.orEmpty() &&
+            third.orEmpty() == other.third.orEmpty()
+
+    fun encode(): String = listOf(first.orEmpty(), second.orEmpty(), third.orEmpty()).joinToString(";")
+
+    companion object {
+        fun decode(raw: String): NamedBases {
+            val p = raw.split(';')
+            fun at(i: Int) = p.getOrNull(i)?.trim()?.takeIf { it.isNotBlank() }
+            return NamedBases(at(0), at(1), at(2))
+        }
+    }
+}
+
+/**
+ * API 주자 이름이 한 박자 늦을 때, 직전 주자+타석 결과로 추정.
+ * 한 베이스 진루(안타·볼넷 등) 또는 희생플라이만. 애매하면 null.
+ */
+fun inferBasesAfterAdvance(
+    before: NamedBases,
+    batter: String,
+    how: String?,
+    runsScored: Int = 0,
+): NamedBases? {
+    val h = how?.trim().orEmpty()
+    val b = batter.trim()
+    if (h.contains("희생플라이")) {
+        // 3루 득점, 타자 아웃, 나머지 유지
+        if (before.third.isNullOrBlank()) return null
+        return NamedBases(before.first, before.second, null)
+    }
+    val oneBase = h.contains("안타") || h.contains("적시") || h.contains("내야안타") ||
+        h.contains("볼넷") || h.contains("사구") || h.contains("몸에") ||
+        h.contains("고의") || h.contains("밀어내기")
+    if (!oneBase || h.contains("2루타") || h.contains("3루타") || h.contains("홈런")) return null
+    if (b.isBlank()) return null
+    // 강제 진루 1루씩: 3루→홈, 2→3, 1→2, 타자→1
+    // runsScored≥2 이면 2루 주자도 홈인했다고 보고 3루를 비움
+    val after = NamedBases(
+        first = b,
+        second = before.first,
+        third = before.second,
+    )
+    return if (runsScored >= 2) {
+        NamedBases(first = after.first, second = after.second, third = null)
+    } else {
+        after
+    }
 }
 
 fun describePlayHow(text: String): String? {

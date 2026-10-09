@@ -9,6 +9,7 @@ import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.PitcherLine
 import com.bossxor.lottegiants.domain.RosterMove
+import com.bossxor.lottegiants.domain.NamedBases
 import com.bossxor.lottegiants.domain.atBatForChance
 import com.bossxor.lottegiants.domain.basesKey
 import com.bossxor.lottegiants.domain.belongsToKboToday
@@ -20,6 +21,7 @@ import com.bossxor.lottegiants.domain.formatConcedeTitle
 import com.bossxor.lottegiants.domain.formatHomerunTitle
 import com.bossxor.lottegiants.domain.formatLotteScoreTitle
 import com.bossxor.lottegiants.domain.formatScoringChanceAlert
+import com.bossxor.lottegiants.domain.inferBasesAfterAdvance
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.domain.kboToday
 import com.bossxor.lottegiants.domain.leadChangeTitle
@@ -29,6 +31,7 @@ import com.bossxor.lottegiants.domain.pickPlayerName
 import com.bossxor.lottegiants.domain.pickScoringRelay
 import com.bossxor.lottegiants.domain.runnersLabel
 import com.bossxor.lottegiants.domain.scoringBody
+import com.bossxor.lottegiants.domain.scoringRelayWindow
 import com.bossxor.lottegiants.domain.shouldEmitAlert
 import com.bossxor.lottegiants.domain.TeamStanding
 import com.bossxor.lottegiants.domain.parseRacePulse
@@ -74,6 +77,8 @@ class EventDetector(private val store: SnapshotStore) {
     private var initialized = false
     private var emittingForLive = false
     private var lastChanceBatter: String = ""
+    /** 직전 득점권 알림의 1·2·3루 이름 — API 주자가 안 바뀌었을 때 진루 추정용 */
+    private var lastChanceBases: NamedBases = NamedBases(null, null, null)
     private var seenPitcherCodes: MutableSet<String> = mutableSetOf()
 
     suspend fun process(context: Context, game: LotteGameInfo?) {
@@ -147,12 +152,14 @@ class EventDetector(private val store: SnapshotStore) {
         val newTexts = game.recentTexts.filter { it.seqno > lastSeqno }.sortedBy { it.seqno }
         val lotteScored = lastLotteScore >= 0 && game.lotteScore > lastLotteScore
         val oppScored = lastOppScore >= 0 && game.opponentScore > lastOppScore
+        val lotteRunsDelta = if (lotteScored) (game.lotteScore - lastLotteScore).coerceAtLeast(1) else 0
         if (lotteScored || oppScored) {
-            val play = pickScoringRelay(newTexts)
+            val window = scoringRelayWindow(game.recentTexts, newTexts, lastSeqno)
+            val play = pickScoringRelay(window)
             val text = play?.text.orEmpty()
             val how = describePlayHow(text)
             val seq = play?.seqno ?: newTexts.maxOfOrNull { it.seqno } ?: 0
-            val lotteRuns = (game.lotteScore - lastLotteScore).coerceAtLeast(1)
+            val lotteRuns = lotteRunsDelta.coerceAtLeast(1)
             val oppRuns = (game.opponentScore - lastOppScore).coerceAtLeast(1)
             val score = "${game.lotteScore}:${game.opponentScore}"
             val lotteWho = pickPlayerName(text, play?.batterTitle.orEmpty(), lotteRosterNames(game))
@@ -305,6 +312,7 @@ class EventDetector(private val store: SnapshotStore) {
             val nowLoaded = game.onBase1 && game.onBase2 && game.onBase3
             val scoringChance = nowChance || nowLoaded
             val batterName = game.currentBatterName.trim()
+            val apiBases = namedBasesFromGame(game)
             if (key != lastBasesKey) {
                 val (was1, was2, was3) = parseBasesKey(lastBasesKey)
                 val wasChance = was2 || was3
@@ -315,16 +323,9 @@ class EventDetector(private val store: SnapshotStore) {
                     play?.batterTitle.orEmpty(),
                     lotteRosterNames(game),
                 )
-                val runners = runnersLabel(
-                    first = runnerName(game, game.onBase1, game.runnerOn1Order, game.runnerOn1Code),
-                    second = runnerName(game, game.onBase2, game.runnerOn2Order, game.runnerOn2Code),
-                    third = runnerName(game, game.onBase3, game.runnerOn3Order, game.runnerOn3Code),
-                )
-                val runnerNames = listOfNotNull(
-                    runnerName(game, game.onBase1, game.runnerOn1Order, game.runnerOn1Code),
-                    runnerName(game, game.onBase2, game.runnerOn2Order, game.runnerOn2Code),
-                    runnerName(game, game.onBase3, game.runnerOn3Order, game.runnerOn3Code),
-                )
+                val bases = resolveChanceBases(apiBases, newTexts, game, lotteRunsDelta)
+                val runners = bases.label()
+                val runnerNames = listOfNotNull(bases.first, bases.second, bases.third)
                 val atBat = atBatForChance(
                     currentBatter = game.currentBatterName,
                     nextBatter = game.nextBatterName,
@@ -358,6 +359,7 @@ class EventDetector(private val store: SnapshotStore) {
                 }
                 lastBasesKey = key
                 lastChanceBatter = atBat.ifBlank { batterName }
+                lastChanceBases = bases
             } else if (
                 scoringChance &&
                 batterName.isNotBlank() &&
@@ -365,14 +367,10 @@ class EventDetector(private val store: SnapshotStore) {
                 batterName != lastChanceBatter &&
                 store.chanceAtBatChange()
             ) {
-                val runners = runnersLabel(
-                    first = runnerName(game, game.onBase1, game.runnerOn1Order, game.runnerOn1Code),
-                    second = runnerName(game, game.onBase2, game.runnerOn2Order, game.runnerOn2Code),
-                    third = runnerName(game, game.onBase3, game.runnerOn3Order, game.runnerOn3Code),
-                )
+                val bases = resolveChanceBases(apiBases, newTexts, game, lotteRunsDelta)
                 val alert = formatScoringChanceAlert(
                     loaded = nowLoaded,
-                    runners = runners,
+                    runners = bases.label(),
                     batterNow = batterName,
                     inningLabel = game.inningLabel,
                     outs = game.out,
@@ -386,12 +384,20 @@ class EventDetector(private val store: SnapshotStore) {
                     gameId = game.gameId, detailTab = "relay",
                 )
                 lastChanceBatter = batterName
+                lastChanceBases = bases
             } else if (scoringChance && batterName.isNotBlank() && lastChanceBatter.isBlank()) {
                 lastChanceBatter = batterName
+                lastChanceBases = apiBases
+            } else if (scoringChance && !apiBases.sameOccupants(lastChanceBases) &&
+                (apiBases.first != null || apiBases.second != null || apiBases.third != null)
+            ) {
+                // 점유 루는 같은데 주자 이름만 갱신된 경우 기억만 맞춤 (알림 스팸 방지)
+                lastChanceBases = apiBases
             }
         } else {
             lastBasesKey = ""
             lastChanceBatter = ""
+            lastChanceBases = NamedBases(null, null, null)
         }
         persistCursor(game)
     }
@@ -683,6 +689,7 @@ class EventDetector(private val store: SnapshotStore) {
         extraNotifiedFor = ""
         lastFavoriteBatterCode = ""
         lastChanceBatter = ""
+        lastChanceBases = NamedBases(null, null, null)
         seenPitcherCodes = mutableSetOf()
         initialized = false
     }
@@ -706,6 +713,8 @@ class EventDetector(private val store: SnapshotStore) {
                 .map { it.trim() }
                 .filter { it.isNotBlank() }
                 .toMutableSet()
+            lastChanceBases = parts.getOrNull(10)?.let { NamedBases.decode(it) }
+                ?: namedBasesFromGame(game)
             if (seenPitcherCodes.isEmpty() && game.currentPitcherCode.isNotBlank()) {
                 seenPitcherCodes.add(game.currentPitcherCode)
             }
@@ -718,6 +727,7 @@ class EventDetector(private val store: SnapshotStore) {
             lastFavoriteBatterCode = (game.lotteLineup + game.opponentLineup + game.lotteBenchBatters + game.opponentBenchBatters)
                 .firstOrNull { it.name == game.currentBatterName }?.playerCode.orEmpty()
             lastChanceBatter = game.currentBatterName.trim()
+            lastChanceBases = namedBasesFromGame(game)
             // 전체 불펜 풀을 넣으면 재시작 후 즐겨찾기 등판을 놓친다. 현재 투수만.
             seenPitcherCodes = if (game.currentPitcherCode.isNotBlank()) {
                 mutableSetOf(game.currentPitcherCode)
@@ -743,8 +753,39 @@ class EventDetector(private val store: SnapshotStore) {
             (lastStatus ?: game.status).name,
             lastChanceBatter,
             seenPitcherCodes.filter { it.isNotBlank() }.sorted().joinToString(","),
+            lastChanceBases.encode(),
         ).joinToString("|")
         store.setLiveEventCursor(raw)
+    }
+
+    private fun namedBasesFromGame(game: LotteGameInfo): NamedBases = NamedBases(
+        first = runnerName(game, game.onBase1, game.runnerOn1Order, game.runnerOn1Code),
+        second = runnerName(game, game.onBase2, game.runnerOn2Order, game.runnerOn2Code),
+        third = runnerName(game, game.onBase3, game.runnerOn3Order, game.runnerOn3Code),
+    )
+
+    /** API 주자가 직전 알림과 같으면(한 박자 늦음) 중계 진루로 추정한다. */
+    private fun resolveChanceBases(
+        api: NamedBases,
+        newTexts: List<com.bossxor.lottegiants.domain.RelayText>,
+        game: LotteGameInfo,
+        runsJustScored: Int,
+    ): NamedBases {
+        val play = pickAdvanceRelay(newTexts) ?: pickScoringRelay(newTexts)
+        val how = describePlayHow(play?.text.orEmpty())
+        val maker = pickPlayerName(
+            play?.text.orEmpty(),
+            play?.batterTitle.orEmpty(),
+            lotteRosterNames(game),
+        ) ?: lastChanceBatter
+        val inferred = inferBasesAfterAdvance(
+            before = lastChanceBases,
+            batter = maker,
+            how = how,
+            runsScored = runsJustScored,
+        )
+        if (inferred != null && api.sameOccupants(lastChanceBases)) return inferred
+        return api
     }
 
     private fun seedScores(game: LotteGameInfo) {
