@@ -1,0 +1,15 @@
+name: Refresh dashboard
+on:
+  release:
+    types: [published]
+  workflow_run:
+    workflows: [Publish latest channel]
+    types: [completed]
+  workflow_dispatch:
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh workflow run pages.yml -R bossxor/works-dashboard
+        env:
+          GH_TOKEN: ${{ secrets.DASHBOARD_TOKEN }}
