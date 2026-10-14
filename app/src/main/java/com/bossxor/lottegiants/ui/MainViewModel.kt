@@ -185,9 +185,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             _snapshot.value = repo.store.loadSnapshot()
             refreshWeatherFromSnapshot(_snapshot.value)
-            if (_resultsTeamCode.value.isBlank()) {
-                _resultsTeamCode.value = repo.store.myTeamCode()
-            }
         }
         viewModelScope.launch {
             favoritePlayers.collect { list ->
