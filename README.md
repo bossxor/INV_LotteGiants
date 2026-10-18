@@ -10,8 +10,8 @@
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.github.io/works-dashboard/) |
-| **최신 릴리스** | [v2.0.61-261010 · latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·update.json 버전 2061, 기존 서명 일치·배포 APK 설치 확인 |
-| **검증** | 단위 테스트 214개·실경기 중계 519개 문구 재생 통과, lintDebug 오류 0, Debug/Release 빌드 성공, S26 울트라에 GitHub 배포 APK 2.0.61 설치 완료, 같은 소스의 로컬 릴리스에서 전적/공시 실기 확인, 프로필/화면 전환/양쪽 로고 칩은 2.0.60에서 확인 |
+| **최신 릴리스** | [v2.0.63-261018 · latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·update.json 버전 2063, 커밋 `8377cca` |
+| **검증** | 단위 테스트 통과, lintVital 오류 0, Release 빌드 성공, S26 울트라에 로컬 릴리스 2.0.63 ADB 설치 완료. GitHub `latest`는 CI #187이 2.0.63/2063으로 덮어씀 |
 
 > 집·회사에서 이어서 작업할 때는 **[작업일지.md](작업일지.md)** 를 본다. 최신이 위. 작업이 끝나면 그 파일을 고치고 push.
 
@@ -271,7 +271,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 `main` 푸시 후 CI가 `latest`에 APK를 올리기까지는 수 분이 걸린다. 그 전에는 앱이 새 파일을 볼 수 없다.
 
-2.0.61 배포는 [커밋 6ec6039](https://github.com/bossxor/INV_LotteGiants/commit/6ec6039c39b5495f6a84ca935a6a85080417ba45)의 [CI #185](https://github.com/bossxor/INV_LotteGiants/actions/runs/37980747215)에서 완료했다. 배포 APK와 update.json의 2.0.61/2061, 기존 서명 일치 및 S26 울트라 ADB 설치를 확인했다. latest 태그는 해당 코드 커밋을 가리키며 릴리스는 하나만 유지한다.
+2.0.63 배포는 [커밋 8377cca](https://github.com/bossxor/INV_LotteGiants/commit/8377ccabbfaba901fa672767b0bbc8044d11dbec)의 [CI #187](https://github.com/bossxor/INV_LotteGiants/actions/runs/39132200809)에서 완료했다. 배포 APK와 update.json의 2.0.63/2063 일치. `latest` 태그는 해당 코드 커밋을 가리키며 릴리스는 하나만 유지한다.
 
 이미 **다른 키(디버그 키 등)** 로 깔린 기기는 한 번 삭제한 뒤 릴리스 APK로 다시 설치해야 한다.
 
@@ -286,8 +286,8 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 ```json
 {
-  "versionCode": 2061,
-  "versionName": "2.0.61",
+  "versionCode": 2063,
+  "versionName": "2.0.63",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }
