@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.62` (`versionCode` **2062**) |
+| **버전** | `2.0.63` (`versionCode` **2063**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.github.io/works-dashboard/) |
@@ -246,8 +246,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.62` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2062` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.63` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2063` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -299,6 +299,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.63** | 포스트시즌 당일 경기는 홈팀을 내 팀으로 알림 |
 | **2.0.62** | 결과 탭 첫 진입 시 팀 필터를 내 팀이 아니라 「전체」로 시작 |
 | **2.0.61** | 실제 조회 범위에 맞춘 전적 제목·날짜 표시, 최근 7일/상세 KBO 공식 공시 통일, 미조회·실패·무변동 구분, 독립 조회·선수 코드 후속 보완, 테스트 214개 |
 | **2.0.60** | 조회·게시 분리와 중복 요청 공유, 자료별 캐시·담당 클래스, 순수 이벤트 reducer/정책 1회 조회, typed 커서 이행, 선수·일정·엔트리 상태 분리와 취소 보강, 테스트 205개 |

@@ -110,12 +110,56 @@ internal fun pickKboLotte(
     )
 }
 
+/**
+ * 당일 포스트시즌이면 응원팀 대신 그 경기 홈팀을 포커스로 쓴다.
+ * 정규시즌은 [storedFocus] + [pickKboLotte] 그대로.
+ */
+internal fun pickPostseasonOrTeamGame(
+    games: List<KboOfficialGame>,
+    preferredId: String? = null,
+    storedFocus: String = LOTTE_TEAM_CODE,
+): Pair<String, KboOfficialGame?> {
+    val stored = storedFocus.trim().uppercase().ifBlank { LOTTE_TEAM_CODE }
+    val ps = games.filter { it.isPostseason() }
+    if (ps.isEmpty()) return stored to pickKboLotte(games, preferredId, stored)
+    val preferred = preferredId?.takeIf { it.isNotBlank() }?.let { id ->
+        ps.firstOrNull { it.naverGameId() == id || it.gameId == id }
+    }
+    val game = preferred ?: ps.minWithOrNull(
+        compareBy({ it.status().livePriority() }, { it.headerNo }, { it.startTime }),
+    )
+    val home = game?.homeId?.trim()?.uppercase().orEmpty()
+    val focus = if (home.isNotBlank()) home else stored
+    return focus to game
+}
+
 internal fun pickNaverLotte(games: List<GameDto>, preferredId: String? = null): GameDto? {
     if (games.isEmpty()) return null
     preferredId?.takeIf { it.isNotBlank() }?.let { id ->
         games.firstOrNull { it.gameId == id }?.let { return it }
     }
     return games.minWithOrNull(compareBy({ it.status().livePriority() }, { it.startTimeText() }))
+}
+
+internal fun GameDto.isPostseason(): Boolean =
+    com.bossxor.lottegiants.domain.isPostseasonGameLabel(specialMatchInfo)
+
+internal fun pickNaverPostseasonOrTeamGame(
+    games: List<GameDto>,
+    preferredId: String? = null,
+    storedFocus: String = LOTTE_TEAM_CODE,
+): Pair<String, GameDto?> {
+    val stored = storedFocus.trim().uppercase().ifBlank { LOTTE_TEAM_CODE }
+    val kbo = games.filter { it.categoryId.isBlank() || it.categoryId == "kbo" }
+    val ps = kbo.filter { it.isPostseason() }
+    if (ps.isEmpty()) return stored to pickNaverLotte(kbo.filter { it.involvesTeam(stored) }, preferredId)
+    val preferred = preferredId?.takeIf { it.isNotBlank() }?.let { id ->
+        ps.firstOrNull { it.gameId == id }
+    }
+    val game = preferred ?: pickNaverLotte(ps, null)
+    val home = game?.homeTeamCode?.trim()?.uppercase().orEmpty()
+    val focus = if (home.isNotBlank()) home else stored
+    return focus to game
 }
 
 internal fun GameStatus.livePriority(): Int = when (this) {

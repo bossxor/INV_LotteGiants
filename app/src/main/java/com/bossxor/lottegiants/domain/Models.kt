@@ -612,6 +612,16 @@ fun normalizeTeamCode(code: String): String {
     return if (KBO_TEAMS.any { it.code == c }) c else LOTTE_TEAM_CODE
 }
 
+/** KBO GAME_SC_NM / 네이버 specialMatchInfo. 정규시즌은 false. */
+fun isPostseasonGameLabel(vararg labels: String?): Boolean {
+    val t = labels.joinToString("") { it.orEmpty() }.replace(" ", "")
+    if (t.isBlank() || t.contains("정규")) return false
+    return t.contains("와일드카드") ||
+        t.contains("준플레이오프") ||
+        t.contains("플레이오프") ||
+        t.contains("한국시리즈")
+}
+
 /** 히어로 워터마크. 런처 구장 배지와 같은 영문 */
 fun stadiumWatermark(code: String): String = when (normalizeTeamCode(code)) {
     "LT" -> "SAJIK"

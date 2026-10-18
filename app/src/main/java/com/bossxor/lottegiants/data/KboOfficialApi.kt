@@ -3,6 +3,7 @@ package com.bossxor.lottegiants.data
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LotteGameInfo
+import com.bossxor.lottegiants.domain.isPostseasonGameLabel
 import com.bossxor.lottegiants.domain.teamCodeToName
 import com.bossxor.lottegiants.domain.MiniGame
 import com.bossxor.lottegiants.domain.cancelDisplayLabel
@@ -225,6 +226,8 @@ data class KboOfficialGame(
         val c = code.trim()
         return c.isNotBlank() && (awayId.equals(c, true) || homeId.equals(c, true))
     }
+
+    fun isPostseason(): Boolean = isPostseasonGameLabel(gameScNm)
 
     /** 이 경기의 진행 상태를 사람이 읽는 한 줄로 (예: "7회말", "취소 (폭염)") */
     fun statusText(): String = when (status()) {
