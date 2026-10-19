@@ -224,11 +224,10 @@ fun describePlayHow(text: String): String? {
 }
 
 /**
- * 이번 플레이의 득점 수를 글자로 쓸 수 있는지. 한 플레이는 최대 4점이고, 원인(안타 등)을 모르는 2점 이상은
- * 여러 조회 사이에 쌓인 점수 차일 수 있어 "6득점 6:2"처럼 누적 점수를 이번 득점으로 오해하게 만든다.
+ * 이번 타석(플레이)의 득점 수를 글자로 쓸 수 있는지. 한 플레이는 최대 4점이라 그보다 큰 값은 여러 조회 사이에
+ * 쌓인 점수 차이므로 "6득점 6:2"처럼 누적 점수를 이번 득점으로 오해하게 만들지 않도록 뺀다.
  */
-internal fun runsKnown(runs: Int, who: String?, how: String?, rbi: Int?): Boolean =
-    runs in 1..4 && (runs == 1 || !who.isNullOrBlank() || !how.isNullOrBlank() || (rbi ?: 0) > 0)
+internal fun runsKnown(runs: Int): Boolean = runs in 1..4
 
 fun formatLotteScoreTitle(
     who: String?,
@@ -246,7 +245,7 @@ fun formatLotteScoreTitle(
         append("${teamName.ifBlank { "롯데" }} 득점!")
         if (play.isNotBlank()) append(" $play")
         if (rbi != null && rbi > 0 && rbi <= 4) append(" · ${rbi}타점")
-        else if (runsKnown(runs, who, how, rbi)) append(" · ${n}득점")
+        else if (runsKnown(runs)) append(" · ${n}득점")
         append(" · $score")
     }
 }
@@ -279,7 +278,7 @@ fun formatConcedeTitle(
     val whoPart = who?.trim()?.takeIf { it.isNotBlank() } ?: opponentName.ifBlank { "상대" }
     val howPart = how?.trim().orEmpty()
     val play = listOf(whoPart, howPart).filter { it.isNotBlank() }.joinToString(" ")
-    val runsPart = if (runsKnown(runs, who, how, null)) " · ${n}점" else ""
+    val runsPart = if (runsKnown(runs)) " · ${n}점" else ""
     return "실점! $play$runsPart · $score"
 }
 

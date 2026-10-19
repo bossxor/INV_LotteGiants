@@ -24,8 +24,14 @@ class ScoreTitleRunsTest {
     }
 
     @Test
-    fun unknownMultiRunConcedeOmitsCount() {
-        assertEquals("실점! LG · 5:2", formatConcedeTitle(null, "LG", 3, "5:2", null))
+    fun twoRunsWithoutDetailStillShown() {
+        assertEquals("KIA 득점! · 2득점 · 6:3", formatLotteScoreTitle(null, 2, "6:3", null, "KIA", null))
+        assertEquals("실점! LG · 3점 · 5:2", formatConcedeTitle(null, "LG", 3, "5:2", null))
+    }
+
+    @Test
+    fun impossibleConcedeCountOmitted() {
+        assertEquals("실점! LG · 7:2", formatConcedeTitle(null, "LG", 5, "7:2", null))
     }
 
     @Test
