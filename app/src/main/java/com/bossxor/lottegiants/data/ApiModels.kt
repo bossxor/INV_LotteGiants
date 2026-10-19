@@ -33,6 +33,8 @@ data class GameDto(
     val cancel: Boolean = false,
     val suspended: Boolean = false,
     val specialMatchInfo: String? = null,
+    /** 포스트시즌은 `kbo_ps_*` (정규시즌은 `kbo_r_*`). specialMatchInfo는 비어 올 때가 많다. */
+    val roundCode: String? = null,
     val gameOnAir: Boolean = false,
     val homeStarterName: String? = null,
     val awayStarterName: String? = null,

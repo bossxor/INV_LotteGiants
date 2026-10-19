@@ -227,7 +227,8 @@ data class KboOfficialGame(
         return c.isNotBlank() && (awayId.equals(c, true) || homeId.equals(c, true))
     }
 
-    fun isPostseason(): Boolean = isPostseasonGameLabel(gameScNm)
+    /** 라벨은 `준PO2`처럼 줄여서 온다. 시리즈 ID 3·4·5 = 준플레이오프·플레이오프·한국시리즈. */
+    fun isPostseason(): Boolean = isPostseasonGameLabel(gameScNm) || srId in 3..5
 
     /** 이 경기의 진행 상태를 사람이 읽는 한 줄로 (예: "7회말", "취소 (폭염)") */
     fun statusText(): String = when (status()) {

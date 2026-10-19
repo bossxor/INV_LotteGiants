@@ -616,6 +616,8 @@ fun normalizeTeamCode(code: String): String {
 fun isPostseasonGameLabel(vararg labels: String?): Boolean {
     val t = labels.joinToString("") { it.orEmpty() }.replace(" ", "")
     if (t.isBlank() || t.contains("정규")) return false
+    // KBO 일정 API는 `WC1`·`준PO2`·`PO3`·`KS4`처럼 줄여서 준다.
+    if (Regex("^(WC|준PO|PO|KS)\\d*$", RegexOption.IGNORE_CASE).containsMatchIn(t)) return true
     return t.contains("와일드카드") ||
         t.contains("준플레이오프") ||
         t.contains("플레이오프") ||

@@ -142,7 +142,8 @@ internal fun pickNaverLotte(games: List<GameDto>, preferredId: String? = null): 
 }
 
 internal fun GameDto.isPostseason(): Boolean =
-    com.bossxor.lottegiants.domain.isPostseasonGameLabel(specialMatchInfo)
+    roundCode.orEmpty().startsWith("kbo_ps") ||
+        com.bossxor.lottegiants.domain.isPostseasonGameLabel(specialMatchInfo)
 
 internal fun pickNaverPostseasonOrTeamGame(
     games: List<GameDto>,
