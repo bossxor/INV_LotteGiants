@@ -271,7 +271,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 `main` 푸시 후 CI가 `latest`에 APK를 올리기까지는 수 분이 걸린다. 그 전에는 앱이 새 파일을 볼 수 없다.
 
-2.0.63 배포는 [커밋 8377cca](https://github.com/bossxor/INV_LotteGiants/commit/8377ccabbfaba901fa672767b0bbc8044d11dbec)의 [CI #187](https://github.com/bossxor/INV_LotteGiants/actions/runs/39132200809)에서 완료했다. 배포 APK와 update.json의 2.0.63/2063 일치. `latest` 태그는 해당 코드 커밋을 가리키며 릴리스는 하나만 유지한다.
+2.0.67 배포는 [커밋 57f4910](https://github.com/bossxor/INV_LotteGiants/commit/57f49106b9751db294f86c559cdf2d88316090e5)의 [CI #191](https://github.com/bossxor/INV_LotteGiants/actions/runs/39370045483)에서 완료했다. 배포 APK와 update.json의 2.0.67/2067 일치. `latest` 태그는 해당 코드 커밋을 가리키며 릴리스는 하나만 유지한다.
 
 이미 **다른 키(디버그 키 등)** 로 깔린 기기는 한 번 삭제한 뒤 릴리스 APK로 다시 설치해야 한다.
 
@@ -286,8 +286,8 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 ```json
 {
-  "versionCode": 2063,
-  "versionName": "2.0.63",
+  "versionCode": 2067,
+  "versionName": "2.0.67",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }
