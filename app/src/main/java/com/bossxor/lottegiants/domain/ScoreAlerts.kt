@@ -18,13 +18,14 @@ fun leadChangeTitle(
     nowOpp: Int,
     opponentName: String,
     teamName: String = "롯데",
+    neutral: Boolean = false,
 ): String? {
     val prev = leadOf(prevLotte, prevOpp)
     val now = leadOf(nowLotte, nowOpp)
     if (prev == now) return null
     if (now == 0) return "동점!"
     if (now == 1 && prev == -1) return "${teamName.ifBlank { "롯데" }} 역전!"
-    if (now == -1 && prev == 1) return "${opponentName.ifBlank { "상대" }} 역전"
+    if (now == -1 && prev == 1) return "${opponentName.ifBlank { "상대" }} 역전${if (neutral) "!" else ""}"
     return null
 }
 

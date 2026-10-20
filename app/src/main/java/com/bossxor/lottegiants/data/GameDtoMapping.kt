@@ -274,6 +274,7 @@ internal fun GameDto.toLotteBase(
         gameDate = gameDate,
         startTime = startTimeText(),
         stadium = stadium.orEmpty(),
+        gameScLabel = if (isPostseason()) "포스트시즌" else "",
         isHome = isHome,
         opponentCode = oppCode,
         opponentName = if (isHome) awayTeamName else homeTeamName,

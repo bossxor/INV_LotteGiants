@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.65` (`versionCode` **2065**) |
+| **버전** | `2.0.66` (`versionCode` **2066**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.github.io/works-dashboard/) |
@@ -246,8 +246,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.65` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2065` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.66` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2066` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -299,6 +299,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.66** | 포스트시즌은 응원팀과 무관하게 양 팀을 똑같이 알림(득점·홈런·역전·득점 찬스·경기 종료, 점수는 원정:홈) |
 | **2.0.65** | 득점·실점 알림은 이번 타석 증가분(1~4점)만 표시, 상세가 없어도 2~4점이면 표시 |
 | **2.0.64** | 포스트시즌 판정을 실제 응답(KBO `준PO2`·SR_ID, 네이버 roundCode `kbo_ps`)에 맞춤, 득점 알림에서 누적 점수 차를 "N득점"으로 쓰지 않음 |
 | **2.0.63** | 포스트시즌 당일 경기는 홈팀을 내 팀으로 알림 |

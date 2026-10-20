@@ -621,7 +621,8 @@ fun isPostseasonGameLabel(vararg labels: String?): Boolean {
     return t.contains("와일드카드") ||
         t.contains("준플레이오프") ||
         t.contains("플레이오프") ||
-        t.contains("한국시리즈")
+        t.contains("한국시리즈") ||
+        t.contains("포스트시즌")
 }
 
 /** 히어로 워터마크. 런처 구장 배지와 같은 영문 */
@@ -715,7 +716,7 @@ data class LotteGameInfo(
     val runnerOn3Name: String = "",
     val crowdCount: String = "",
     val gameDuration: String = "",
-    /** 포스트시즌·특수경기 라벨 (GAME_SC_NM) */
+    /** 포스트시즌·특수경기 라벨 (GAME_SC_NM). 네이버 경로는 포스트시즌이면 "포스트시즌". */
     val gameScLabel: String = "",
     val lotteScore: Int = 0,
     val opponentScore: Int = 0,
@@ -1304,3 +1305,13 @@ val LotteGameInfo.inningLabel: String
         inning <= 0 -> statusText
         else -> "${inning}회${if (isTopInning) "초" else "말"}"
     }
+
+/** 포스트시즌 경기는 응원팀과 무관하게 양 팀을 똑같이 다룬다(알림 문구·찬스·종료). */
+val LotteGameInfo.isPostseason: Boolean get() = isPostseasonGameLabel(gameScLabel)
+
+/** 중립 표기용 팀 이름: 원정 / 홈. (focus 쪽이 홈이면 상대가 원정) */
+val LotteGameInfo.awayTeamLabel: String get() = if (isHome) opponentName else focusName()
+val LotteGameInfo.homeTeamLabel: String get() = if (isHome) focusName() else opponentName
+
+/** 중립 점수 문자열 `원정:홈`. */
+val LotteGameInfo.neutralScore: String get() = if (isHome) "$opponentScore:$lotteScore" else "$lotteScore:$opponentScore"

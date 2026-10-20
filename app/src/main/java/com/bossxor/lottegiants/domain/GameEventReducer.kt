@@ -65,8 +65,10 @@ private class GameEventReduction(previous: LiveEventCursor, private var eighthNo
         if (batterCode.isNotBlank()) lastFavoriteBatterCode = batterCode
         else if (atBatNow.isBlank()) lastFavoriteBatterCode = ""
 
+        // 포스트시즌은 응원팀과 무관하게 양 팀을 똑같이 알린다: 득점은 팀 이름으로, 점수는 원정:홈 순서로.
+        val neutral = game.isPostseason
         run {
-            val score = "${game.lotteScore}:${game.opponentScore}"
+            val score = if (neutral) game.neutralScore else "${game.lotteScore}:${game.opponentScore}"
             fun emitScores(focus: Boolean) {
                 val reconciled = reconcileScores(if (focus) focusScores else opponentScores,
                     game.recentTexts, lastSeqno,
@@ -90,13 +92,14 @@ private class GameEventReduction(previous: LiveEventCursor, private var eighthNo
                         if (isLive) currentBases else NamedBases(null, null, null),
                         if (play.inning > 0) "${play.inning}회${if (play.isTop == true) "초" else "말"}" else game.inningLabel)
                     val hr = play.how?.contains("홈런") == true
+                    val teamName = if (focus) game.focusName() else game.opponentName
                     val title = when {
-                        !focus -> formatConcedeTitle(play.who, game.opponentName, play.runs, score, play.how)
-                        hr -> formatHomerunTitle(play.who, play.runs, score, play.how, game.focusName())
+                        !focus && !neutral -> formatConcedeTitle(play.who, game.opponentName, play.runs, score, play.how)
+                        hr -> formatHomerunTitle(play.who, play.runs, score, play.how, teamName)
                         else -> formatLotteScoreTitle(play.who, play.runs, score, play.how,
-                            game.focusName(), play.rbi)
+                            teamName, play.rbi)
                     }
-                    val type = when { !focus -> NotificationType.CONCEDING; hr -> NotificationType.HOMERUN; else -> NotificationType.SCORE }
+                    val type = when { !focus && !neutral -> NotificationType.CONCEDING; hr -> NotificationType.HOMERUN; else -> NotificationType.SCORE }
                     // ID는 득점 사건에 고정한다. 홈런 근거가 늦게 와도 기존 알림을 갱신한다.
                     val id = (if (focus) 1_000_000 else 2_000_000) + update.record.id
                     emit(type, id,
@@ -110,7 +113,7 @@ private class GameEventReduction(previous: LiveEventCursor, private var eighthNo
             emitScores(true)
             emitScores(false)
             leadChangeTitle(lastLotteScore, lastOppScore, game.lotteScore, game.opponentScore,
-                game.opponentName, game.focusName())?.let { title ->
+                game.opponentName, game.focusName(), neutral)?.let { title ->
                 emit(NotificationType.LEAD_CHANGE,
                     4_000_000 + (newTexts.maxOfOrNull { it.seqno } ?: lastSeqno).coerceAtLeast(0),
                     title, score, gameId = game.gameId, detailTab = "relay")
@@ -183,7 +186,8 @@ private class GameEventReduction(previous: LiveEventCursor, private var eighthNo
             if (game.out == 0 || game.inning != lastInning) {
                 emit(
                     NotificationType.INNING_CHANGE, 2501,
-                    game.inningLabel, "중간 스코어 ${game.focusName()} ${game.lotteScore}:${game.opponentScore}",
+                    game.inningLabel, if (neutral) "중간 스코어 ${game.awayTeamLabel} ${game.neutralScore} ${game.homeTeamLabel}"
+                        else "중간 스코어 ${game.focusName()} ${game.lotteScore}:${game.opponentScore}",
                     gameId = game.gameId,
                 )
             }
@@ -196,7 +200,8 @@ private class GameEventReduction(previous: LiveEventCursor, private var eighthNo
             val key = "${game.gameId}-8b"
             emit(
                 NotificationType.EIGHTH_INNING, 2510,
-                "8회말!", "${game.focusName()} ${game.lotteScore}:${game.opponentScore} · ${game.opponentName}",
+                "8회말!", if (neutral) "${game.awayTeamLabel} ${game.neutralScore} ${game.homeTeamLabel}"
+                    else "${game.focusName()} ${game.lotteScore}:${game.opponentScore} · ${game.opponentName}",
                 gameId = game.gameId,
             )
             eighthNotifiedFor = key
@@ -215,7 +220,8 @@ private class GameEventReduction(previous: LiveEventCursor, private var eighthNo
         lastInning = game.inning
         lastTop = game.isTopInning
 
-        if (game.status != GameStatus.LIVE || !game.isLotteBatting) {
+        // 포스트시즌은 공격 중인 팀이 어느 쪽이든 득점 찬스를 같은 기준으로 알린다.
+        if (game.status != GameStatus.LIVE || (!game.isLotteBatting && !neutral)) {
             lastBasesKey = ""
             lastChanceBatter = ""
             lastChanceBases = NamedBases(null, null, null)
@@ -231,9 +237,12 @@ private class GameEventReduction(previous: LiveEventCursor, private var eighthNo
             if (!game.isSuspended && (entered || changedBatter)) {
                 val alert = formatScoringChanceAlert(loaded, currentBases.label(), atBat,
                     game.inningLabel, game.out, game.onBase1, game.onBase2, game.onBase3)
+                val chanceTitle = if (neutral) {
+                    "${if (game.isLotteBatting) game.focusName() else game.opponentName} ${alert.title}"
+                } else alert.title
                 emit(NotificationType.SCORING_CHANCE,
                     if (entered) { if (loaded) 2601 else 2602 } else 2603,
-                    alert.title, alert.text, gameId = game.gameId, detailTab = "relay")
+                    chanceTitle, alert.text, gameId = game.gameId, detailTab = "relay")
             }
             // 점유 루가 같아도 매번 갱신한다. 타석만 바뀐 경우와 득점 플레이를 구분한다.
             lastBasesKey = key

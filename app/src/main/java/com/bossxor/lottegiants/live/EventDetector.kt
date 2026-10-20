@@ -6,6 +6,10 @@ import com.bossxor.lottegiants.data.SnapshotStore
 import com.bossxor.lottegiants.domain.GameStatus
 import com.bossxor.lottegiants.domain.KBO_ZONE
 import com.bossxor.lottegiants.domain.LotteGameInfo
+import com.bossxor.lottegiants.domain.awayTeamLabel
+import com.bossxor.lottegiants.domain.homeTeamLabel
+import com.bossxor.lottegiants.domain.isPostseason
+import com.bossxor.lottegiants.domain.neutralScore
 import com.bossxor.lottegiants.domain.RosterMove
 import com.bossxor.lottegiants.domain.NamedBases
 import com.bossxor.lottegiants.domain.basesKey
@@ -203,15 +207,20 @@ class EventDetector(private val store: SnapshotStore) {
         if (store.notifiedEndGameId() == game.gameId) return
         val today = kboToday().toString()
         if (game.gameDate.isNotBlank() && game.gameDate != today) return
+        val neutral = game.isPostseason
         val result = when {
+            neutral && game.lotteScore > game.opponentScore -> "${game.focusName()} 승리!"
+            neutral && game.lotteScore < game.opponentScore -> "${game.opponentName} 승리!"
             game.lotteScore > game.opponentScore -> "${game.focusName()} 승리!"
             game.lotteScore < game.opponentScore -> "${game.focusName()} 패배"
             else -> "무승부"
         }
         val dh = dhSuffix(game.doubleHeaderNo)
+        val finalText = if (neutral) "최종 ${game.awayTeamLabel} ${game.neutralScore} ${game.homeTeamLabel}"
+        else "최종 ${game.lotteScore}:${game.opponentScore} vs ${game.opponentName}"
         maybeNotify(
             context, NotificationType.GAME_END, 2002,
-            "$result$dh", "최종 ${game.lotteScore}:${game.opponentScore} vs ${game.opponentName}",
+            "$result$dh", finalText,
             gameId = game.gameId,
         )
         store.setNotifiedEndGameId(game.gameId)
