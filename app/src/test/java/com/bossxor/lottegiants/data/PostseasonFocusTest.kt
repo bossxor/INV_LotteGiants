@@ -61,6 +61,32 @@ class PostseasonFocusTest {
         assertEquals(2, picked?.gameState)
     }
 
+    @Test
+    fun postseasonSplitListsAllPsForChips() {
+        val games = listOf(
+            kbo("OB", "LG", "플레이오프", 2),
+            kbo("HH", "KT", "준플레이오프", 1),
+            kbo("LT", "SS", "정규시즌", 1),
+        )
+        val (live, other) = splitTodayLiveGames(games, "LT")
+        assertEquals(2, live.size)
+        assertTrue(live.all { it.isPostseason() })
+        assertEquals(1, other.size)
+        assertEquals("LT", other.single().awayId)
+    }
+
+    @Test
+    fun regularSplitKeepsMyTeamOnly() {
+        val games = listOf(
+            kbo("LG", "LT", "정규시즌", 2),
+            kbo("OB", "SS", "정규시즌", 1),
+        )
+        val (live, other) = splitTodayLiveGames(games, "LT")
+        assertEquals(1, live.size)
+        assertEquals("LT", live.single().homeId)
+        assertEquals(1, other.size)
+    }
+
     private fun kbo(
         away: String,
         home: String,

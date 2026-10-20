@@ -6,12 +6,12 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.66` (`versionCode` **2066**) |
+| **버전** | `2.0.67` (`versionCode` **2067**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.github.io/works-dashboard/) |
-| **최신 릴리스** | [v2.0.63-261018 · latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·update.json 버전 2063, 커밋 `8377cca` |
-| **검증** | 단위 테스트 통과, lintVital 오류 0, Release 빌드 성공, S26 울트라에 로컬 릴리스 2.0.63 ADB 설치 완료. GitHub `latest`는 CI #187이 2.0.63/2063으로 덮어씀 |
+| **최신 릴리스** | [latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·update.json 버전 2067 |
+| **검증** | 단위 테스트 통과, Release 빌드, S26 울트라에 2.0.67 ADB 설치 |
 
 > 집·회사에서 이어서 작업할 때는 **[작업일지.md](작업일지.md)** 를 본다. 최신이 위. 작업이 끝나면 그 파일을 고치고 push.
 
@@ -246,8 +246,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.66` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2066` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.67` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2067` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -299,6 +299,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.67** | 포스트시즌 myTeamCode 덮어쓰기로 라이브 탭이 공유 조회 중단에 걸리던 문제 수정, PS 당일 전체 경기 칩 |
 | **2.0.66** | 포스트시즌은 응원팀과 무관하게 양 팀을 똑같이 알림(득점·홈런·역전·득점 찬스·경기 종료, 점수는 원정:홈) |
 | **2.0.65** | 득점·실점 알림은 이번 타석 증가분(1~4점)만 표시, 상세가 없어도 2~4점이면 표시 |
 | **2.0.64** | 포스트시즌 판정을 실제 응답(KBO `준PO2`·SR_ID, 네이버 roundCode `kbo_ps`)에 맞춤, 득점 알림에서 누적 점수 차를 "N득점"으로 쓰지 않음 |
@@ -350,14 +351,6 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 | **2.0.2** | 설정에서 내 팀 전환. 스냅샷·알림·위젯·테마·히스토리·홈 아이콘이 선택한 팀을 따라감 (기본값 롯데). S26에 `latest` 덮어쓰기 설치 |
 | **2.0.1** | 위젯 선발·잔여 글자 확대, 구장명 표시 (컴팩트·라이브·종료 포함). S26에 `latest` 덮어쓰기 설치 |
 | **2.0.0** | 앱 이름 집관. 10구단 구장 배지 런처 아이콘·activity-alias. 위젯 추가 화면 중립화. Wear 모듈 삭제. `versionCode` 2000. S26에 `latest` 덮어쓰기 설치 |
-| **1.3.87** | 등말소 14시부터. LIVE는 현재 이닝만·중계 탭에서 전체. 루타 25초, 감시 45초, 아이콘 축소, 휴일 히어로, 득점·역전 진동 설정. S26에 `latest` 덮어쓰기 설치 |
-| **1.3.86** | 시작·탭 로딩 지연, 비경기 폴링 45초, 감시 FGS 축소, 설정 백업, 순위 선수 검색. S26에 `latest` 덮어쓰기 설치 |
-| **1.3.85** | 실시간 조회 과다 호출을 줄여 오류·폰 차단을 완화. 라인업 15초·등말소 25초 |
-| **1.3.84** | 런처 SAJIK 배지 여백 (전경 16% inset) |
-| **1.3.83** | 종료·취소 알림을 지우면 같은 경기를 다시 올리지 않음 |
-| **1.3.82** | 순위 상단을 레이스 요약 · 잔여 상대 · 다음 5경기로 분리 |
-| **1.3.81** | 잔여 상대·다음 5경기에 로고 |
-| **1.3.80** | 폰 APK에서 Wear 번들 제거. 순위표에 연속 칸 |
 
 ---
 

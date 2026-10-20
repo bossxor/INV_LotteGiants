@@ -162,7 +162,7 @@ fun LiveScreen(
     val lotteNow = snapshot?.lotteGame?.takeIf { it.belongsToKboToday() }
     val game = viewingGame ?: lotteNow ?: snapshot?.nextLotteGame
     val viewingOther = viewingGame != null
-    val viewingOtherTeam = viewingOther && game?.focusTeamCode?.equals(myTeam, true) == false
+    val viewingOtherTeam = game?.focusTeamCode?.equals(myTeam, true) == false
     val focusTeam = game?.focusTeamCode?.ifBlank { myTeam } ?: myTeam
     val offDay = viewingGame == null && lotteNow == null
     val showOffDayHero = offDay &&
@@ -294,7 +294,7 @@ fun LiveScreen(
                                 ErrorRetryLine(refreshError, onRefresh, onDismissRefreshError)
                             }
                             if (!viewingOther && lotteNow != null) {
-                                val liveChoices = snapshot.todayLotteGames
+                                val liveChoices = snapshot?.todayLotteGames.orEmpty()
                                 if (liveChoices.size >= 2) {
                                     Spacer(Modifier.height(8.dp))
                                     DhGameSwitcher(
@@ -858,18 +858,18 @@ private fun PreviewTab(
             if (lb?.name.isNullOrBlank() && ob?.name.isNullOrBlank()) {
                 Text("프리뷰 키플레이어 정보 없음", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
             } else {
-                if (!lb?.name.isNullOrBlank()) {
+                lb?.takeIf { it.name.isNotBlank() }?.let { batter ->
                     KeyBatterLine(
                         g.focusName(),
-                        lb!!,
+                        batter,
                         g.opponentName,
                         onKeyPlayerClick,
                         snapshot?.hotColdZone.orEmpty(),
                     )
                 }
-                if (!ob?.name.isNullOrBlank()) {
-                    if (!lb?.name.isNullOrBlank()) Spacer(Modifier.height(10.dp))
-                    KeyBatterLine(g.opponentName, ob!!, g.focusName(), onKeyPlayerClick)
+                ob?.takeIf { it.name.isNotBlank() }?.let { batter ->
+                    if (lb?.name?.isNotBlank() == true) Spacer(Modifier.height(10.dp))
+                    KeyBatterLine(g.opponentName, batter, g.focusName(), onKeyPlayerClick)
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(

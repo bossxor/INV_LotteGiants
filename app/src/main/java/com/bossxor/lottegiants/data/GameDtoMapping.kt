@@ -113,6 +113,7 @@ internal fun pickKboLotte(
 /**
  * 당일 포스트시즌이면 응원팀 대신 그 경기 홈팀을 포커스로 쓴다.
  * 정규시즌은 [storedFocus] + [pickKboLotte] 그대로.
+ * 스냅샷 myTeamCode 는 덮지 말고 게임 focusTeamCode 에만 쓴다.
  */
 internal fun pickPostseasonOrTeamGame(
     games: List<KboOfficialGame>,
@@ -131,6 +132,20 @@ internal fun pickPostseasonOrTeamGame(
     val home = game?.homeId?.trim()?.uppercase().orEmpty()
     val focus = if (home.isNotBlank()) home else stored
     return focus to game
+}
+
+/**
+ * 라이브 칩/기타 경기 목록. 포스트시즌 당일이면 전체 PS vs 나머지,
+ * 정규시즌은 응원팀 vs 그 외.
+ */
+internal fun splitTodayLiveGames(
+    games: List<KboOfficialGame>,
+    storedFocus: String,
+): Pair<List<KboOfficialGame>, List<KboOfficialGame>> {
+    val ps = games.filter { it.isPostseason() }
+    if (ps.isNotEmpty()) return ps to games.filter { !it.isPostseason() }
+    val focus = storedFocus.trim().uppercase().ifBlank { LOTTE_TEAM_CODE }
+    return games.filter { it.involvesTeam(focus) } to games.filter { !it.involvesTeam(focus) }
 }
 
 internal fun pickNaverLotte(games: List<GameDto>, preferredId: String? = null): GameDto? {

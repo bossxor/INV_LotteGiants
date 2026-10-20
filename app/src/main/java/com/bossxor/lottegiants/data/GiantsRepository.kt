@@ -94,7 +94,7 @@ class GiantsRepository private constructor(context: Context) {
      */
     suspend fun refreshSnapshot(force: Boolean = false): LiveSnapshot =
         snapshots.refresh(SnapshotKind.FULL, force, SNAPSHOT_FRESH_MS) {
-            val stale = lastKnownSnapshot()
+        val stale = lastKnownSnapshot()
             if (stale != null && !force && System.currentTimeMillis() < snapshotCooldownUntil) return@refresh stale
             try {
                 fetchFreshSnapshot().also { snapshotFailCount = 0; snapshotCooldownUntil = 0L }
@@ -131,10 +131,11 @@ class GiantsRepository private constructor(context: Context) {
             val recover = cursor.inning.takeIf { cursor.gameId == game.gameId }
             val relay = fetchLiveRelay(game.gameId, recover)
             if (relay != null) game = mergeRelay(game, relay)
+            val (liveGames, others) = splitTodayLiveGames(games, stored)
             prev.copy(updatedAtMillis = System.currentTimeMillis(), lotteGame = game,
-                todayLotteGames = kboToMiniGames(today, games.filter { it.involvesTeam(focus) }),
-                otherGames = kboToMiniGames(today, games.filterNot { it.involvesTeam(focus) }),
-                myTeamCode = focus,
+                todayLotteGames = kboToMiniGames(today, liveGames),
+                otherGames = kboToMiniGames(today, others),
+                myTeamCode = stored,
                 pitchLocations = game.pitchLocations,
                 winProbSeries = relay?.let { buildWinProbFromRelay(it, game.isHome) }?.takeIf { it.isNotEmpty() }
                     ?: prev.winProbSeries)
@@ -170,12 +171,13 @@ class GiantsRepository private constructor(context: Context) {
         val games = fetchKboGames(today)
         val (focus, kbo) = pickPostseasonOrTeamGame(games, null, stored)
         val lotte = kbo?.toLotteBase(focus)?.takeIf { it.belongsToKboToday() }
+        val (liveGames, others) = splitTodayLiveGames(games, stored)
         return LiveSnapshot(
             updatedAtMillis = System.currentTimeMillis(),
             lotteGame = lotte,
-            otherGames = kboToMiniGames(today, games.filter { !it.involvesTeam(focus) }),
-            todayLotteGames = kboToMiniGames(today, games.filter { it.involvesTeam(focus) }),
-            myTeamCode = focus,
+            otherGames = kboToMiniGames(today, others),
+            todayLotteGames = kboToMiniGames(today, liveGames),
+            myTeamCode = stored,
         )
     }
 
@@ -226,15 +228,20 @@ class GiantsRepository private constructor(context: Context) {
             null
         }
 
+        val (todayLiveKbo, todayOtherKbo) = splitTodayLiveGames(kboToday, storedFocus)
         val otherGames = if (kboToday.isNotEmpty()) {
-            kboToMiniGames(today, kboToday.filter { !it.involvesTeam(focus) })
+            kboToMiniGames(today, todayOtherKbo)
         } else {
             val naverToday = runCatching {
                 api.getGames(fromDate = todayStr, toDate = todayStr)
                     .result?.games.orEmpty().filter { it.categoryId == "kbo" }
             }.getOrDefault(emptyList())
             val reasons = cancelReasonsFor(naverToday, today)
-            naverToday.filter { !it.involvesTeam(focus) }
+            val psDay = naverToday.any { it.isPostseason() }
+            naverToday
+                .filter { g ->
+                    if (psDay) !g.isPostseason() else !g.involvesTeam(storedFocus)
+                }
                 .map { it.toMiniGame(kboCancelLabel = reasons[it.matchKey()]) }
         }
         val yesterdayGames = if (kboYesterday.isNotEmpty()) {
@@ -304,13 +311,13 @@ class GiantsRepository private constructor(context: Context) {
                     .minWithOrNull(compareBy({ it.isoDate() }, { it.startTime }))
             } else {
                 kboRange
-                    .filter {
-                        it.involvesTeam(focus) &&
-                            it.status() == GameStatus.BEFORE &&
-                            it.isoDate() >= todayStr &&
-                            it.naverGameId() != lotteInfo?.gameId
-                    }
-                    .minWithOrNull(compareBy({ it.isoDate() }, { it.startTime }))
+                .filter {
+                    it.involvesTeam(focus) &&
+                        it.status() == GameStatus.BEFORE &&
+                        it.isoDate() >= todayStr &&
+                        it.naverGameId() != lotteInfo?.gameId
+                }
+                .minWithOrNull(compareBy({ it.isoDate() }, { it.startTime }))
             }
             nextKbo?.let { kbo ->
                 val nextFocus = if (todayIsPostseason) {
@@ -395,14 +402,18 @@ class GiantsRepository private constructor(context: Context) {
         }
         val lastLotte = recentLotte.firstOrNull()
 
-        val todayLotteGames = if (kboToday.any { it.involvesTeam(focus) }) {
-            kboToMiniGames(today, kboToday.filter { it.involvesTeam(focus) })
+        val todayLotteGames = if (kboToday.isNotEmpty()) {
+            kboToMiniGames(today, todayLiveKbo)
                 .sortedWith(compareBy({ it.doubleHeaderNo }, { it.startTime }))
         } else {
             runCatching {
-                api.getGames(fromDate = todayStr, toDate = todayStr)
-                    .result?.games.orEmpty()
-                    .filter { it.categoryId == "kbo" && it.involvesTeam(focus) }
+                val naverToday = api.getGames(fromDate = todayStr, toDate = todayStr)
+                    .result?.games.orEmpty().filter { it.categoryId == "kbo" }
+                val psDay = naverToday.any { it.isPostseason() }
+                naverToday
+                    .filter { g ->
+                        if (psDay) g.isPostseason() else g.involvesTeam(storedFocus)
+                    }
                     .map { it.toMiniGame() }
                     .sortedWith(compareBy({ it.doubleHeaderNo }, { it.startTime }))
             }.getOrDefault(emptyList())
@@ -483,7 +494,7 @@ class GiantsRepository private constructor(context: Context) {
             lotteSeasonRank = rank,
             lotteRemainingGames = rem,
             widgetRaceLine = widgetRaceLine(rank, rem, starter, countdown),
-            myTeamCode = focus,
+            myTeamCode = storedFocus,
         )
         return snapshot
     }
@@ -874,7 +885,7 @@ class GiantsRepository private constructor(context: Context) {
             val naver = candidates.firstOrNull { it.gameId == requestedGameId }
                 ?: naverPicked
                 ?: pickNaverLotte(candidates.filter { it.toLotteBase(focusTeamCode = naverFocus).status == GameStatus.BEFORE }, "")
-                ?: return null
+            ?: return null
             val nFocus = if (naver.isPostseason()) {
                 naver.homeTeamCode.trim().uppercase().ifBlank { naverFocus }
             } else {

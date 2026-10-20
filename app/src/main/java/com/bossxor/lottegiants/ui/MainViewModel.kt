@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.bossxor.lottegiants.data.GiantsRepository
+import com.bossxor.lottegiants.data.SharedFetchCanceledException
 import com.bossxor.lottegiants.domain.DayEntryChanges
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.FavoritePlayer
@@ -64,6 +65,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val refreshError: StateFlow<String?> = _refreshError.asStateFlow()
     /** 사용자가 배너를 닫으면 자동 폴링 실패로 다시 안 띄운다. */
     private var refreshErrorDismissed = false
+    /** 공유 조회 취소 시 스냅샷이 비어 있으면 한 번만 짧은 재시도. */
+    private var sharedFetchSoftRetried = false
 
     private val _favoriteStats = MutableStateFlow<Map<String, PlayerDetail>>(emptyMap())
     val favoriteStats: StateFlow<Map<String, PlayerDetail>> = _favoriteStats.asStateFlow()
@@ -388,6 +391,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _snapshot.value = it
                 _refreshError.value = null
                 refreshErrorDismissed = false
+                sharedFetchSoftRetried = false
                 WidgetUpdater.updateAll(getApplication())
                 if (_selectedDate.value == kboToday()) {
                     syncTodayGamesFromSnapshot(it)
@@ -397,6 +401,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             .onFailure { e ->
                 if (e is CancellationException) throw e
+                val sharedCancel = e is SharedFetchCanceledException ||
+                    e.message?.startsWith("공유 조회") == true
+                if (sharedCancel) {
+                    Log.d("LiveVM", "shared fetch canceled; soft retry", e)
+                    if (_snapshot.value == null && !sharedFetchSoftRetried) {
+                        sharedFetchSoftRetried = true
+                        delay(400)
+                        if (_snapshot.value == null) refreshOnce(force = false)
+                    }
+                    return@onFailure
+                }
                 Log.e("LiveVM", "refreshOnce", e)
                 val snap = _snapshot.value
                 if (snap == null) {
