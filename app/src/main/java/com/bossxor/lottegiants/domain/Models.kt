@@ -612,6 +612,28 @@ fun normalizeTeamCode(code: String): String {
     return if (KBO_TEAMS.any { it.code == c }) c else LOTTE_TEAM_CODE
 }
 
+/** KBO 시리즈 ID: 3 준플레이오프 · 4 와일드카드 · 5 플레이오프 · 7 한국시리즈. */
+val POSTSEASON_SR_IDS = setOf(3, 4, 5, 7)
+
+/**
+ * 네이버 포스트시즌 gameId는 연도 자리를 시리즈 ID 네 자리로 쓴다(`33331020HTLG02026` = 2026 준PO).
+ * 정규시즌은 KBO G_ID 뒤에 시즌을 붙인 그대로.
+ */
+fun naverGameIdFor(kboGameId: String, seasonId: Int, srId: Int): String =
+    if (srId in POSTSEASON_SR_IDS && kboGameId.length > 4) {
+        "${srId.toString().repeat(4)}${kboGameId.drop(4)}$seasonId"
+    } else {
+        "$kboGameId$seasonId"
+    }
+
+/** 네이버 gameId에서 경기 날짜 `yyyyMMdd`. 포스트시즌 접두(3333 등)는 끝의 시즌 연도로 바꾼다. */
+fun naverGameIdYmd(gameId: String): String {
+    val id = gameId.trim()
+    val prefix = id.take(4)
+    val ps = id.length >= 17 && prefix.toSet().size == 1 && prefix.first().digitToIntOrNull() in POSTSEASON_SR_IDS
+    return if (ps) id.takeLast(4) + id.substring(4, 8) else id.take(8)
+}
+
 /** KBO GAME_SC_NM / 네이버 specialMatchInfo. 정규시즌은 false. */
 fun isPostseasonGameLabel(vararg labels: String?): Boolean {
     val t = labels.joinToString("") { it.orEmpty() }.replace(" ", "")

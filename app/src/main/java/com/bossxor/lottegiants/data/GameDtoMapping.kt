@@ -80,7 +80,7 @@ import kotlin.coroutines.cancellation.CancellationException
 /** 일정 DTO(GameDto/KBO) → 도메인 변환·선택 헬퍼(상태 없음). */
 
 internal fun parseNaverGameIdDate(gameId: String): LocalDate? {
-    val ymd = gameId.take(8)
+    val ymd = com.bossxor.lottegiants.domain.naverGameIdYmd(gameId)
     if (ymd.length < 8 || ymd.any { !it.isDigit() }) return null
     return runCatching {
         LocalDate.parse(ymd, DateTimeFormatter.BASIC_ISO_DATE)

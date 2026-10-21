@@ -214,8 +214,8 @@ data class KboOfficialGame(
 
     fun cancelStatusText(): String = cancelDisplayLabel(cancelReasonLabel())
 
-    /** 네이버 스포츠 gameId는 KBO G_ID 뒤에 시즌을 붙인 형태다. */
-    fun naverGameId(): String = "$gameId$seasonId"
+    /** 네이버 스포츠 gameId. 정규시즌은 G_ID+시즌, 포스트시즌은 연도 자리가 시리즈 ID 네 자리다. */
+    fun naverGameId(): String = com.bossxor.lottegiants.domain.naverGameIdFor(gameId, seasonId, srId)
 
     fun matchKey(): String = "${awayId.trim().uppercase()}_${homeId.trim().uppercase()}"
 
@@ -227,8 +227,8 @@ data class KboOfficialGame(
         return c.isNotBlank() && (awayId.equals(c, true) || homeId.equals(c, true))
     }
 
-    /** 라벨은 `준PO2`처럼 줄여서 온다. 시리즈 ID 3·4·5 = 준플레이오프·플레이오프·한국시리즈. */
-    fun isPostseason(): Boolean = isPostseasonGameLabel(gameScNm) || srId in 3..5
+    /** 라벨은 `준PO2`처럼 줄여서 온다. 시리즈 ID 3 준PO · 4 WC · 5 PO · 7 KS. */
+    fun isPostseason(): Boolean = isPostseasonGameLabel(gameScNm) || srId in com.bossxor.lottegiants.domain.POSTSEASON_SR_IDS
 
     /** 이 경기의 진행 상태를 사람이 읽는 한 줄로 (예: "7회말", "취소 (폭염)") */
     fun statusText(): String = when (status()) {
