@@ -87,15 +87,14 @@ private class GameEventReduction(previous: LiveEventCursor, private var eighthNo
                     val isLive = game.status == GameStatus.LIVE && attackingNow &&
                         (play.inning == 0 || play.inning == game.inning) &&
                         (play.isTop == null || play.isTop == game.isTopInning)
-                    val atBat = if (isLive) atBatNow else ""
-                    val body = scoringDetailBody(play, atBat,
+                    val body = scoringDetailBody(play,
                         if (isLive) currentBases else NamedBases(null, null, null),
                         if (play.inning > 0) "${play.inning}회${if (play.isTop == true) "초" else "말"}" else game.inningLabel)
                     val hr = play.how?.contains("홈런") == true
                     val teamName = if (focus) game.focusName() else game.opponentName
                     val title = when {
                         !focus && !neutral -> formatConcedeTitle(play.who, game.opponentName, play.runs, score, play.how)
-                        hr -> formatHomerunTitle(play.who, play.runs, score, play.how, teamName)
+                        hr -> formatHomerunTitle(play.who, homerunRuns(play, game.recentTexts), score, play.how, teamName)
                         else -> formatLotteScoreTitle(play.who, play.runs, score, play.how,
                             teamName, play.rbi)
                     }

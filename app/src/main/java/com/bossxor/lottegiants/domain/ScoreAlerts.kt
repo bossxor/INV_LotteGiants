@@ -259,7 +259,15 @@ fun formatHomerunTitle(
     teamName: String = "롯데",
 ): String {
     val n = runs.coerceAtLeast(1)
-    val howPart = how?.trim()?.takeIf { it.isNotBlank() } ?: if (n in 1..4) "${n}점홈런" else "홈런"
+    // 방향(좌중간 등)만 있으면 몇 점짜리인지 빠진다. 이번 타석 점수를 홈런 종류로 붙인다.
+    val kind = when (n) {
+        1 -> "솔로 홈런"
+        2, 3 -> "${n}점 홈런"
+        4 -> "만루 홈런"
+        else -> "홈런"
+    }
+    val dir = how?.trim()?.takeIf { it.isNotBlank() }?.removeSuffix("홈런")?.trim().orEmpty()
+    val howPart = listOf(dir, kind).filter { it.isNotBlank() }.joinToString(" ")
     val whoPart = who?.trim().orEmpty()
     return buildString {
         append("${teamName.ifBlank { "롯데" }} 홈런!")

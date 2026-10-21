@@ -1011,6 +1011,8 @@ data class LiveSnapshot(
     val nextLotteGame: LotteGameInfo? = null,
     val lastLotteGame: LotteGameInfo? = null,
     val recentLotteGames: List<LotteGameInfo> = emptyList(),
+    /** 포스트시즌 기간: 팀과 무관한 앞으로의 포스트시즌 경기 전부(공개된 일정). */
+    val postseasonUpcoming: List<LotteGameInfo> = emptyList(),
     val otherGames: List<MiniGame> = emptyList(),
     val yesterdayGames: List<MiniGame> = emptyList(),
     /** 오늘 롯데 경기 (DH 1·2차전 전환용) */

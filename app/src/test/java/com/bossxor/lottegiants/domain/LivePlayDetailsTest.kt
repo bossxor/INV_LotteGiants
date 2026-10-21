@@ -48,8 +48,10 @@ class LivePlayDetailsTest {
         assertEquals(2, p.runs)
         assertEquals(2, p.rbi)
         assertEquals(listOf("레이예스", "윤동희"), p.scorers)
-        assertTrue(scoringDetailBody(p, "고승민", NamedBases(null, "전준우", null), "5회초")
-            .contains("타석 고승민"))
+        // 득점 뒤 지금 타석(다음 타자)은 득점한 타자로 오해되므로 본문에 넣지 않는다.
+        val body = scoringDetailBody(p, NamedBases(null, "전준우", null), "5회초")
+        assertTrue(body.contains("홈인 레이예스·윤동희"))
+        assertTrue(!body.contains("타석"))
     }
     @Test fun sacrificeFlySurvivesNextBatterTitleOnHomeIn() {
         val p = scoringPlays(listOf(line(10, "전준우 : 중견수 희생플라이", 0),

@@ -208,21 +208,28 @@ class GiantsRepository private constructor(context: Context) {
             val c = async { runCatching { kboSeasonWindow(today) }.getOrDefault(emptyList()) }
             Triple(a.await(), b.await(), c.await())
         }
-        val reuseSideCards = rangeWasCached &&
-            prev?.nextLotteGame != null &&
-            prev.recentLotteGames.isNotEmpty()
-
         val preferredLiveId = store.preferredLiveGameId()
         val (kboFocus, kboPicked) = pickPostseasonOrTeamGame(kboToday, preferredLiveId, storedFocus)
-        var focus = kboFocus
-        val kboLotte = kboPicked
+        // 오늘 포스트시즌 경기가 없는 날도 포스트시즌 기간이면 가을야구 경기를 따라간다.
+        val periodFocus = if (kboToday.none { it.isPostseason() }) {
+            postseasonPeriodFocus(kboRange, todayStr, kboToday, storedFocus)
+        } else {
+            null
+        }
+        var focus = periodFocus ?: kboFocus
+        val kboLotte = kboPicked?.takeIf { periodFocus == null || it.involvesTeam(periodFocus) }
+        // 포커스 팀이 바뀌면(내 팀 → 포스트시즌 경기) 이전 다음 경기·최근 경기 카드를 쓰지 않는다.
+        val reuseSideCards = rangeWasCached &&
+            prev?.nextLotteGame != null &&
+            prev.recentLotteGames.isNotEmpty() &&
+            prev.nextLotteGame.focusTeamCode.equals(focus, ignoreCase = true)
         val lotteTodayNaver = if (kboLotte == null) {
             val naverTodayAll = runCatching {
                 api.getGames(fromDate = todayStr, toDate = todayStr)
                     .result?.games.orEmpty().filter { it.categoryId == "kbo" }
             }.getOrDefault(emptyList())
             val picked = pickNaverPostseasonOrTeamGame(naverTodayAll, preferredLiveId, storedFocus)
-            focus = picked.first
+            if (picked.second != null || periodFocus == null) focus = picked.first
             picked.second
         } else {
             null
@@ -296,7 +303,21 @@ class GiantsRepository private constructor(context: Context) {
             lotteInfo = safeEnrich(lotteInfo, kboRange, kboLotte)
         }
 
-        val todayIsPostseason = kboToday.any { it.isPostseason() } || lotteTodayNaver?.isPostseason() == true
+        val todayIsPostseason = kboToday.any { it.isPostseason() } || lotteTodayNaver?.isPostseason() == true ||
+            periodFocus != null
+        // 포스트시즌은 팀과 무관하게 앞으로의 경기 전부를 보여 준다. 기본 창(14일)보다 멀리(30일)까지 본다.
+        val postseasonUpcoming = if (todayIsPostseason) {
+            val far = runCatching { schedules.range(today.plusDays(15), today.plusDays(30)) }.getOrDefault(emptyList())
+            (kboRange + far).distinctBy { it.gameId }
+                .filter {
+                    it.isPostseason() && it.status() == GameStatus.BEFORE && it.isoDate() >= todayStr &&
+                        it.homeId.isNotBlank() && it.awayId.isNotBlank() && it.naverGameId() != lotteInfo?.gameId
+                }
+                .sortedWith(compareBy({ it.isoDate() }, { it.startTime }))
+                .map { it.toLotteBase(it.homeId.trim().uppercase()) }
+        } else {
+            emptyList()
+        }
         val nextLotte = if (reuseSideCards) {
             prev?.nextLotteGame
         } else {
@@ -391,12 +412,17 @@ class GiantsRepository private constructor(context: Context) {
         val recentLotte = if (reuseSideCards) {
             prev?.recentLotteGames.orEmpty()
         } else {
+            // 포스트시즌은 팀과 무관하게 최근 포스트시즌 경기들(각 경기 홈팀 기준).
             kboRange
-                .filter { it.involvesTeam(focus) && it.status() == GameStatus.ENDED && it.isoDate() <= todayStr }
-                .sortedByDescending { it.gameDate }
+                .filter {
+                    (if (todayIsPostseason) it.isPostseason() else it.involvesTeam(focus)) &&
+                        it.status() == GameStatus.ENDED && it.isoDate() <= todayStr
+                }
+                .sortedWith(compareByDescending<KboOfficialGame> { it.gameDate }.thenByDescending { it.startTime })
                 .take(5)
                 .map { kbo ->
-                    val base = enrichFromKboDetail(kbo.toLotteBase(focus), kbo)
+                    val f = if (todayIsPostseason) kbo.homeId.trim().uppercase().ifBlank { focus } else focus
+                    val base = enrichFromKboDetail(kbo.toLotteBase(f), kbo)
                     safeEnrich(base, kboRange, kbo)
                 }
         }
@@ -463,6 +489,7 @@ class GiantsRepository private constructor(context: Context) {
             nextLotteGame = nextLotte,
             lastLotteGame = lastLotte,
             recentLotteGames = recentLotte,
+            postseasonUpcoming = postseasonUpcoming,
             otherGames = otherGames,
             yesterdayGames = yesterdayGames,
             todayLotteGames = todayLotteGames,

@@ -138,10 +138,20 @@ fun isPlateResult(text: String): Boolean = !isRunnerMovement(text) && parseSubst
     !isPlateStart(text) && (describePlayHow(text) != null ||
         (text.contains(":") && listOf("아웃", "땅볼", "플라이", "삼진").any(text::contains)))
 
-fun scoringDetailBody(play: ScoringPlay, atBat: String, bases: NamedBases, inningLabel: String): String =
+/**
+ * 홈런의 이번 타석 점수. 홈런 줄의 주자 상태(아직 홈인 전)로 세면 홈인 줄이 늦게 와도 처음부터 `만루 홈런`이 된다.
+ * 중계에 이미 더 많은 홈인이 잡혔으면 그 값을 쓴다.
+ */
+fun homerunRuns(play: ScoringPlay, texts: List<RelayText>): Int {
+    val line = texts.firstOrNull { it.seqno == play.seqno && it.text.contains("홈런") } ?: return play.runs
+    val onBase = listOf(line.base1Code, line.base2Code, line.base3Code).count { !it.isNullOrBlank() && it != "0" }
+    return maxOf(play.runs, 1 + onBase).coerceAtMost(4)
+}
+
+/** 득점 알림 본문. 지금 타석(득점 뒤 다음 타자)은 득점한 타자로 오해되므로 넣지 않는다. */
+fun scoringDetailBody(play: ScoringPlay, bases: NamedBases, inningLabel: String): String =
     listOfNotNull(
         play.scorers.takeIf { it.isNotEmpty() }?.joinToString("·")?.let { "홈인 $it" },
         bases.label().takeIf { it.isNotBlank() }?.let { "주자 $it" },
-        atBat.takeIf { it.isNotBlank() }?.let { "타석 $it" },
         listOfNotNull(inningLabel, play.out?.let { "${it}아웃" }).joinToString(" "),
     ).joinToString(" · ")

@@ -6,12 +6,12 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.67` (`versionCode` **2067**) |
+| **버전** | `2.0.68` (`versionCode` **2068**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.github.io/works-dashboard/) |
-| **최신 릴리스** | [latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·update.json 버전 2067 |
-| **검증** | 단위 테스트 통과, Release 빌드, S26 울트라에 2.0.67 ADB 설치 |
+| **최신 릴리스** | [latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·update.json 버전 2068 |
+| **검증** | 단위 테스트 통과, Release 빌드, S26 울트라에 2.0.68 ADB 설치 |
 
 > 집·회사에서 이어서 작업할 때는 **[작업일지.md](작업일지.md)** 를 본다. 최신이 위. 작업이 끝나면 그 파일을 고치고 push.
 
@@ -246,8 +246,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.67` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2067` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.68` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2068` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -286,8 +286,8 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 ```json
 {
-  "versionCode": 2067,
-  "versionName": "2.0.67",
+  "versionCode": 2068,
+  "versionName": "2.0.68",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }
@@ -299,6 +299,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.68** | 득점 알림: 홈런은 솔로·N점·만루로 점수 표시, 본문에서 다음 타자(타석) 제거. 포스트시즌 기간엔 쉬는 날도 가을야구 경기 기준 라이브 바, 최근 포스트시즌 경기·앞으로의 포스트시즌 경기 전부 표시 |
 | **2.0.67** | 포스트시즌 myTeamCode 덮어쓰기로 라이브 탭이 공유 조회 중단에 걸리던 문제 수정, PS 당일 전체 경기 칩 |
 | **2.0.66** | 포스트시즌은 응원팀과 무관하게 양 팀을 똑같이 알림(득점·홈런·역전·득점 찬스·경기 종료, 점수는 원정:홈) |
 | **2.0.65** | 득점·실점 알림은 이번 타석 증가분(1~4점)만 표시, 상세가 없어도 2~4점이면 표시 |

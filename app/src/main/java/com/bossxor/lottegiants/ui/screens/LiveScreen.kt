@@ -68,6 +68,10 @@ import com.bossxor.lottegiants.domain.LotteGameInfo
 import com.bossxor.lottegiants.domain.toZone
 import com.bossxor.lottegiants.domain.belongsToKboToday
 import com.bossxor.lottegiants.domain.focusName
+import com.bossxor.lottegiants.domain.awayTeamLabel
+import com.bossxor.lottegiants.domain.homeTeamLabel
+import com.bossxor.lottegiants.domain.isPostseason
+import com.bossxor.lottegiants.domain.neutralScore
 import com.bossxor.lottegiants.domain.matchesTeam
 import com.bossxor.lottegiants.domain.stadiumWatermark
 import com.bossxor.lottegiants.domain.teamCodeToName
@@ -465,6 +469,10 @@ fun LiveScreen(
                                 },
                             )
                             Spacer(Modifier.height(10.dp))
+                        }
+                        snapshot?.postseasonUpcoming?.takeIf { it.isNotEmpty() }?.let {
+                            PostseasonUpcomingCard(it, onOpenGame)
+                            Spacer(Modifier.height(12.dp))
                         }
                         snapshot?.recentLotteGames?.takeIf { it.isNotEmpty() }?.let {
                             RecentFiveCard(it)
@@ -1999,10 +2007,32 @@ private fun BatterRecordCard(
 
 @Composable
 private fun RecentFiveCard(games: List<LotteGameInfo>) {
+    // 포스트시즌은 팀과 무관한 경기들이라 승/패 대신 `원정 점수 홈`으로 똑같이 보여 준다.
+    val neutral = games.all { it.isPostseason }
     SectionCard {
         Column {
-            SectionHeader("최근 ${games.size}경기")
+            SectionHeader(if (neutral) "최근 포스트시즌 ${games.size}경기" else "최근 ${games.size}경기")
             games.forEachIndexed { idx, g ->
+                if (neutral) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(g.gameDate.takeLast(5), Modifier.width(48.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "${g.awayTeamLabel} ${g.neutralScore} ${g.homeTeamLabel}",
+                            Modifier.weight(1f),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                        )
+                        Text(g.gameScLabel, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (idx < games.lastIndex) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                    }
+                    return@forEachIndexed
+                }
                 Row(
                     Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -2731,4 +2761,46 @@ private fun DetailLoadError(message: String, onRetry: () -> Unit) {
 private fun isIgnoringBatteryOptimizations(context: android.content.Context): Boolean {
     val pm = context.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
     return pm.isIgnoringBatteryOptimizations(context.packageName)
+}
+
+/** 포스트시즌 기간: 팀과 무관한 앞으로의 포스트시즌 경기 전부. 누르면 경기 상세. */
+@Composable
+private fun PostseasonUpcomingCard(games: List<LotteGameInfo>, onOpenGame: (String) -> Unit) {
+    SectionCard {
+        Column {
+            SectionHeader("다음 포스트시즌 경기 ${games.size}")
+            games.forEachIndexed { idx, g ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenGame(g.gameId) }
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "${g.gameDate.takeLast(5)} ${g.startTime}",
+                        Modifier.width(92.dp),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "${g.awayTeamLabel} vs ${g.homeTeamLabel}",
+                        Modifier.weight(1f),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                    Text(
+                        listOf(g.gameScLabel, g.stadium).filter { it.isNotBlank() }.joinToString(" · "),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+                if (idx < games.lastIndex) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                }
+            }
+        }
+    }
 }

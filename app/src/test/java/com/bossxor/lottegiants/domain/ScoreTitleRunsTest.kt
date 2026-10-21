@@ -35,6 +35,23 @@ class ScoreTitleRunsTest {
     }
 
     @Test
+    fun homerunShowsHowManyRunsWithDirection() {
+        assertEquals("KIA 홈런! 김도영 좌중간 만루 홈런 · 7:0", formatHomerunTitle("김도영", 4, "7:0", "좌중간 홈런", "KIA"))
+        assertEquals("KIA 홈런! 나성범 중견 솔로 홈런 · 1:0", formatHomerunTitle("나성범", 1, "1:0", "중견 홈런", "KIA"))
+        assertEquals("KIA 홈런! 2점 홈런 · 3:0", formatHomerunTitle(null, 2, "3:0", null, "KIA"))
+    }
+
+    @Test
+    fun homerunRunsCountRunnersOnHomerLine() {
+        // 2026-10-20 준PO3 김도영: 홈런 줄엔 주자 셋, 홈인 줄은 한 줄만 먼저 온 상태
+        val hr = RelayText(109, "김도영 : 좌중간 뒤 홈런", 0, 2, true, base1Code = "2", base2Code = "1", base3Code = "9")
+        val play = ScoringPlay(109, "김도영", "좌중간 홈런", 2, null, emptyList(), 2, true, 3, 5)
+        assertEquals(4, homerunRuns(play, listOf(hr)))
+        val solo = RelayText(52, "나성범 : 중견수 뒤 홈런", 0, 2, true, base1Code = "0", base2Code = "0", base3Code = "0")
+        assertEquals(1, homerunRuns(play.copy(seqno = 52, runs = 1), listOf(solo)))
+    }
+
+    @Test
     fun homerunNeverSaysMoreThanFour() {
         assertEquals("KIA 홈런! 홈런 · 6:2", formatHomerunTitle(null, 6, "6:2", null, "KIA"))
     }

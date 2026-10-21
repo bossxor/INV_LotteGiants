@@ -148,6 +148,26 @@ internal fun splitTodayLiveGames(
     return games.filter { it.involvesTeam(focus) } to games.filter { !it.involvesTeam(focus) }
 }
 
+/**
+ * 포스트시즌 기간(정규시즌 경기가 더 없음)이고 오늘 내 팀 경기가 없으면, 다가오는 포스트시즌 경기 → 없으면
+ * 가장 최근 포스트시즌 경기의 홈팀을 포커스로 쓴다. 쉬는 날에도 라이브 바가 내 팀이 아닌 가을야구를 따라간다.
+ */
+internal fun postseasonPeriodFocus(
+    range: List<KboOfficialGame>,
+    todayIso: String,
+    todayGames: List<KboOfficialGame>,
+    stored: String,
+): String? {
+    if (todayGames.any { it.involvesTeam(stored) && !it.isPostseason() }) return null
+    if (range.any { !it.isPostseason() && it.isoDate() >= todayIso && it.status() == GameStatus.BEFORE }) return null
+    val ps = range.filter { it.isPostseason() && it.homeId.isNotBlank() && it.awayId.isNotBlank() }
+    val next = ps.filter { it.isoDate() >= todayIso && it.status() == GameStatus.BEFORE }
+        .minWithOrNull(compareBy({ it.isoDate() }, { it.startTime }))
+    val last = ps.filter { it.isoDate() <= todayIso && it.status() == GameStatus.ENDED }
+        .maxWithOrNull(compareBy({ it.isoDate() }, { it.startTime }))
+    return (next ?: last)?.homeId?.trim()?.uppercase()?.takeIf { it.isNotBlank() }
+}
+
 internal fun pickNaverLotte(games: List<GameDto>, preferredId: String? = null): GameDto? {
     if (games.isEmpty()) return null
     preferredId?.takeIf { it.isNotBlank() }?.let { id ->
