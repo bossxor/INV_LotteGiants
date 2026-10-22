@@ -11,7 +11,7 @@
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.github.io/works-dashboard/) |
 | **최신 릴리스** | [latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·update.json 버전 2073 |
-| **검증** | 단위 테스트 통과, Release 빌드, S26 울트라에 2.0.73 ADB 설치 |
+| **검증** | 단위 테스트 통과, Release 빌드, S26 울트라에 2.0.73 ADB 설치, 포스트시즌 양 팀 기준 화면(라이브 탭 위쪽·경기 상세·프리뷰·요약 MVP·키플레이어·선발 투수·승리 확률)과 중계·요약·기록 탭을 지난 경기(10/20 KIA 13:1 LG)로 실기 확인 |
 
 > 집·회사에서 이어서 작업할 때는 **[작업일지.md](작업일지.md)** 를 본다. 최신이 위. 작업이 끝나면 그 파일을 고치고 push.
 
@@ -271,7 +271,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 `main` 푸시 후 CI가 `latest`에 APK를 올리기까지는 수 분이 걸린다. 그 전에는 앱이 새 파일을 볼 수 없다.
 
-2.0.67 배포는 [커밋 57f4910](https://github.com/bossxor/INV_LotteGiants/commit/57f49106b9751db294f86c559cdf2d88316090e5)의 [CI #191](https://github.com/bossxor/INV_LotteGiants/actions/runs/39370045483)에서 완료했다. 배포 APK와 update.json의 2.0.67/2067 일치. `latest` 태그는 해당 코드 커밋을 가리키며 릴리스는 하나만 유지한다.
+2.0.73 배포는 [커밋 154a7e4](https://github.com/bossxor/INV_LotteGiants/commit/154a7e49fb6b5811c49524b2a24eb4cb79f8760a)의 [CI #197](https://github.com/bossxor/INV_LotteGiants/actions/runs/39735627819)에서 완료했다. 배포 APK와 update.json의 2.0.73/2073 일치. `latest` 태그는 해당 코드 커밋을 가리키며 릴리스는 하나만 유지한다.
 
 이미 **다른 키(디버그 키 등)** 로 깔린 기기는 한 번 삭제한 뒤 릴리스 APK로 다시 설치해야 한다.
 
