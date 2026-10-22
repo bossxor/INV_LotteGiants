@@ -6,12 +6,12 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.72` (`versionCode` **2072**) |
+| **버전** | `2.0.73` (`versionCode` **2073**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.github.io/works-dashboard/) |
-| **최신 릴리스** | [latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·update.json 버전 2072 |
-| **검증** | 단위 테스트 통과, Release 빌드, S26 울트라에 2.0.72 ADB 설치 |
+| **최신 릴리스** | [latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·update.json 버전 2073 |
+| **검증** | 단위 테스트 통과, Release 빌드, S26 울트라에 2.0.73 ADB 설치 |
 
 > 집·회사에서 이어서 작업할 때는 **[작업일지.md](작업일지.md)** 를 본다. 최신이 위. 작업이 끝나면 그 파일을 고치고 push.
 
@@ -246,8 +246,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.72` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2072` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.73` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2073` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -286,8 +286,8 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 ```json
 {
-  "versionCode": 2072,
-  "versionName": "2.0.72",
+  "versionCode": 2073,
+  "versionName": "2.0.73",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }
@@ -299,6 +299,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.73** | 포스트시즌 키플레이어를 양 팀 전체에서 선택(팀 이름 표기), 선발 투수 카드는 원정 왼쪽·홈 오른쪽 |
 | **2.0.72** | 포스트시즌 요약 탭 승리 확률을 한 팀 기준이 아니라 앞선 팀 기준으로 표시 |
 | **2.0.71** | 포스트시즌 화면을 양 팀 기준으로: 라이브 탭 위쪽(어제 `KIA 13 : 1 LG`, 다음 `KIA vs 삼성`·구장·대회, 구장 워터마크), 경기 상세 맨 위(WIN/LOSE 대신 `준PO3 · 종료`), 프리뷰(`장소: 홈`·시즌 대결 줄 삭제, 구장 옆 홈팀), 요약 간이 MVP는 양 팀 전체에서 선택 |
 | **2.0.70** | 내 팀 시즌이 끝났거나 개막 전이면 「등말소 변화 없음」 안내를 보내지 않음(실제 등말소 공시 알림은 그대로) |

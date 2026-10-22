@@ -790,8 +790,12 @@ private fun PreviewTab(
         Column {
             SectionHeader("선발 투수 비교")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                PreviewPitcherCol(g.focusName(), p?.lotteStarter, g.lotteStartingPitcher)
-                PreviewPitcherCol(g.opponentName.ifBlank { "상대" }, p?.opponentStarter, g.opponentStartingPitcher)
+                val ownCol: @Composable () -> Unit = { PreviewPitcherCol(g.focusName(), p?.lotteStarter, g.lotteStartingPitcher) }
+                val oppCol: @Composable () -> Unit = {
+                    PreviewPitcherCol(g.opponentName.ifBlank { "상대" }, p?.opponentStarter, g.opponentStartingPitcher)
+                }
+                // 포스트시즌은 다른 곳과 같게 원정이 왼쪽, 홈이 오른쪽.
+                if (g.isPostseason && g.isHome) { oppCol(); ownCol() } else { ownCol(); oppCol() }
             }
         }
     }
@@ -1175,14 +1179,21 @@ private fun SummaryTab(
         Column {
             SectionHeader("선발 투수")
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(g.focusName(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                    Text(g.lotteStartingPitcher.ifBlank { "미정" }, fontWeight = FontWeight.SemiBold)
+                val ownCol: @Composable () -> Unit = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(g.focusName(), style = MaterialTheme.typography.labelMedium,
+                            color = if (g.isPostseason) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold)
+                        Text(g.lotteStartingPitcher.ifBlank { "미정" }, fontWeight = FontWeight.SemiBold)
+                    }
                 }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(g.opponentName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
-                    Text(g.opponentStartingPitcher.ifBlank { "미정" }, fontWeight = FontWeight.SemiBold)
+                val oppCol: @Composable () -> Unit = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(g.opponentName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                        Text(g.opponentStartingPitcher.ifBlank { "미정" }, fontWeight = FontWeight.SemiBold)
+                    }
                 }
+                if (g.isPostseason && g.isHome) { oppCol(); ownCol() } else { ownCol(); oppCol() }
             }
         }
     }
@@ -2702,12 +2713,16 @@ private fun pickKeyPlayer(
     if (game == null) return null
 
     if (game.status == GameStatus.LIVE || game.status == GameStatus.ENDED) {
-        val best = (game.lotteLineup + game.lotteBenchBatters)
+        // 포스트시즌은 응원팀과 무관하게 양 팀 전체에서 고르고 팀 이름을 붙인다.
+        val mine = game.lotteLineup + game.lotteBenchBatters
+        val pool = if (game.isPostseason) mine + game.opponentLineup + game.opponentBenchBatters else mine
+        val best = pool
             .filter { it.name.isNotBlank() }
             .filter { it.todayHits > 0 || it.todayRbi > 0 || it.todayRun > 0 }
             .maxByOrNull { it.todayHits * 3 + it.todayRbi * 2 + it.todayRun }
         if (best != null) {
             val metric = buildList {
+                if (game.isPostseason) add(if (best in mine) game.focusName() else game.opponentName)
                 if (best.todayAtBats > 0) add("${best.todayAtBats}타수 ${best.todayHits}안타")
                 else if (best.todayHits > 0) add("${best.todayHits}안타")
                 if (best.todayRbi > 0) add("${best.todayRbi}타점")
@@ -2717,7 +2732,12 @@ private fun pickKeyPlayer(
         }
     }
 
-    val fromPreview = game.preview?.lotteKeyBatter?.takeIf { it.name.isNotBlank() }
+    val ownPreview = game.preview?.lotteKeyBatter?.takeIf { it.name.isNotBlank() }
+    val oppPreview = game.preview?.opponentKeyBatter?.takeIf { it.name.isNotBlank() }
+    // 포스트시즌 경기 전엔 두 팀 주목 타자 중 최근 타율이 높은 쪽.
+    val fromPreview = if (game.isPostseason && oppPreview != null &&
+        (ownPreview == null || (oppPreview.recentAvg.toDoubleOrNull() ?: 0.0) > (ownPreview.recentAvg.toDoubleOrNull() ?: 0.0))
+    ) oppPreview else ownPreview
     if (fromPreview != null) {
         val metric = when {
             fromPreview.recentAvg.isNotBlank() ->
@@ -2731,6 +2751,8 @@ private fun pickKeyPlayer(
         return KeyPlayerPick(fromPreview.name, fromPreview.playerCode, metric, "주목할 타자")
     }
 
+    // 시즌 리더 대체값은 한 팀 기준이라 포스트시즌엔 쓰지 않는다.
+    if (game.isPostseason) return null
     val leader = leaders.firstOrNull {
         !it.isPitcher && (it.matchesTeam(game.focusTeamCode) || (game.focusName() == "롯데" && it.isLotte))
     } ?: return null
