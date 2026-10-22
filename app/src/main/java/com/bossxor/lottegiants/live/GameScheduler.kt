@@ -241,7 +241,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
             if (!enabled) return AlertQueryResult.Skipped
             val result = AlertPollCoordinator.query(false, AlertWatchGate.ROSTER_FAST_MS) {
                 val moves = repo.pollRosterMovesForAlert()
-                detector.processRosterMoves(context, moves)
+                detector.processRosterMoves(context, moves, seasonOver = moves.isEmpty() && repo.isMyTeamSeasonOver())
             }
             if (result is AlertQueryResult.Failed) android.util.Log.w("AlertPoll", "roster: ${result.reason}")
             return result

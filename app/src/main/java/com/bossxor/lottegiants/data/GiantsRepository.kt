@@ -887,6 +887,13 @@ class GiantsRepository private constructor(context: Context) {
     suspend fun fetchRecentRosterMoves(days: Int = 7, teamCode: String = LOTTE_TEAM_CODE) = rosters.fetchRecentRosterMoves(days, teamCode)
     suspend fun pollRosterMovesForAlert(teamCode: String = "") = rosters.pollRosterMovesForAlert(teamCode)
 
+    /** 내 팀 시즌이 끝났으면 「등말소 변화 없음」 같은 시즌 중 안내를 보내지 않는다. */
+    suspend fun isMyTeamSeasonOver(): Boolean {
+        val today = kboToday()
+        val range = runCatching { kboSeasonWindow(today) }.getOrDefault(emptyList())
+        return teamSeasonOver(range, store.myTeamCode(), today.toString())
+    }
+
     /**
      * 라인업 알림용 경량 조회 — 당일 KBO 일정 + (필요 시) 네이버 라인업 relay만 본다.
      */

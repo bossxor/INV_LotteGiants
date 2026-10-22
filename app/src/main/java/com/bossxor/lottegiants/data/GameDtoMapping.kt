@@ -168,6 +168,17 @@ internal fun postseasonPeriodFocus(
     return (next ?: last)?.homeId?.trim()?.uppercase()?.takeIf { it.isNotBlank() }
 }
 
+/**
+ * 내 팀이 시즌 중이 아니면 true. 시즌 중 = 일정 창(지난 3주~앞으로 2주)에 이미 치른 경기와 남은 경기가 모두 있을 때.
+ * 개막 전(치른 경기 없음)·탈락 뒤(남은 경기 없음)·비시즌(일정 없음)은 모두 시즌 밖이다. 시범경기(srId 1)는 세지 않는다.
+ */
+internal fun teamSeasonOver(range: List<KboOfficialGame>, team: String, todayIso: String): Boolean {
+    val games = range.filter { it.involvesTeam(team) && it.srId != 1 && it.status() != GameStatus.CANCELED }
+    val started = games.any { it.isoDate() <= todayIso }
+    val remaining = games.any { it.isoDate() >= todayIso }
+    return !(started && remaining)
+}
+
 internal fun pickNaverLotte(games: List<GameDto>, preferredId: String? = null): GameDto? {
     if (games.isEmpty()) return null
     preferredId?.takeIf { it.isNotBlank() }?.let { id ->

@@ -249,15 +249,16 @@ class EventDetector(private val store: SnapshotStore) {
      * 등말소 공시 알림. 새 공시만 골라 알리고, 이미 알린 키는 DataStore에 남겨 중복을 막는다.
      * 여러 명이 한꺼번에 공시되면 알림이 쏟아지지 않게 한 건으로 묶는다.
      */
-    suspend fun processRosterMoves(context: Context, moves: List<RosterMove>) = rosterMutex.withLock {
-        processRosterMovesLocked(dispatcher.batch(context, false), moves)
-    }
+    suspend fun processRosterMoves(context: Context, moves: List<RosterMove>, seasonOver: Boolean = false) =
+        rosterMutex.withLock {
+            processRosterMovesLocked(dispatcher.batch(context, false), moves, seasonOver)
+        }
 
-    private suspend fun processRosterMovesLocked(context: AlertBatch, moves: List<RosterMove>) {
+    private suspend fun processRosterMovesLocked(context: AlertBatch, moves: List<RosterMove>, seasonOver: Boolean) {
         val today = kboToday().toString()
         if (moves.isEmpty()) {
-            // 당일 경기가 없어 라인업이 안 뜨면, 14시 이후 첫 빈 폴링에서 1회
-            maybeNotifyRosterNone(context, allowWithoutLineup = true)
+            // 당일 경기가 없어 라인업이 안 뜨면, 14시 이후 첫 빈 폴링에서 1회. 시즌이 끝난 팀엔 보내지 않는다.
+            if (!seasonOver) maybeNotifyRosterNone(context, allowWithoutLineup = true)
             return
         }
         val plan = planRosterNotifications(

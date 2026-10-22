@@ -43,7 +43,8 @@ class GiantsApp : Application(), ImageLoaderFactory {
             val detector = EventDetector(repo.store)
             runCatching { detector.process(this@GiantsApp, snap?.lotteGame) }
             runCatching {
-                detector.processRosterMoves(this@GiantsApp, repo.pollRosterMovesForAlert())
+                val moves = repo.pollRosterMovesForAlert()
+                detector.processRosterMoves(this@GiantsApp, moves, seasonOver = moves.isEmpty() && repo.isMyTeamSeasonOver())
             }
             runCatching {
                 if (repo.store.isLiveScoreEnabled()) {
