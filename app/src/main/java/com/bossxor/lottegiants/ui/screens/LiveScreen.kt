@@ -1203,8 +1203,11 @@ private fun SummaryTab(
     if (lotteProb != null) {
         SectionCard {
             Column {
-                SectionHeader("${g.focusName()} 승리 확률")
-                val last = (lotteProb * 100).toInt()
+                // 포스트시즌은 한 팀 기준이 아니라 지금 앞선 팀의 승리 확률을 보여 준다.
+                val leadIsFocus = !g.isPostseason || lotteProb >= 0.5
+                val leadName = if (leadIsFocus) g.focusName() else g.opponentName.ifBlank { "상대" }
+                SectionHeader(if (g.isPostseason) "$leadName 승리 확률" else "${g.focusName()} 승리 확률")
+                val last = ((if (leadIsFocus) lotteProb else 1.0 - lotteProb) * 100).toInt()
                 Text(
                     "$last%",
                     fontWeight = FontWeight.Black,
@@ -1272,7 +1275,7 @@ private fun SummaryTab(
     } else if (!viewingOther && (g.status == GameStatus.LIVE || g.status == GameStatus.ENDED)) {
         SectionCard {
             Column {
-                SectionHeader("${g.focusName()} 승리 확률")
+                SectionHeader(if (g.isPostseason) "승리 확률" else "${g.focusName()} 승리 확률")
                 Text(
                     "아직 충분한 데이터가 없습니다.",
                     style = MaterialTheme.typography.bodySmall,
