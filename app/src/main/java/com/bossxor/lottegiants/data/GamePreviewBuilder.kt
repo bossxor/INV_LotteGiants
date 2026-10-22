@@ -1,5 +1,6 @@
 package com.bossxor.lottegiants.data
 
+import com.bossxor.lottegiants.domain.isPostseason
 import android.content.Context
 import com.bossxor.lottegiants.domain.DayEntryChanges
 import com.bossxor.lottegiants.domain.EntryPlayer
@@ -305,12 +306,20 @@ internal fun extractKeyPlays(texts: List<RelayText>): List<KeyPlay> {
 }
 
 internal fun provisionalMvp(game: LotteGameInfo): Pair<String, String> {
-    val lotteBatters = game.lotteLineup + game.lotteBenchBatters
-    val best = lotteBatters.maxWithOrNull(
+    // 포스트시즌은 응원팀과 무관하게 양 팀 전체에서 고른다.
+    val mine = game.lotteLineup + game.lotteBenchBatters
+    val theirs = if (game.isPostseason) game.opponentLineup + game.opponentBenchBatters else emptyList()
+    val best = (mine + theirs).maxWithOrNull(
         compareBy<LineupSlot> { it.todayRbi }.thenBy { it.todayHits }.thenBy { it.todayRun },
     ) ?: return "" to ""
     if (best.todayHits <= 0 && best.todayRbi <= 0) return "" to ""
+    val team = if (game.isPostseason) {
+        (if (best in mine) game.focusName() else game.opponentName) + " · "
+    } else {
+        ""
+    }
     return best.name to buildString {
+        append(team)
         append("${best.todayHits}안타")
         if (best.todayRbi > 0) append(" ${best.todayRbi}타점")
         if (best.todayRun > 0) append(" ${best.todayRun}득점")

@@ -755,13 +755,15 @@ private fun PreviewTab(
         Column {
             SectionHeader("경기 정보")
             InfoLine("일시", "${g.gameDate}  ${g.startTime.ifBlank { "-" }}")
-            InfoLine("구장", g.stadium.ifBlank { p?.stadium.orEmpty().ifBlank { "-" } })
+            val stadiumText = g.stadium.ifBlank { p?.stadium.orEmpty().ifBlank { "-" } }
+            // 포스트시즌은 한 팀 기준(홈/원정, 시즌 대결) 대신 구장 옆에 홈팀을 적는다.
+            InfoLine("구장", if (g.isPostseason) "$stadiumText (${g.homeTeamLabel} 홈)" else stadiumText)
             InfoLine("중계", g.broadChannel.ifBlank { "-" })
-            InfoLine("장소", if (g.isHome) "홈" else "원정")
+            if (!g.isPostseason) InfoLine("장소", if (g.isHome) "홈" else "원정")
             if (g.doubleHeaderNo > 0) {
                 InfoLine("더블헤더", "${g.doubleHeaderNo}차전")
             }
-            if (g.seasonSeriesNo > 0) {
+            if (g.seasonSeriesNo > 0 && !g.isPostseason) {
                 InfoLine("시즌 대결", "${g.seasonSeriesNo}차전")
             }
             if (g.gameScLabel.isNotBlank()) {
@@ -2197,8 +2199,10 @@ private fun OffDayHero(
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // 포스트시즌 기간엔 내 팀이 아니라 가장 가까운 포스트시즌 경기의 구장을 쓴다.
+            val psRef = (next ?: last)?.takeIf { it.isPostseason }
             Text(
-                stadiumWatermark(myTeamCode),
+                stadiumWatermark(psRef?.focusTeamCode ?: myTeamCode),
                 color = muted,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -2207,7 +2211,28 @@ private fun OffDayHero(
             Spacer(Modifier.weight(1f))
             CompactRefresh(secondsUntilRefresh, isRefreshing, onRefresh, onDark = dark)
         }
-        last?.let { g ->
+        last?.takeIf { it.isPostseason }?.let { g ->
+            Spacer(Modifier.height(12.dp))
+            val yesterday = remember { com.bossxor.lottegiants.domain.kboToday().minusDays(1).toString() }
+            val lastLabel = if (g.gameDate.take(10) == yesterday) "어제" else "최근"
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = g.gameId.isNotBlank()) { onOpenGame(g.gameId) },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(lastLabel, color = muted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp))
+                TeamLogo(if (g.isHome) g.opponentLogoUrl else g.lotteLogoUrl.ifBlank { teamLogoUrl(g.focusTeamCode) }, size = 24)
+                Spacer(Modifier.width(4.dp))
+                TeamLogo(if (g.isHome) g.lotteLogoUrl.ifBlank { teamLogoUrl(g.focusTeamCode) } else g.opponentLogoUrl, size = 24)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "${g.awayTeamLabel} ${g.neutralScore.replace(":", " : ")} ${g.homeTeamLabel}",
+                    color = onHero, fontWeight = FontWeight.Black, fontSize = 15.sp,
+                )
+            }
+        }
+        last?.takeIf { !it.isPostseason }?.let { g ->
             Spacer(Modifier.height(12.dp))
             val (wl, wlColor) = when {
                 g.lotteScore > g.opponentScore -> "승" to WinGreen
@@ -2237,7 +2262,39 @@ private fun OffDayHero(
                 Text(wl, color = wlColor, fontWeight = FontWeight.Black, fontSize = 14.sp)
             }
         }
-        next?.let { g ->
+        next?.takeIf { it.isPostseason }?.let { g ->
+            Spacer(Modifier.height(10.dp))
+            val countdown = remember(g.gameDate, g.startTime) {
+                com.bossxor.lottegiants.domain.gameCountdownLabel(g.gameDate, g.startTime)
+            }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = g.gameId.isNotBlank()) { onOpenGame(g.gameId) },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("다음", color = muted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp))
+                TeamLogo(if (g.isHome) g.opponentLogoUrl else g.lotteLogoUrl.ifBlank { teamLogoUrl(g.focusTeamCode) }, size = 24)
+                Spacer(Modifier.width(4.dp))
+                TeamLogo(if (g.isHome) g.lotteLogoUrl.ifBlank { teamLogoUrl(g.focusTeamCode) } else g.opponentLogoUrl, size = 24)
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("${g.awayTeamLabel} vs ${g.homeTeamLabel}", color = onHero, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text(
+                        listOf(
+                            g.gameDate.takeLast(5).replace("-", "/"),
+                            g.startTime,
+                            g.stadium,
+                            g.gameScLabel,
+                            countdown,
+                        ).filter { it.isNotBlank() }.joinToString(" · "),
+                        color = soft,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        }
+        next?.takeIf { !it.isPostseason }?.let { g ->
             Spacer(Modifier.height(10.dp))
             val countdown = remember(g.gameDate, g.startTime) {
                 com.bossxor.lottegiants.domain.gameCountdownLabel(g.gameDate, g.startTime)
@@ -2321,7 +2378,7 @@ private fun HeroCard(
                 )
             } else {
                 Text(
-                    stadiumWatermark(myTeamCode.ifBlank { g.focusTeamCode }),
+                    stadiumWatermark(if (g.isPostseason) g.focusTeamCode else myTeamCode.ifBlank { g.focusTeamCode }),
                     color = muted,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
@@ -2347,12 +2404,20 @@ private fun HeroCard(
                 letterSpacing = 1.2.sp,
             )
             g.status == GameStatus.ENDED -> {
-                val (label, color) = when {
-                    g.lotteScore > g.opponentScore -> "WIN" to WinGreen
-                    g.lotteScore < g.opponentScore -> "LOSE" to LoseRed
-                    else -> "DRAW" to LotteGold
+                if (g.isPostseason) {
+                    // 포스트시즌은 어느 팀 기준의 WIN/LOSE가 아니라 대회 라벨과 종료만 쓴다.
+                    Text(
+                        listOf(g.gameScLabel, "종료").filter { it.isNotBlank() }.joinToString(" · "),
+                        fontWeight = FontWeight.Black, fontSize = 16.sp, color = onHero, letterSpacing = 1.2.sp,
+                    )
+                } else {
+                    val (label, color) = when {
+                        g.lotteScore > g.opponentScore -> "WIN" to WinGreen
+                        g.lotteScore < g.opponentScore -> "LOSE" to LoseRed
+                        else -> "DRAW" to LotteGold
+                    }
+                    Text(label, fontWeight = FontWeight.Black, fontSize = 18.sp, color = color, letterSpacing = 1.2.sp)
                 }
-                Text(label, fontWeight = FontWeight.Black, fontSize = 18.sp, color = color, letterSpacing = 1.2.sp)
             }
             g.status == GameStatus.BEFORE -> Text(
                 g.startTime.ifBlank { "예정" },

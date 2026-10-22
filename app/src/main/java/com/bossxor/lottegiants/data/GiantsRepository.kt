@@ -537,7 +537,7 @@ class GiantsRepository private constructor(context: Context) {
         val kbo = dayGames.firstOrNull { it.naverGameId() == gameId || it.gameId == gameId }
         if (kbo != null) {
             val myTeam = store.myTeamCode()
-            val focus = if (kbo.involvesTeam(myTeam)) {
+            val focus = if (kbo.involvesTeam(myTeam) && !kbo.isPostseason()) {
                 myTeam
             } else {
                 kbo.homeId.trim().uppercase()
