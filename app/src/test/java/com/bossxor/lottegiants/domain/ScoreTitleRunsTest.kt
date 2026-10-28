@@ -52,6 +52,25 @@ class ScoreTitleRunsTest {
     }
 
     @Test
+    fun homerunGluedKindTokensAreNotDuplicated() {
+        // 네이버는 "솔로홈런"·"좌월 만루홈런"·"그랜드슬램"처럼 종류를 붙여 쓰기도 한다.
+        assertEquals("롯데 홈런! 전준우 솔로 홈런 · 1:0", formatHomerunTitle("전준우", 1, "1:0", "솔로홈런", "롯데"))
+        assertEquals("롯데 홈런! 전준우 좌월 만루 홈런 · 5:0", formatHomerunTitle("전준우", 4, "5:0", "좌월 만루홈런", "롯데"))
+        assertEquals("롯데 홈런! 전준우 만루 홈런 · 5:0", formatHomerunTitle("전준우", 4, "5:0", "그랜드슬램", "롯데"))
+        assertEquals("롯데 홈런! 전준우 우중간 2점 홈런 · 3:0", formatHomerunTitle("전준우", 2, "3:0", "우중간 2점홈런", "롯데"))
+    }
+
+    @Test
+    fun homerunRunsDoesNotTurnCumulativeDeltaIntoGrandSlam() {
+        val hr = RelayText(1, "김도영 : 좌중간 홈런", 0, 2, true, base1Code = "0", base2Code = "0", base3Code = "0")
+        val play = ScoringPlay(1, "김도영", "좌중간 홈런", 6, null, emptyList(), 2, true, 0, 6)
+        assertEquals(1, homerunRuns(play, listOf(hr)))
+        val loaded = hr.copy(base1Code = "2", base2Code = "1", base3Code = "9")
+        assertEquals(4, homerunRuns(play, listOf(loaded)))
+        assertEquals(6, homerunRuns(play, emptyList()))
+    }
+
+    @Test
     fun homerunNeverSaysMoreThanFour() {
         assertEquals("KIA 홈런! 홈런 · 6:2", formatHomerunTitle(null, 6, "6:2", null, "KIA"))
     }

@@ -320,7 +320,9 @@ data class KboOfficialGame(
             runnerOn1Order = if (live) base1Order else 0,
             runnerOn2Order = if (live) base2Order else 0,
             runnerOn3Order = if (live) base3Order else 0,
-            gameScLabel = gameScNm.trim(),
+            gameScLabel = gameScNm.trim().ifBlank {
+                if (srId in com.bossxor.lottegiants.domain.POSTSEASON_SR_IDS) "포스트시즌" else ""
+            },
             lotteScore = if (isHome) homeScore else awayScore,
             opponentScore = if (isHome) awayScore else homeScore,
             status = state,

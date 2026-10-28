@@ -266,7 +266,8 @@ fun formatHomerunTitle(
         4 -> "만루 홈런"
         else -> "홈런"
     }
-    val dir = how?.trim()?.takeIf { it.isNotBlank() }?.removeSuffix("홈런")?.trim().orEmpty()
+    val dir = how?.trim().orEmpty()
+        .replace(Regex("(솔로|[0-9]점|만루)?\\s*홈런|그랜드슬램"), "").trim()
     val howPart = listOf(dir, kind).filter { it.isNotBlank() }.joinToString(" ")
     val whoPart = who?.trim().orEmpty()
     return buildString {

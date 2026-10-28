@@ -3,6 +3,7 @@ package com.bossxor.lottegiants.data
 import android.content.Context
 import com.bossxor.lottegiants.domain.GamePreview
 import com.bossxor.lottegiants.domain.GameStatus
+import com.bossxor.lottegiants.domain.isPostseason
 import com.bossxor.lottegiants.domain.LOTTE_TEAM_CODE
 import com.bossxor.lottegiants.domain.LeaderPlayer
 import com.bossxor.lottegiants.domain.LineupSlot
@@ -217,12 +218,15 @@ class GiantsRepository private constructor(context: Context) {
             null
         }
         var focus = periodFocus ?: kboFocus
-        val kboLotte = kboPicked?.takeIf { periodFocus == null || it.involvesTeam(periodFocus) }
-        // 포커스 팀이 바뀌면(내 팀 → 포스트시즌 경기) 이전 다음 경기·최근 경기 카드를 쓰지 않는다.
+        val kboLotte = kboPicked
+        // 옆 카드(다음·최근 경기)는 같은 모드일 때만 다시 쓴다. 포스트시즌 ↔ 정규시즌이 바뀌거나 정규시즌에서
+        // 응원팀이 바뀌면 새로 만든다. 포스트시즌은 경기마다 홈팀이 달라 팀 비교로는 매번 놓치므로 모드만 본다.
+        val psMode = kboToday.any { it.isPostseason() } || periodFocus != null
         val reuseSideCards = rangeWasCached &&
             prev?.nextLotteGame != null &&
             prev.recentLotteGames.isNotEmpty() &&
-            prev.nextLotteGame.focusTeamCode.equals(focus, ignoreCase = true)
+            prev.nextLotteGame.isPostseason == psMode &&
+            (psMode || prev.nextLotteGame.focusTeamCode.equals(focus, ignoreCase = true))
         val lotteTodayNaver = if (kboLotte == null) {
             val naverTodayAll = runCatching {
                 api.getGames(fromDate = todayStr, toDate = todayStr)

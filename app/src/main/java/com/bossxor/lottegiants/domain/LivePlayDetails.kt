@@ -145,7 +145,9 @@ fun isPlateResult(text: String): Boolean = !isRunnerMovement(text) && parseSubst
 fun homerunRuns(play: ScoringPlay, texts: List<RelayText>): Int {
     val line = texts.firstOrNull { it.seqno == play.seqno && it.text.contains("홈런") } ?: return play.runs
     val onBase = listOf(line.base1Code, line.base2Code, line.base3Code).count { !it.isNullOrBlank() && it != "0" }
-    return maxOf(play.runs, 1 + onBase).coerceAtMost(4)
+    val fromBases = (1 + onBase).coerceAtMost(4)
+    // 점수 차가 한 플레이로 불가능한 값(5점 이상)이면 홈런 줄의 주자 수만 믿는다.
+    return if (play.runs in 1..4) maxOf(play.runs, fromBases) else fromBases
 }
 
 /** 득점 알림 본문. 지금 타석(득점 뒤 다음 타자)은 득점한 타자로 오해되므로 넣지 않는다. */
