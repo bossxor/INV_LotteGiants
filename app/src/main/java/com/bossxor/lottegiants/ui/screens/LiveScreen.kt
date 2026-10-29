@@ -1248,6 +1248,13 @@ private fun SummaryTab(
                     )
                 }
                 Spacer(Modifier.height(4.dp))
+                // 포스트시즌은 내 팀이 없으니 두 팀 고유색으로 칠한다.
+                val awayCode = if (g.isHome) g.opponentCode else g.focusTeamCode
+                val homeCode = if (g.isHome) g.focusTeamCode else g.opponentCode
+                val awayBar = if (g.isPostseason) Color(com.bossxor.lottegiants.widget.WidgetAssets.winProbBarColor(awayCode))
+                else if (g.isHome) Color(0xFFC30452) else LotteRed
+                val homeBar = if (g.isPostseason) Color(com.bossxor.lottegiants.widget.WidgetAssets.winProbBarColor(homeCode))
+                else if (g.isHome) LotteRed else Color(0xFF9AA0A6)
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -1258,13 +1265,13 @@ private fun SummaryTab(
                         Modifier
                             .weight(awayProb.toFloat().coerceIn(0.02f, 0.98f))
                             .fillMaxHeight()
-                            .background(if (g.isHome) Color(0xFFC30452) else LotteRed),
+                            .background(awayBar),
                     )
                     Box(
                         Modifier
                             .weight(homeProb.toFloat().coerceIn(0.02f, 0.98f))
                             .fillMaxHeight()
-                            .background(if (g.isHome) LotteRed else Color(0xFF9AA0A6)),
+                            .background(homeBar),
                     )
                 }
                 if (winSeries.size >= 2) {

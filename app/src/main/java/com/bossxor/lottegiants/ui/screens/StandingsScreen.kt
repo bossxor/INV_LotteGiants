@@ -64,6 +64,9 @@ import com.bossxor.lottegiants.ui.WinGreen
 import com.bossxor.lottegiants.ui.ScoreShare
 import com.bossxor.lottegiants.ui.components.ScreenTitle
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.runtime.CompositionLocalProvider
 import com.bossxor.lottegiants.ui.components.SectionCard
 import com.bossxor.lottegiants.ui.components.SparklineChart
 import com.bossxor.lottegiants.ui.components.TeamLogo
@@ -294,7 +297,7 @@ fun StandingsScreen(
                             )
                         }
                         Spacer(Modifier.height(6.dp))
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp)) {
+                        CappedFontScale { Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp)) {
                             Text(
                                 "순위",
                                 Modifier.weight(StandingCol.rank),
@@ -344,7 +347,7 @@ fun StandingsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.Bold,
                             )
-                        }
+                        } }
                         HorizontalDivider(
                             thickness = 1.dp,
                             color = MaterialTheme.colorScheme.outlineVariant,
@@ -730,8 +733,25 @@ private fun formatGb(gb: Double?): String {
     return if (gb > 0) "+$absStr" else "-$absStr"
 }
 
+/** 고정 열 너비 표라 글자 배율 1.3배까지만 키운다(2.0배에서 글자 단위로 깨짐). */
+@Composable
+private fun CappedFontScale(content: @Composable () -> Unit) {
+    val d = LocalDensity.current
+    CompositionLocalProvider(LocalDensity provides Density(d.density, minOf(d.fontScale, 1.3f))) { content() }
+}
+
 @Composable
 private fun StandingRow(
+    t: TeamStanding,
+    base: TeamStanding?,
+    isBase: Boolean,
+    onClick: () -> Unit,
+    isLotte: Boolean = false,
+    compact: Boolean = false,
+) = CappedFontScale { StandingRowBody(t, base, isBase, onClick, isLotte, compact) }
+
+@Composable
+private fun StandingRowBody(
     t: TeamStanding,
     base: TeamStanding?,
     isBase: Boolean,

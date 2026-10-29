@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 internal class ScheduleSource(private val api: KboOfficialApi,
     private val clock: () -> Long = { System.nanoTime() / 1_000_000L }) {
     private val cache = ConcurrentHashMap<LocalDate, Pair<Long, List<KboOfficialGame>>>()
+    private val failedAt = ConcurrentHashMap<LocalDate, Long>()
     private val flight = SingleFlight<LocalDate, List<KboOfficialGame>>()
     private val rangeLimit = Semaphore(6)
     private val rangeFlight = SingleFlight<LocalDate, List<KboOfficialGame>>()
@@ -26,6 +27,8 @@ internal class ScheduleSource(private val api: KboOfficialApi,
     suspend fun day(date: LocalDate, fresh: Boolean = false): List<KboOfficialGame> {
         val ttl = if (date == kboToday() || date == LocalDate.now(KBO_ZONE)) 30_000L else 600_000L
         if (!fresh) cache[date]?.takeIf { clock() - it.first in 0 until ttl }?.let { return it.second }
+        // KBO가 막혔을 때 폴링마다 같은 날짜를 다시 두드리지 않는다.
+        if (!fresh && failedAt[date]?.let { clock() - it in 0 until FAIL_BACKOFF_MS } == true) return emptyList()
         return try {
             flight.run(date) {
                 val response = api.getGameList(date = KboOfficialApi.dateParam(date))
@@ -33,18 +36,25 @@ internal class ScheduleSource(private val api: KboOfficialApi,
                 response.game.filter { it.gameId.isNotBlank() }.forKboDate(date).also {
                     // 정상 빈 일정도 캐시한다. 실패 응답은 저장하지 않는다.
                     cache[date] = clock() to it
+                    failedAt.remove(date)
                     val earliest = kboToday().minusDays(400)
                     cache.keys.removeAll { d -> d < earliest || d > kboToday().plusDays(400) }
                 }
             }
         } catch (e: CancellationException) { throw e }
-        catch (e: Exception) { if (fresh) throw e else emptyList() }
+        catch (e: Exception) {
+            if (fresh) throw e
+            failedAt[date] = clock()
+            emptyList()
+        }
     }
 
     suspend fun range(from: LocalDate, to: LocalDate): List<KboOfficialGame> = coroutineScope {
         generateSequence(from) { it.plusDays(1) }.takeWhile { !it.isAfter(to) }
             .map { date -> async { rangeLimit.withPermit { day(date) } } }.toList().awaitAll().flatten()
     }
+
+    private companion object { const val FAIL_BACKOFF_MS = 60_000L }
 
     suspend fun seasonWindow(today: LocalDate): List<KboOfficialGame> {
         if (hasSeasonWindow(today)) return season
