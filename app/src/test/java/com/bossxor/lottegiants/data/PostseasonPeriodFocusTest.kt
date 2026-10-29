@@ -26,12 +26,22 @@ class PostseasonPeriodFocusTest {
     }
 
     @Test fun afterKoreanSeriesEndsFallsBackToMyTeam() {
-        val range = listOf(g("20261101", "KT", "LG", "KS7", 3, 5))
+        val range = listOf(g("20261101", "KT", "LG", "KS7", 3, 7))
         assertNull(postseasonPeriodFocus(range, "2026-11-02", emptyList(), "LT"))
     }
 
+    @Test fun afterWildCardEndsKeepsPostseasonFocus() {
+        val range = listOf(g("20261006", "HT", "LG", "WC2", 3, 5))
+        assertEquals("LG", postseasonPeriodFocus(range, "2026-10-07", emptyList(), "LT"))
+    }
+
+    @Test fun canceledKoreanSeriesGameIsNotTheEnd() {
+        val range = listOf(g("20261101", "KT", "LG", "KS2", 3, 7), g("20261103", "LG", "KT", "KS3", 4, 7))
+        assertEquals("LG", postseasonPeriodFocus(range, "2026-11-03", emptyList(), "LT"))
+    }
+
     @Test fun koreanSeriesBreakDayKeepsNextGame() {
-        val range = listOf(g("20261101", "KT", "LG", "KS2", 3, 5), g("20261103", "LG", "KT", "KS3", 1, 5))
+        val range = listOf(g("20261101", "KT", "LG", "KS2", 3, 7), g("20261103", "LG", "KT", "KS3", 1, 7))
         assertEquals("KT", postseasonPeriodFocus(range, "2026-11-02", emptyList(), "LT"))
     }
 

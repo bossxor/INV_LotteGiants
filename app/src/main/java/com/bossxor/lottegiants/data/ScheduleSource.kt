@@ -28,7 +28,7 @@ internal class ScheduleSource(private val api: KboOfficialApi,
         val ttl = if (date == kboToday() || date == LocalDate.now(KBO_ZONE)) 30_000L else 600_000L
         if (!fresh) cache[date]?.takeIf { clock() - it.first in 0 until ttl }?.let { return it.second }
         // KBO가 막혔을 때 폴링마다 같은 날짜를 다시 두드리지 않는다.
-        if (!fresh && failedAt[date]?.let { clock() - it in 0 until FAIL_BACKOFF_MS } == true) return emptyList()
+        if (!fresh && failedAt[date]?.let { clock() - it in 0 until FAIL_BACKOFF_MS } == true) return cache[date]?.second ?: emptyList()
         return try {
             flight.run(date) {
                 val response = api.getGameList(date = KboOfficialApi.dateParam(date))
@@ -39,13 +39,14 @@ internal class ScheduleSource(private val api: KboOfficialApi,
                     failedAt.remove(date)
                     val earliest = kboToday().minusDays(400)
                     cache.keys.removeAll { d -> d < earliest || d > kboToday().plusDays(400) }
+                    failedAt.keys.removeAll { d -> d < earliest || d > kboToday().plusDays(400) }
                 }
             }
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) {
             if (fresh) throw e
             failedAt[date] = clock()
-            emptyList()
+            cache[date]?.second ?: emptyList() // 직전 정상 데이터가 있으면 만료됐어도 빈 일정보다 낫다
         }
     }
 
@@ -60,8 +61,11 @@ internal class ScheduleSource(private val api: KboOfficialApi,
         if (hasSeasonWindow(today)) return season
         return rangeFlight.run(today) {
             if (hasSeasonWindow(today)) return@run season
-            range(today.minusDays(21), today.plusDays(14)).also {
-                if (it.isNotEmpty()) { season = it; seasonAt = clock(); seasonDay = today }
+            val from = today.minusDays(21)
+            val to = today.plusDays(14)
+            range(from, to).also {
+                // 일부 날짜 조회가 실패했으면 구멍 난 일정을 10분 캐시하지 않는다.
+                if (it.isNotEmpty() && failedAt.keys.none { d -> d >= from && d <= to }) { season = it; seasonAt = clock(); seasonDay = today }
             }.ifEmpty { if (seasonDay == today) season else emptyList() }
         }
     }

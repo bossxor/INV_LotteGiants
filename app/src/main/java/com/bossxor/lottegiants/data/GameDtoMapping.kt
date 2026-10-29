@@ -166,12 +166,14 @@ internal fun postseasonPeriodFocus(
     val last = ps.filter { it.isoDate() <= todayIso && it.status() == GameStatus.ENDED }
         .maxWithOrNull(compareBy({ it.isoDate() }, { it.startTime }))
     // 한국시리즈가 끝나 남은 포스트시즌 경기가 없으면 시즌이 끝난 것이니 내 팀 기준으로 돌아간다.
-    if (next == null && last != null && last.isKoreanSeries()) return null
+    // 우천 취소·진행 중인 한국시리즈 경기가 남아 있으면 아직 끝난 게 아니다.
+    val ksOpen = range.any { it.isKoreanSeries() && it.isoDate() >= todayIso && it.status() != GameStatus.ENDED }
+    if (next == null && last != null && last.isKoreanSeries() && !ksOpen) return null
     return (next ?: last)?.homeId?.trim()?.uppercase()?.takeIf { it.isNotBlank() }
 }
 
 internal fun KboOfficialGame.isKoreanSeries(): Boolean =
-    srId == 5 || gameScNm.replace(" ", "").let { it.startsWith("KS", true) || it.contains("한국시리즈") }
+    srId == 7 || gameScNm.replace(" ", "").let { it.startsWith("KS", true) || it.contains("한국시리즈") }
 
 /**
  * 내 팀이 시즌 중이 아니면 true. 시즌 중 = 일정 창(지난 3주~앞으로 2주)에 이미 치른 경기와 남은 경기가 모두 있을 때.
