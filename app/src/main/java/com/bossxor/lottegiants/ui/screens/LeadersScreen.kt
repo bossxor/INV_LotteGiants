@@ -32,6 +32,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,11 +98,11 @@ fun LeadersScreen(
     filterTeamCode: String = LOTTE_TEAM_CODE,
     onRetry: (() -> Unit)? = null,
 ) {
-    var tab by remember { mutableIntStateOf(0) }
+    var tab by rememberSaveable { mutableIntStateOf(0) }
     var teamOnly by remember(filterTeamCode) {
         mutableStateOf(filterTeamCode.isNotBlank() && filterTeamCode != LOTTE_TEAM_CODE)
     }
-    var query by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
     val season = remember { LocalDate.now().let { if (it.monthValue < 3) it.year - 1 else it.year } }
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
     val teamLabel = teamCodeToName(filterTeamCode).ifBlank { "롯데" }

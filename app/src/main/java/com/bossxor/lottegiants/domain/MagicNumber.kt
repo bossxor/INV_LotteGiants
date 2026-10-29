@@ -549,7 +549,7 @@ fun lotteRaceSummary(
     val headline = buildString {
         append("$focusName ${lotte.ranking}위")
         if (slot.isNotBlank()) append(" · $slot")
-        append(" · 잔여 ${rem}경기")
+        append(if (rem > 0) " · 잔여 ${rem}경기" else " · 정규시즌 종료")
     }
     val lines = mutableListOf<String>()
 

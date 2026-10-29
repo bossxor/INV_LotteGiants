@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -124,7 +125,7 @@ fun StandingsScreen(
                 ScreenTitle("순위")
             }
             item {
-                var query by remember { mutableStateOf("") }
+                var query by rememberSaveable { mutableStateOf("") }
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },

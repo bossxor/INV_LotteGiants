@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -83,6 +84,7 @@ import com.bossxor.lottegiants.ui.LotteGold
 import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.LoseRed
 import com.bossxor.lottegiants.ui.WinGreen
+import com.bossxor.lottegiants.ui.readableText
 import com.bossxor.lottegiants.ui.components.ScreenTitle
 import com.bossxor.lottegiants.ui.components.TeamLogo
 import java.time.DayOfWeek
@@ -446,8 +448,10 @@ private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Text(
         label,
         modifier = Modifier
+            .widthIn(min = 48.dp)
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 7.dp),
+        textAlign = TextAlign.Center,
         color = if (selected) LotteRed else MaterialTheme.colorScheme.onSurfaceVariant,
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         fontSize = 13.sp,
@@ -594,9 +598,9 @@ private fun CalendarMonthView(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("승", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = WinGreen)
-                Text("패", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LoseRed)
-                Text("무", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LotteGold)
+                Text("승", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = readableText(WinGreen))
+                Text("패", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = readableText(LoseRed))
+                Text("무", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = readableText(LotteGold))
                 Text("·", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("홈", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CalHomeBlue)
                 Text("원정", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CalAwayRed)
@@ -728,7 +732,7 @@ private fun RowScope.CalendarDayCell(
                         cellLabel,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Black,
-                        color = cellLabelColor,
+                        color = readableText(cellLabelColor),
                         maxLines = 1,
                     )
                 } else if (date == today) {
@@ -873,7 +877,7 @@ private fun StatusPill(text: String, color: Color) {
             .clip(RoundedCornerShape(6.dp))
             .background(color.copy(alpha = 0.15f))
             .padding(horizontal = 8.dp, vertical = 2.dp),
-        color = color,
+        color = readableText(color),
         fontSize = 11.sp,
         fontWeight = FontWeight.Bold,
         maxLines = 1,

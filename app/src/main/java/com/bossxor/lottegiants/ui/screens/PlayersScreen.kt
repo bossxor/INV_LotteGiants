@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -30,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,7 +69,7 @@ fun PlayersScreen(
     onFavoriteClick: (FavoritePlayer) -> Unit = {},
     onJerseyClick: (EntryPlayer) -> Unit = {},
 ) {
-    var query by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
     val focusTeam = playersTeamCode.ifBlank { myTeamCode }
 
     LaunchedEffect(Unit) { onAppear() }
@@ -265,9 +268,11 @@ private fun PlayersModeChip(label: String, selected: Boolean, onClick: () -> Uni
     Text(
         label,
         modifier = Modifier
+            .widthIn(min = 48.dp)
             .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 7.dp),
+        textAlign = TextAlign.Center,
         color = if (selected) LotteRed else MaterialTheme.colorScheme.onSurfaceVariant,
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         fontSize = 13.sp,

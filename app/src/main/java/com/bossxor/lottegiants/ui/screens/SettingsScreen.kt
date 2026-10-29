@@ -11,6 +11,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,11 +41,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -112,7 +116,7 @@ fun SettingsScreen(
     ) {
         ScreenTitle("설정", "테마 · 알림 · 업데이트")
 
-        val myTeam by store.myTeamCodeFlow.collectAsState(initial = LOTTE_TEAM_CODE)
+        val myTeam by store.myTeamCodeFlow.collectAsStateWithLifecycle(initialValue = LOTTE_TEAM_CODE)
         var pickTeam by remember { mutableStateOf(false) }
         var confirmTeam by remember { mutableStateOf<String?>(null) }
         var switchingTeam by remember { mutableStateOf(false) }
@@ -225,7 +229,6 @@ fun SettingsScreen(
                 ) {
                     ThemeOption(
                         selected = pickedTheme == ThemeMode.LIGHT,
-                        icon = Icons.Default.Star,
                         label = "라이트",
                         modifier = Modifier.weight(1f),
                         onClick = {
@@ -235,7 +238,6 @@ fun SettingsScreen(
                     )
                     ThemeOption(
                         selected = pickedTheme == ThemeMode.DARK,
-                        icon = Icons.Default.Check,
                         label = "다크",
                         modifier = Modifier.weight(1f),
                         onClick = {
@@ -245,7 +247,6 @@ fun SettingsScreen(
                     )
                     ThemeOption(
                         selected = pickedTheme == ThemeMode.SYSTEM,
-                        icon = Icons.Default.Settings,
                         label = "시스템",
                         modifier = Modifier.weight(1f),
                         onClick = {
@@ -265,7 +266,7 @@ fun SettingsScreen(
             fontSize = 12.sp,
         )
         Spacer(Modifier.height(8.dp))
-        val liveOnly by store.alertsLiveOnlyFlow.collectAsState(initial = false)
+        val liveOnly by store.alertsLiveOnlyFlow.collectAsStateWithLifecycle(initialValue = false)
         SectionCard {
             Column {
                 Text("프리셋", fontWeight = FontWeight.SemiBold)
@@ -287,13 +288,13 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Switch(
+                    AppSwitch(
                         checked = liveOnly,
                         onCheckedChange = { on -> scope.launch { store.setAlertsLiveOnly(on) } },
                     )
                 }
                 Spacer(Modifier.height(12.dp))
-                val vibrateOn by store.alertVibrateFlow.collectAsState(initial = true)
+                val vibrateOn by store.alertVibrateFlow.collectAsStateWithLifecycle(initialValue = true)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("득점·역전 진동", fontWeight = FontWeight.SemiBold)
@@ -303,13 +304,13 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Switch(
+                    AppSwitch(
                         checked = vibrateOn,
                         onCheckedChange = { on -> scope.launch { store.setAlertVibrate(on) } },
                     )
                 }
                 Spacer(Modifier.height(12.dp))
-                val chanceAtBat by store.chanceAtBatChangeFlow.collectAsState(initial = true)
+                val chanceAtBat by store.chanceAtBatChangeFlow.collectAsStateWithLifecycle(initialValue = true)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("득점권 타석이 바뀌면 알림", fontWeight = FontWeight.SemiBold)
@@ -319,7 +320,7 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Switch(
+                    AppSwitch(
                         checked = chanceAtBat,
                         onCheckedChange = { on -> scope.launch { store.setChanceAtBatChange(on) } },
                     )
@@ -328,7 +329,7 @@ fun SettingsScreen(
         }
         Spacer(Modifier.height(8.dp))
 
-        val alertHistory by store.alertHistoryFlow.collectAsState(initial = emptyList())
+        val alertHistory by store.alertHistoryFlow.collectAsStateWithLifecycle(initialValue = emptyList())
         val todayStart = remember {
             java.time.ZonedDateTime.now(com.bossxor.lottegiants.domain.KBO_ZONE)
                 .toLocalDate().atStartOfDay(com.bossxor.lottegiants.domain.KBO_ZONE)
@@ -387,7 +388,7 @@ fun SettingsScreen(
         SectionCard {
             Column {
                 NotificationType.entries.forEachIndexed { i, type ->
-                    val enabled by store.notificationEnabledFlow(type).collectAsState(initial = true)
+                    val enabled by store.notificationEnabledFlow(type).collectAsStateWithLifecycle(initialValue = true)
                     Row(
                         Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -396,7 +397,7 @@ fun SettingsScreen(
                             Text(type.label, fontWeight = FontWeight.SemiBold)
                             Text(type.descriptionFor(teamCodeToName(myTeam)), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Switch(
+                        AppSwitch(
                             checked = enabled,
                             onCheckedChange = { on ->
                                 scope.launch { store.setNotificationEnabled(type, on) }
@@ -423,8 +424,8 @@ fun SettingsScreen(
             fontSize = 12.sp,
         )
         Spacer(Modifier.height(8.dp))
-        val liveEnabled by store.liveScoreEnabledFlow.collectAsState(initial = true)
-        val liveMode by store.liveDisplayModeFlow.collectAsState(initial = LiveDisplayMode.FULL)
+        val liveEnabled by store.liveScoreEnabledFlow.collectAsStateWithLifecycle(initialValue = true)
+        val liveMode by store.liveDisplayModeFlow.collectAsStateWithLifecycle(initialValue = LiveDisplayMode.FULL)
         val notifEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
         SectionCard {
             Column {
@@ -433,7 +434,7 @@ fun SettingsScreen(
                         Text("실시간 스코어", fontWeight = FontWeight.SemiBold)
                         Text("끄면 실시간 스코어 알림을 숨깁니다", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Switch(
+                    AppSwitch(
                         checked = liveEnabled,
                         onCheckedChange = { on ->
                             scope.launch {
@@ -522,7 +523,7 @@ fun SettingsScreen(
                     }
                 }
                 Spacer(Modifier.height(14.dp))
-                val liveLead by store.liveLeadMinutesFlow.collectAsState(initial = 120)
+                val liveLead by store.liveLeadMinutesFlow.collectAsStateWithLifecycle(initialValue = 120)
                 Text("알림 표시 시작", fontWeight = FontWeight.SemiBold)
                 Text(
                     "경기 시작 ${liveLeadLabel(liveLead)}부터 · 30분~4시간",
@@ -612,8 +613,8 @@ fun SettingsScreen(
         Spacer(Modifier.height(24.dp))
         Text("홈 화면 위젯", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
-        val widgetOpacity by store.widgetOpacityFlow.collectAsState(initial = 100)
-        val showOppLogo by store.widgetShowOppLogoFlow.collectAsState(initial = true)
+        val widgetOpacity by store.widgetOpacityFlow.collectAsStateWithLifecycle(initialValue = 100)
+        val showOppLogo by store.widgetShowOppLogoFlow.collectAsStateWithLifecycle(initialValue = true)
         var opacitySlide by remember { mutableStateOf(widgetOpacity.toFloat()) }
         LaunchedEffect(widgetOpacity) { opacitySlide = widgetOpacity.toFloat() }
         SectionCard {
@@ -636,7 +637,7 @@ fun SettingsScreen(
                         Text("상대 팀 로고", fontWeight = FontWeight.SemiBold)
                         Text("끄면 위젯에서 상대 엠블럼을 숨깁니다", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Switch(
+                    AppSwitch(
                         checked = showOppLogo,
                         onCheckedChange = { on ->
                             scope.launch {
@@ -947,14 +948,33 @@ private fun openSamsungSleepSettings(context: android.content.Context) {
     }
 }
 
+/** 꺼진 상태가 배경에 묻히지 않게 트랙 테두리와 손잡이를 진하게 한 스위치. */
+@Composable
+private fun AppSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    val off = MaterialTheme.colorScheme.onSurfaceVariant
+    Switch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        colors = SwitchDefaults.colors(
+            uncheckedThumbColor = off,
+            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+            uncheckedBorderColor = off,
+        ),
+    )
+}
+
 @Composable
 private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(10.dp)
     Text(
         label,
         modifier = Modifier
+            .clip(shape)
+            .background(if (selected) LotteRed.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant)
+            .border(1.dp, if (selected) LotteRed else MaterialTheme.colorScheme.outline, shape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 7.dp),
-        color = if (selected) LotteRed else MaterialTheme.colorScheme.onSurfaceVariant,
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        color = if (selected) LotteRed else MaterialTheme.colorScheme.onSurface,
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
         fontSize = 13.sp,
     )
@@ -963,7 +983,6 @@ private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun ThemeOption(
     selected: Boolean,
-    icon: ImageVector,
     label: String,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
@@ -978,16 +997,28 @@ private fun ThemeOption(
             .clip(RoundedCornerShape(14.dp))
             .border(1.5.dp, border, RoundedCornerShape(14.dp))
             .background(bg)
-            .clickable(onClick = onClick)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .padding(vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            icon,
-            contentDescription = label,
-            tint = if (selected) LotteRed else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(22.dp),
-        )
+        // 선택은 라디오처럼 체크 원으로만 보여 준다(테마마다 다른 아이콘은 상태로 오해된다).
+        Box(
+            Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .then(
+                    if (selected) {
+                        Modifier.background(LotteRed)
+                    } else {
+                        Modifier.border(1.5.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape)
+                    },
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (selected) {
+                Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+            }
+        }
         Spacer(Modifier.height(6.dp))
         Text(
             label,

@@ -46,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
@@ -85,6 +86,7 @@ import com.bossxor.lottegiants.domain.WinProb
 import com.bossxor.lottegiants.domain.inningLabel
 import com.bossxor.lottegiants.ui.LoseRed
 import com.bossxor.lottegiants.ui.LotteGold
+import com.bossxor.lottegiants.ui.readableText
 import com.bossxor.lottegiants.ui.LotteRed
 import com.bossxor.lottegiants.ui.WinGreen
 import com.bossxor.lottegiants.domain.RecentFormGame
@@ -140,7 +142,7 @@ fun LiveScreen(
     initialDetailTab: String? = null,
     focusNonce: Int = 0,
 ) {
-    var selectedTab by remember { mutableIntStateOf(detailTabIndex(initialDetailTab)) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(detailTabIndex(initialDetailTab)) }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     // 탭 내용이 짧아도 한 화면을 채우게 해서, 어떤 탭에서든 스크롤로 히어로를 접을 수 있게 한다.
@@ -289,7 +291,7 @@ fun LiveScreen(
                                     },
                                     onDismiss = {
                                         showPermBanner = false
-                                        kotlinx.coroutines.MainScope().launch { store.setBannerDismissedDay(today) }
+                                        scope.launch { store.setBannerDismissedDay(today) }
                                     },
                                 )
                             }
@@ -465,7 +467,7 @@ fun LiveScreen(
                                 },
                                 onDismiss = {
                                     showPermBanner = false
-                                    kotlinx.coroutines.MainScope().launch { store.setBannerDismissedDay(today) }
+                                    scope.launch { store.setBannerDismissedDay(today) }
                                 },
                             )
                             Spacer(Modifier.height(10.dp))
@@ -2408,7 +2410,7 @@ private fun HeroCard(
                 g.suspendLabel,
                 fontWeight = FontWeight.Black,
                 fontSize = 16.sp,
-                color = LotteGold,
+                color = readableText(LotteGold),
             )
             g.status == GameStatus.LIVE -> Text(
                 "LIVE",
@@ -2430,14 +2432,15 @@ private fun HeroCard(
                         g.lotteScore < g.opponentScore -> "LOSE" to LoseRed
                         else -> "DRAW" to LotteGold
                     }
-                    Text(label, fontWeight = FontWeight.Black, fontSize = 18.sp, color = color, letterSpacing = 1.2.sp)
+                    Text(label, fontWeight = FontWeight.Black, fontSize = 18.sp, color = readableText(color), letterSpacing = 1.2.sp)
                 }
             }
+            // 시각은 가운데 알약과 카운트다운에 이미 있어, 위쪽에는 상태 이름만 둔다.
             g.status == GameStatus.BEFORE -> Text(
-                g.startTime.ifBlank { "예정" },
+                "경기 전",
                 fontWeight = FontWeight.Black,
                 fontSize = 16.sp,
-                color = LotteGold,
+                color = soft,
             )
             g.status == GameStatus.CANCELED -> Text(
                 g.cancelLabel.ifBlank { "취소" },
@@ -2474,7 +2477,7 @@ private fun HeroCard(
                         }
                         if (cd.isNotBlank() && cd != g.startTime) {
                             Spacer(Modifier.height(4.dp))
-                            Text(cd, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LotteGold, maxLines = 1)
+                            Text(cd, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = readableText(LotteGold), maxLines = 1)
                         }
                     }
                     Spacer(Modifier.height(8.dp))

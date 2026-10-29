@@ -13,6 +13,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
@@ -147,6 +148,10 @@ fun heroGradient(): Brush {
 @Composable
 fun heroOnColor(): Color =
     if (isAppDark()) Color.White else MaterialTheme.colorScheme.onBackground
+
+/** 밝은 테마에서 강조색(금·초록·빨강)을 글자로 쓰면 대비가 1~3:1이라, 글자만 어둡게 눌러 4.5:1 안팎으로 맞춘다. */
+@Composable
+fun readableText(c: Color): Color = if (isAppDark()) c else lerp(c, Color.Black, 0.5f)
 
 @Composable
 fun heroLeadScoreColor(): Color =

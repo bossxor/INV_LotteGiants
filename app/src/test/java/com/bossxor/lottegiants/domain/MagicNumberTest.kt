@@ -102,6 +102,17 @@ class MagicNumberTest {
     }
 
     @Test
+    fun headlineSaysSeasonOverWhenNoGamesLeft() {
+        val standings = listOf(
+            team("SS", 1, 85, 59),
+            team(LOTTE_TEAM_CODE, 7, 66, 78, games = 144),
+        )
+        val race = lotteRaceSummary(standings)!!
+        assertTrue(race.headline.contains("정규시즌 종료"))
+        assertTrue(!race.headline.contains("잔여"))
+    }
+
+    @Test
     fun seventhShowsWildcardGapAndTragic() {
         val standings = listOf(
             team("SS", 1, 85, 45),

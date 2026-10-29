@@ -12,6 +12,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.bossxor.lottegiants.BuildConfig
 import com.bossxor.lottegiants.data.GiantsRepository
 import com.bossxor.lottegiants.data.NotificationType
 import com.bossxor.lottegiants.domain.GameStatus
@@ -371,6 +372,8 @@ class GameAlarmReceiver : BroadcastReceiver() {
         ) {
             return
         }
+        // 미리보기 알림은 개발용이라 릴리스 빌드에서는 다른 앱이 보내도 무시한다.
+        if (action == GameSchedulerWorker.ACTION_PREVIEW_NOWBAR && !BuildConfig.DEBUG) return
         val pending = goAsync()
         Thread {
             try {

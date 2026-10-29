@@ -42,12 +42,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -123,45 +124,45 @@ class MainActivity : ComponentActivity() {
         applyOpenIntent(intent)
 
         setContent {
-            val themeMode by vm.themeMode.collectAsState()
-            val myTeamCode by vm.myTeamCode.collectAsState()
+            val themeMode by vm.themeMode.collectAsStateWithLifecycle()
+            val myTeamCode by vm.myTeamCode.collectAsStateWithLifecycle()
             LotteGiantsTheme(themeMode = themeMode, teamCode = myTeamCode) {
-                val snapshot by vm.snapshot.collectAsState()
-                val standings by vm.standings.collectAsState()
-                val error by vm.error.collectAsState()
-                val refreshError by vm.refreshError.collectAsState()
-                val dayGames by vm.dayGames.collectAsState()
-                val dayGamesLoading by vm.dayGamesLoading.collectAsState()
-                val selectedDate by vm.selectedDate.collectAsState()
-                val secondsUntilRefresh by vm.secondsUntilRefresh.collectAsState()
-                val isRefreshing by vm.isRefreshing.collectAsState()
-                val monthGames by vm.monthGames.collectAsState()
-                val calendarMonth by vm.calendarMonth.collectAsState()
-                val weather by vm.weather.collectAsState()
-                val entryDate by vm.entryDate.collectAsState()
-                val dayEntry by vm.dayEntry.collectAsState()
-                val entryLoading by vm.entryLoading.collectAsState()
-                val entryFailed by vm.entryFailed.collectAsState()
-                val recentEntries by vm.recentEntries.collectAsState()
-                val entryChangeDates by vm.entryChangeDates.collectAsState()
-                val teamCard by vm.teamCard.collectAsState()
-                val batterLeaders by vm.batterLeaders.collectAsState()
-                val pitcherLeaders by vm.pitcherLeaders.collectAsState()
-                val playerDetail by vm.playerDetail.collectAsState()
-                val playerLoading by vm.playerLoading.collectAsState()
-                val favoriteCodes by vm.favoriteCodes.collectAsState()
-                val favoritePlayers by vm.favoritePlayers.collectAsState()
-                val favoriteStats by vm.favoriteStats.collectAsState()
-                val viewingGame by vm.viewingGame.collectAsState()
-                val viewingLoading by vm.viewingLoading.collectAsState()
-                val resultsTeamCode by vm.resultsTeamCode.collectAsState()
-                val seasonGames by vm.seasonGames.collectAsState()
-                val seasonLoading by vm.seasonLoading.collectAsState()
-                val jerseyPlayers by vm.jerseyPlayers.collectAsState()
-                val jerseyLoading by vm.jerseyLoading.collectAsState()
-                val playersTeamCode by vm.playersTeamCode.collectAsState()
-                val overlayTeamCode by vm.overlayTeamCode.collectAsState()
-                val overlayTeamCard by vm.overlayTeamCard.collectAsState()
+                val snapshot by vm.snapshot.collectAsStateWithLifecycle()
+                val standings by vm.standings.collectAsStateWithLifecycle()
+                val error by vm.error.collectAsStateWithLifecycle()
+                val refreshError by vm.refreshError.collectAsStateWithLifecycle()
+                val dayGames by vm.dayGames.collectAsStateWithLifecycle()
+                val dayGamesLoading by vm.dayGamesLoading.collectAsStateWithLifecycle()
+                val selectedDate by vm.selectedDate.collectAsStateWithLifecycle()
+                val secondsUntilRefresh by vm.secondsUntilRefresh.collectAsStateWithLifecycle()
+                val isRefreshing by vm.isRefreshing.collectAsStateWithLifecycle()
+                val monthGames by vm.monthGames.collectAsStateWithLifecycle()
+                val calendarMonth by vm.calendarMonth.collectAsStateWithLifecycle()
+                val weather by vm.weather.collectAsStateWithLifecycle()
+                val entryDate by vm.entryDate.collectAsStateWithLifecycle()
+                val dayEntry by vm.dayEntry.collectAsStateWithLifecycle()
+                val entryLoading by vm.entryLoading.collectAsStateWithLifecycle()
+                val entryFailed by vm.entryFailed.collectAsStateWithLifecycle()
+                val recentEntries by vm.recentEntries.collectAsStateWithLifecycle()
+                val entryChangeDates by vm.entryChangeDates.collectAsStateWithLifecycle()
+                val teamCard by vm.teamCard.collectAsStateWithLifecycle()
+                val batterLeaders by vm.batterLeaders.collectAsStateWithLifecycle()
+                val pitcherLeaders by vm.pitcherLeaders.collectAsStateWithLifecycle()
+                val playerDetail by vm.playerDetail.collectAsStateWithLifecycle()
+                val playerLoading by vm.playerLoading.collectAsStateWithLifecycle()
+                val favoriteCodes by vm.favoriteCodes.collectAsStateWithLifecycle()
+                val favoritePlayers by vm.favoritePlayers.collectAsStateWithLifecycle()
+                val favoriteStats by vm.favoriteStats.collectAsStateWithLifecycle()
+                val viewingGame by vm.viewingGame.collectAsStateWithLifecycle()
+                val viewingLoading by vm.viewingLoading.collectAsStateWithLifecycle()
+                val resultsTeamCode by vm.resultsTeamCode.collectAsStateWithLifecycle()
+                val seasonGames by vm.seasonGames.collectAsStateWithLifecycle()
+                val seasonLoading by vm.seasonLoading.collectAsStateWithLifecycle()
+                val jerseyPlayers by vm.jerseyPlayers.collectAsStateWithLifecycle()
+                val jerseyLoading by vm.jerseyLoading.collectAsStateWithLifecycle()
+                val playersTeamCode by vm.playersTeamCode.collectAsStateWithLifecycle()
+                val overlayTeamCode by vm.overlayTeamCode.collectAsStateWithLifecycle()
+                val overlayTeamCard by vm.overlayTeamCard.collectAsStateWithLifecycle()
                 val scope = rememberCoroutineScope()
                 var updateStatus by remember { mutableStateOf<String?>(null) }
                 var lastAutoUpdateAt by remember { mutableLongStateOf(0L) }
@@ -520,7 +521,7 @@ private fun AppScaffold(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val store = remember { GiantsRepository.get(context).store }
-    var tab by remember { mutableIntStateOf(initialTab) }
+    var tab by rememberSaveable { mutableIntStateOf(initialTab) }
     var returnTab by remember { mutableIntStateOf(-1) }
     var overlay by remember { mutableStateOf(if (openEntry) Overlay.EntryBoard else Overlay.None) }
     var showPlayerSheet by remember { mutableStateOf(false) }
