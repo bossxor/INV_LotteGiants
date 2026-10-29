@@ -357,6 +357,7 @@ class GameSchedulerWorker(appContext: Context, params: WorkerParameters) :
         const val ACTION_HIDE_LIVE = "com.bossxor.lottegiants.HIDE_LIVE"
         /** adb 시험용: `am broadcast -n .../.live.GameAlarmReceiver -a ...PREVIEW_NOWBAR --es state live` */
         const val ACTION_PREVIEW_NOWBAR = "com.bossxor.lottegiants.PREVIEW_NOWBAR"
+        const val ACTION_PREVIEW_ALERTS = "com.bossxor.lottegiants.PREVIEW_ALERTS"
         const val ACTION_FAST_POLL = "com.bossxor.lottegiants.FAST_POLL"
         const val ACTION_ROSTER_POLL = "com.bossxor.lottegiants.ROSTER_POLL"
         const val ACTION_KBO_DAY_ROLLOVER = "com.bossxor.lottegiants.KBO_DAY_ROLLOVER"
@@ -372,8 +373,14 @@ class GameAlarmReceiver : BroadcastReceiver() {
         ) {
             return
         }
-        // 미리보기 알림은 개발용이라 릴리스 빌드에서는 다른 앱이 보내도 무시한다.
-        if (action == GameSchedulerWorker.ACTION_PREVIEW_NOWBAR && !BuildConfig.DEBUG) return
+        // 미리보기 알림은 개발용이라 디버그 빌드나 adb(shell, uid 2000)에서 보낸 것만 처리한다.
+        val preview = action == GameSchedulerWorker.ACTION_PREVIEW_NOWBAR ||
+            action == GameSchedulerWorker.ACTION_PREVIEW_ALERTS
+        if (preview && !BuildConfig.DEBUG &&
+            !(Build.VERSION.SDK_INT >= 34 && sentFromUid == 2000)
+        ) {
+            return
+        }
         val pending = goAsync()
         Thread {
             try {
@@ -453,6 +460,17 @@ class GameAlarmReceiver : BroadcastReceiver() {
                             val awayScore = intent?.takeIf { it.hasExtra("awayScore") }?.getIntExtra("awayScore", 0)
                             val homeScore = intent?.takeIf { it.hasExtra("homeScore") }?.getIntExtra("homeScore", 0)
                             runBlocking { NowBarPreview.post(context, st, home, awayScore, homeScore) }
+                        }
+                        GameSchedulerWorker.ACTION_PREVIEW_ALERTS -> {
+                            listOf(
+                                NotificationType.SCORE to "득점 알림 시험",
+                                NotificationType.HOMERUN to "홈런 알림 시험",
+                                NotificationType.INNING_CHANGE to "이닝 교대 시험",
+                                NotificationType.GAME_START to "경기 시작 시험",
+                                NotificationType.LINEUP to "라인업 시험",
+                            ).forEachIndexed { i, (type, title) ->
+                                NotificationHelper.notifyEvent(context, type, title, "알림 일괄 삭제 시험 ${i + 1}", 9101 + i)
+                            }
                         }
                         GameSchedulerWorker.ACTION_HIDE_LIVE -> {
                             runBlocking {
