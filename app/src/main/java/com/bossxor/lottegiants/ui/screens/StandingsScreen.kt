@@ -65,8 +65,8 @@ import com.bossxor.lottegiants.ui.ScoreShare
 import com.bossxor.lottegiants.ui.components.ScreenTitle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Density
-import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import com.bossxor.lottegiants.ui.components.SectionCard
 import com.bossxor.lottegiants.ui.components.SparklineChart
 import com.bossxor.lottegiants.ui.components.TeamLogo
@@ -92,6 +92,7 @@ fun StandingsScreen(
 ) {
     val focusCode = myTeamCode.ifBlank { LOTTE_TEAM_CODE }
     val focusName = teamCodeToName(focusCode).ifBlank { "롯데" }
+    val tableScroll = androidx.compose.foundation.rememberScrollState() // 큰 글자에서 표 전체가 함께 가로 스크롤
     var baseTeamId by remember(standings, focusCode) {
         mutableStateOf(
             standings.firstOrNull { it.teamId.equals(focusCode, true) }?.teamId
@@ -293,11 +294,12 @@ fun StandingsScreen(
                                 isBase = lotteStanding.teamId == baseTeamId,
                                 isLotte = true,
                                 compact = true,
+                                scroll = tableScroll,
                                 onClick = { baseTeamId = lotteStanding.teamId },
                             )
                         }
                         Spacer(Modifier.height(6.dp))
-                        CappedFontScale { Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp)) {
+                        ScrollableTable(tableScroll) { Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp)) {
                             Text(
                                 "순위",
                                 Modifier.weight(StandingCol.rank),
@@ -373,6 +375,7 @@ fun StandingsScreen(
                             base = baseTeam,
                             isBase = t.teamId == baseTeamId,
                             isLotte = t.teamId.equals(focusCode, true),
+                            scroll = tableScroll,
                             onClick = { baseTeamId = t.teamId },
                         )
                     }
@@ -733,11 +736,14 @@ private fun formatGb(gb: Double?): String {
     return if (gb > 0) "+$absStr" else "-$absStr"
 }
 
-/** 고정 열 너비 표라 글자 배율 1.3배까지만 키운다(2.0배에서 글자 단위로 깨짐). */
+/** 열 비율 표라 큰 글자에서는 폭을 글자 배율만큼 넓히고 가로 스크롤한다(보통 크기에서는 화면 폭 그대로). */
 @Composable
-private fun CappedFontScale(content: @Composable () -> Unit) {
-    val d = LocalDensity.current
-    CompositionLocalProvider(LocalDensity provides Density(d.density, minOf(d.fontScale, 1.3f))) { content() }
+private fun ScrollableTable(scroll: androidx.compose.foundation.ScrollState, content: @Composable () -> Unit) {
+    androidx.compose.foundation.layout.BoxWithConstraints {
+        val need = (340 * LocalDensity.current.fontScale).dp // 실기: 1.15배는 화면 폭에 들어가고 2.0배는 이 폭이어야 안 쪼개진다
+        val w = if (need > maxWidth) need else maxWidth
+        Box(Modifier.horizontalScroll(scroll)) { Box(Modifier.width(w)) { content() } }
+    }
 }
 
 @Composable
@@ -748,7 +754,8 @@ private fun StandingRow(
     onClick: () -> Unit,
     isLotte: Boolean = false,
     compact: Boolean = false,
-) = CappedFontScale { StandingRowBody(t, base, isBase, onClick, isLotte, compact) }
+    scroll: androidx.compose.foundation.ScrollState,
+) = ScrollableTable(scroll) { StandingRowBody(t, base, isBase, onClick, isLotte, compact) }
 
 @Composable
 private fun StandingRowBody(

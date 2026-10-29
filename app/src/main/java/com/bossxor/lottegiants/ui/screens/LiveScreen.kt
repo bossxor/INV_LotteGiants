@@ -1253,8 +1253,12 @@ private fun SummaryTab(
                 val homeCode = if (g.isHome) g.focusTeamCode else g.opponentCode
                 val awayBar = if (g.isPostseason) Color(com.bossxor.lottegiants.widget.WidgetAssets.winProbBarColor(awayCode))
                 else if (g.isHome) Color(0xFFC30452) else LotteRed
-                val homeBar = if (g.isPostseason) Color(com.bossxor.lottegiants.widget.WidgetAssets.winProbBarColor(homeCode))
+                val homeBar0 = if (g.isPostseason) Color(com.bossxor.lottegiants.widget.WidgetAssets.winProbBarColor(homeCode))
                 else if (g.isHome) LotteRed else Color(0xFF9AA0A6)
+                // 두 팀 색이 비슷하면 구간이 구분되지 않으니 홈 쪽을 회색으로 바꾼다.
+                val colorGap = kotlin.math.abs(awayBar.red - homeBar0.red) + kotlin.math.abs(awayBar.green - homeBar0.green) +
+                    kotlin.math.abs(awayBar.blue - homeBar0.blue)
+                val homeBar = if (g.isPostseason && colorGap < 0.35f) Color(0xFF9AA0A6) else homeBar0
                 Row(
                     Modifier
                         .fillMaxWidth()

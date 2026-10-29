@@ -47,6 +47,20 @@ class ScheduleSourceTest {
         assertEquals(1, src.day(d).size) // 백오프 중에도 직전 정상 데이터
     }
 
+    @Test fun backoffBoundaryAndSuccessClearsIt() = runBlocking {
+        var now = 0L
+        val api = FakeApi(fail = true)
+        val src = ScheduleSource(api) { now }
+        val d = kboToday().plusDays(20) // 날짜 정리 범위(±400일) 안이라 상대 날짜가 오히려 안정적
+        src.day(d)
+        now = 59_999L; src.day(d)
+        assertEquals(1, api.calls)
+        now = 60_000L; api.fail = false; src.day(d)
+        assertEquals(2, api.calls)
+        now = 60_001L; src.day(d) // 성공 캐시 히트, 호출 없음
+        assertEquals(2, api.calls)
+    }
+
     @Test fun freshIgnoresBackoff() = runBlocking {
         val api = FakeApi(fail = true)
         val src = ScheduleSource(api) { 0L }
