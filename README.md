@@ -6,12 +6,12 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.79` (`versionCode` **2079**) |
+| **버전** | `2.0.80` (`versionCode` **2080**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.github.io/works-dashboard/) |
-| **최신 릴리스** | [latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·update.json 버전 2079 |
-| **검증** | 단위 테스트 260건 통과, Release 빌드, S26 울트라에 2.0.79 ADB 설치(2.0.79는 설치·버전만 확인), 순위 탭·다크 모드·큰 글자 1.5배 폰 화면 확인, 2.0배 순위표 수정 확인, 2.0.75 디자인 변경(라이브 헤더·설정)을 폰 화면으로 확인, 포스트시즌 양 팀 기준 화면(라이브 탭 위쪽·경기 상세·프리뷰·요약 MVP·키플레이어·선발 투수·승리 확률)과 중계·요약·기록 탭을 지난 경기(10/20 KIA 13:1 LG)로 실기 확인 |
+| **최신 릴리스** | [latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·update.json 버전 2080 |
+| **검증** | 단위 테스트 261건 통과, Release 빌드, S26 울트라에 2.0.80 ADB 설치(순위표 1.15·1.5·2.0배 화면 확인), 순위 탭·다크 모드·큰 글자 1.5배 폰 화면 확인, 2.0배 순위표 수정 확인, 2.0.75 디자인 변경(라이브 헤더·설정)을 폰 화면으로 확인, 포스트시즌 양 팀 기준 화면(라이브 탭 위쪽·경기 상세·프리뷰·요약 MVP·키플레이어·선발 투수·승리 확률)과 중계·요약·기록 탭을 지난 경기(10/20 KIA 13:1 LG)로 실기 확인 |
 
 > 집·회사에서 이어서 작업할 때는 **[작업일지.md](작업일지.md)** 를 본다. 최신이 위. 작업이 끝나면 그 파일을 고치고 push.
 
@@ -246,8 +246,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.79` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2079` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.80` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2080` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -286,8 +286,8 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 ```json
 {
-  "versionCode": 2079,
-  "versionName": "2.0.79",
+  "versionCode": 2080,
+  "versionName": "2.0.80",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }
@@ -299,6 +299,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.80** | 순위표 글자 배율 상한을 없애고 큰 글자에서는 표를 가로 스크롤(헤더·행 동시), 포스트시즌 두 팀 색이 비슷하면 승리 확률 바 회색 폴백, 일정 백오프 경계 테스트 |
 | **2.0.79** | 2.0.78 코드 리뷰 반영: 한국시리즈 판별 srId 정정(와일드카드전 뒤 추적이 끊기던 문제), 취소된 한국시리즈 경기를 종료로 오판하지 않음, 일정 조회 실패 때 직전 정상 데이터 유지, 일부 날짜 실패한 시즌 일정은 캐시하지 않음 |
 | **2.0.78** | 한국시리즈 종료 뒤 포스트시즌 바가 내 팀 기준으로 복귀, KBO 일정 조회 실패 시 60초간 재조회 안 함(새로고침은 무시), 포스트시즌 승리 확률 바를 두 팀 고유색으로, 순위표 글자 배율 1.3배 상한(2.0배에서 글자 단위로 깨짐) |
 | **2.0.77** | 2.0.76 시험용 방송(shell 송신 허용)이 동작하지 않아 되돌림. 기능 변화 없음(2.0.75와 동일) |
