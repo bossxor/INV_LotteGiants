@@ -489,6 +489,7 @@ class GameAlarmReceiver : BroadcastReceiver() {
                                     quietEndHour = store.quietEndHour(),
                                     now = LocalTime.now(KBO_ZONE),
                                     type = NotificationType.PREGAME_REMINDER,
+                                    masterEnabled = store.isAlertsMasterEnabled(),
                                 )
                                 if (allow) {
                                     NotificationHelper.createChannels(context)

@@ -298,7 +298,7 @@ object NotificationHelper {
     suspend fun refreshLiveNotificationIfNeeded(context: Context) {
         val app = context.applicationContext
         val repo = com.bossxor.lottegiants.data.GiantsRepository.get(app)
-        if (!repo.store.isLiveScoreEnabled()) return
+        if (!repo.store.isAlertsMasterEnabled() || !repo.store.isLiveScoreEnabled()) return
         createChannels(app)
         val lead = repo.store.liveLeadMinutes()
         val pinned = repo.store.isLiveNotificationPinned()

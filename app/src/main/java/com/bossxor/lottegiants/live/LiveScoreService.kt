@@ -70,7 +70,7 @@ class LiveScoreService : Service() {
         // DataStore await는 메인 스레드 runBlocking 금지 — IO에서 검사 후 LIVE가 아니면 stopSelf
         scope.launch {
             val repo = GiantsRepository.get(this@LiveScoreService)
-            val enabled = repo.store.isLiveScoreEnabled()
+            val enabled = repo.store.isAlertsMasterEnabled() && repo.store.isLiveScoreEnabled()
             if (!enabled) {
                 stopSelfSafely(removeNotification = true)
                 return@launch
@@ -124,7 +124,7 @@ class LiveScoreService : Service() {
             val repo = GiantsRepository.get(this@LiveScoreService)
             while (isActive) {
                 try {
-                    if (!repo.store.isLiveScoreEnabled()) {
+                    if (!repo.store.isAlertsMasterEnabled() || !repo.store.isLiveScoreEnabled()) {
                         stopSelfSafely(removeNotification = true)
                         break
                     }

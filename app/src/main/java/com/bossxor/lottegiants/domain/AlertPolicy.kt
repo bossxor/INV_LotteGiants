@@ -59,7 +59,9 @@ fun shouldEmitAlert(
     quietEndHour: Int,
     now: LocalTime,
     type: NotificationType,
+    masterEnabled: Boolean = true,
 ): Boolean {
+    if (!masterEnabled) return false
     if (!typeEnabled) return false
     if (quietEnabled && isQuietHour(now, quietStartHour, quietEndHour)) return false
     if (liveOnly && !gameIsLive && !isLiveOnlyExempt(type)) return false

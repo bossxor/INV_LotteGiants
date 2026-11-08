@@ -173,6 +173,7 @@ class AlertWatchService : Service() {
 
         suspend fun shouldRun(context: Context): Boolean {
             val store = GiantsRepository.get(context).store
+            if (!store.isAlertsMasterEnabled()) return false
             val lineupOn = store.isNotificationEnabled(NotificationType.LINEUP)
             val rosterOn = store.isNotificationEnabled(NotificationType.ROSTER) ||
                 store.isNotificationEnabled(NotificationType.FAVORITE_ROSTER)

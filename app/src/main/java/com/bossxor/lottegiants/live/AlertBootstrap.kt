@@ -76,6 +76,7 @@ object AlertBootstrap {
             quietEndHour = repo.store.quietEndHour(),
             now = LocalTime.now(KBO_ZONE),
             type = NotificationType.PREGAME_REMINDER,
+            masterEnabled = repo.store.isAlertsMasterEnabled(),
         )
         if (allow) {
             NotificationHelper.notifyEvent(

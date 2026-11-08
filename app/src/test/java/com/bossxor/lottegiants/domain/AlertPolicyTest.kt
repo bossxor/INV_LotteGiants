@@ -119,4 +119,34 @@ class AlertPolicyTest {
     fun allPresetHasEveryType() {
         assertEquals(NotificationType.entries.toSet(), typesForPreset(AlertPreset.ALL))
     }
+
+    @Test
+    fun masterOffBlocksEvenWhenTypeOn() {
+        assertFalse(
+            shouldEmitAlert(
+                typeEnabled = true,
+                liveOnly = false,
+                gameIsLive = true,
+                quietEnabled = false,
+                quietStartHour = 23,
+                quietEndHour = 8,
+                now = LocalTime.of(15, 0),
+                type = NotificationType.SCORE,
+                masterEnabled = false,
+            ),
+        )
+        assertTrue(
+            shouldEmitAlert(
+                typeEnabled = true,
+                liveOnly = false,
+                gameIsLive = true,
+                quietEnabled = false,
+                quietStartHour = 23,
+                quietEndHour = 8,
+                now = LocalTime.of(15, 0),
+                type = NotificationType.SCORE,
+                masterEnabled = true,
+            ),
+        )
+    }
 }

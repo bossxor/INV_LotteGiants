@@ -18,7 +18,8 @@ internal class AlertBatch(val context: Context, private val store: SnapshotStore
         }
         for (alert in alerts) {
             if (!shouldEmitAlert(alert.type in policy.enabled, policy.liveOnly, gameIsLive,
-                    policy.quietEnabled, policy.quietStart, policy.quietEnd, LocalTime.now(KBO_ZONE), alert.type)) continue
+                    policy.quietEnabled, policy.quietStart, policy.quietEnd, LocalTime.now(KBO_ZONE), alert.type,
+                    policy.masterEnabled)) continue
             NotificationHelper.notifyEvent(context, alert.type, alert.title, alert.text, alert.id,
                 alert.gameId, alert.detailTab, alert.silentUpdate, policy.vibrate)
             store.appendAlertHistory(AlertHistoryItem(System.currentTimeMillis(), alert.type.name,

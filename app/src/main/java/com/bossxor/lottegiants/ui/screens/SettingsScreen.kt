@@ -83,6 +83,7 @@ import com.bossxor.lottegiants.domain.LiveDisplayMode
 import com.bossxor.lottegiants.domain.ThemeMode
 import com.bossxor.lottegiants.domain.liveLeadChipLabel
 import com.bossxor.lottegiants.domain.liveLeadLabel
+import com.bossxor.lottegiants.live.AlertWatchService
 import com.bossxor.lottegiants.live.CrashGuard
 import com.bossxor.lottegiants.live.LiveScoreService
 import com.bossxor.lottegiants.live.NotificationHelper
@@ -261,12 +262,46 @@ fun SettingsScreen(
         Spacer(Modifier.height(24.dp))
         Text("알림", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text(
-            "프리셋으로 한 번에 고르거나, 아래에서 종류별로 켤 수 있습니다.",
+            "전체를 꺼도 아래 종류·프리셋은 그대로입니다. 다시 켜면 그 설정대로 갑니다.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 12.sp,
         )
         Spacer(Modifier.height(8.dp))
+        val alertsMaster by store.alertsMasterEnabledFlow.collectAsStateWithLifecycle(initialValue = true)
         val liveOnly by store.alertsLiveOnlyFlow.collectAsStateWithLifecycle(initialValue = false)
+        SectionCard {
+            Column {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("알림", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (alertsMaster) "이벤트·라이브 바·감시 알림을 보냅니다" else "종류 설정은 유지, 알림만 멈춤",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    AppSwitch(
+                        checked = alertsMaster,
+                        onCheckedChange = { on ->
+                            scope.launch {
+                                store.setAlertsMasterEnabled(on)
+                                if (on) {
+                                    if (store.isLiveScoreEnabled()) {
+                                        NotificationHelper.refreshLiveNotificationIfNeeded(context)
+                                    }
+                                    AlertWatchService.startIfNeeded(context)
+                                } else {
+                                    LiveScoreService.stop(context)
+                                    NotificationHelper.cancelLive(context)
+                                    AlertWatchService.stop(context)
+                                }
+                            }
+                        },
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
         SectionCard {
             Column {
                 Text("프리셋", fontWeight = FontWeight.SemiBold)

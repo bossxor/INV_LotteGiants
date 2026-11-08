@@ -67,7 +67,7 @@ class SnapshotStore(private val context: Context) {
         }, liveOnly = prefs[KEY_ALERTS_LIVE_ONLY] ?: false, vibrate = prefs[KEY_ALERT_VIBRATE] ?: true,
             quietEnabled = prefs[KEY_QUIET_ENABLED] ?: false, quietStart = prefs[KEY_QUIET_START] ?: 23,
             quietEnd = prefs[KEY_QUIET_END] ?: 8, chanceAtBatChange = prefs[KEY_CHANCE_AT_BAT_CHANGE] ?: true,
-            favorites = favorites)
+            favorites = favorites, masterEnabled = prefs[KEY_ALERTS_MASTER] ?: true)
     }
 
     fun notificationEnabledFlow(type: NotificationType): Flow<Boolean> =
@@ -406,6 +406,16 @@ class SnapshotStore(private val context: Context) {
         }
     }
 
+    val alertsMasterEnabledFlow: Flow<Boolean> = context.dataStore.data.map {
+        it[KEY_ALERTS_MASTER] ?: true
+    }
+
+    suspend fun isAlertsMasterEnabled(): Boolean = safeFirst(alertsMasterEnabledFlow, true)
+
+    suspend fun setAlertsMasterEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_ALERTS_MASTER] = enabled }
+    }
+
     val alertsLiveOnlyFlow: Flow<Boolean> = context.dataStore.data.map {
         it[KEY_ALERTS_LIVE_ONLY] ?: false
     }
@@ -602,6 +612,7 @@ class SnapshotStore(private val context: Context) {
             widgetOpacity = widgetOpacity(),
             widgetShowOppLogo = widgetShowOppLogo(),
             alertsLiveOnly = alertsLiveOnly(),
+            alertsMasterEnabled = isAlertsMasterEnabled(),
             alertVibrate = alertVibrate(),
             quietEnabled = quietHoursEnabled(),
             quietStartHour = quietStartHour(),
@@ -629,6 +640,7 @@ class SnapshotStore(private val context: Context) {
             prefs[KEY_WIDGET_OPACITY] = backup.widgetOpacity.coerceIn(20, 100)
             prefs[KEY_WIDGET_OPP_LOGO] = backup.widgetShowOppLogo
             prefs[KEY_ALERTS_LIVE_ONLY] = backup.alertsLiveOnly
+            prefs[KEY_ALERTS_MASTER] = backup.alertsMasterEnabled
             prefs[KEY_ALERT_VIBRATE] = backup.alertVibrate
             prefs[KEY_QUIET_ENABLED] = backup.quietEnabled
             prefs[KEY_QUIET_START] = backup.quietStartHour.coerceIn(0, 23)
@@ -670,6 +682,7 @@ class SnapshotStore(private val context: Context) {
         private val KEY_PENDING_UPDATE_CODE = stringPreferencesKey("pending_update_code")
         private val KEY_PREFERRED_LIVE = stringPreferencesKey("preferred_live_game_id")
         private val KEY_ALERTS_LIVE_ONLY = booleanPreferencesKey("alerts_live_only")
+        private val KEY_ALERTS_MASTER = booleanPreferencesKey("alerts_master_enabled")
         private val KEY_ALERT_VIBRATE = booleanPreferencesKey("alert_vibrate_score_lead")
         private val KEY_QUIET_ENABLED = booleanPreferencesKey("quiet_hours_enabled")
         private val KEY_QUIET_START = intPreferencesKey("quiet_start_hour")
