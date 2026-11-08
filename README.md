@@ -6,11 +6,11 @@
 
 | | |
 |---|---|
-| **버전** | `2.0.82` (`versionCode` **2082**) |
+| **버전** | `2.0.83` (`versionCode` **2083**) |
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.github.io/works-dashboard/) |
-| **최신 릴리스** | [v2.0.82-261108 · latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·update.json 2082, 커밋 `760eb1a` |
+| **최신 릴리스** | [latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — 푸시 후 CI가 2.0.83으로 덮어씀 |
 | **검증** | 단위 테스트 261건 통과, Release 빌드, S26 울트라에 2.0.80 ADB 설치(순위표 1.15·1.5·2.0배 화면 확인), 순위 탭·다크 모드·큰 글자 1.5배 폰 화면 확인, 2.0배 순위표 수정 확인, 2.0.75 디자인 변경(라이브 헤더·설정)을 폰 화면으로 확인, 포스트시즌 양 팀 기준 화면(라이브 탭 위쪽·경기 상세·프리뷰·요약 MVP·키플레이어·선발 투수·승리 확률)과 중계·요약·기록 탭을 지난 경기(10/20 KIA 13:1 LG)로 실기 확인 |
 
 > 집·회사에서 이어서 작업할 때는 **[작업일지.md](작업일지.md)** 를 본다. 최신이 위. 작업이 끝나면 그 파일을 고치고 push.
@@ -246,8 +246,8 @@ debug/release **모두 동일 키**로 서명한다. 디버그 키로 깔린 기
 
 | 필드 | 설명 | 현재 |
 |------|------|------|
-| `versionName` | 사용자에게 보이는 버전 | `2.0.82` |
-| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2082` |
+| `versionName` | 사용자에게 보이는 버전 | `2.0.83` |
+| `versionCode` | 업데이트 비교용 정수 (2.x는 2000대) | `2083` |
 
 기능 배포 시 `versionCode`만 올리고 `versionName`은 유지해도 된다.
 
@@ -286,8 +286,8 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 ```json
 {
-  "versionCode": 2082,
-  "versionName": "2.0.82",
+  "versionCode": 2083,
+  "versionName": "2.0.83",
   "apkFileName": "LotteGiants.apk",
   "notes": "변경 내용"
 }
@@ -299,6 +299,7 @@ gh release download latest --repo bossxor/INV_LotteGiants --pattern LotteGiants.
 
 | 버전 | 내용 |
 |------|------|
+| **2.0.83** | 구조 문서를 2.0.82 코드에 맞춤(EGM 리뷰): 알림 마스터·포스트시즌·WorkManager 폴·용어표 |
 | **2.0.82** | 알림 전체 스위치: 종류 설정은 유지하고 이벤트·라이브 바·감시만 멈춤 |
 | **2.0.81** | FAST_POLL 방송 ANR(앱이 계속 중지됨): 폴링을 WorkManager로 분리, 감시 FGS가 있으면 백업 조회 생략 |
 | **2.0.80** | 순위표 글자 배율 상한을 없애고 큰 글자에서는 표를 가로 스크롤(헤더·행 동시), 포스트시즌 두 팀 색이 비슷하면 승리 확률 바 회색 폴백, 일정 백오프 경계 테스트 |
@@ -386,7 +387,7 @@ scripts/         env.ps1, build.ps1, publish-latest, CI 서명 설정
 ```
 
 
-Gradle 모듈은 기존 `app` 하나를 유지하면서 조회·게시·이벤트 계산·발행·화면 요청의 책임을 구분했습니다. 자세한 흐름과 캐시/취소 정책, 검증 범위는 [구조 설명](docs/architecture.md)에 정리했습니다.
+Gradle 모듈은 기존 `app` 하나를 유지하면서 조회·게시·이벤트 계산·발행·화면 요청의 책임을 구분합니다. 흐름·캐시/취소·알림 마스터·포스트시즌은 [구조 설명](docs/architecture.md)(as of 2.0.83, 구현 계획 아님)을 본다.
 
 - 화면·서비스·위젯의 LIVE 조회를 공유하고, 전체 네트워크 대기와 짧은 게시 잠금을 분리합니다. 늦은 전체 응답과 팀/DH 선택 변경 후 응답은 최신 상태를 덮지 않습니다.
 - 프리뷰(5분)·날씨(15분)와 보조 자료 갱신은 LIVE 점수 경로와 최신성을 구분합니다. 당일 라인업·등말소는 신선 조회를 유지합니다.
