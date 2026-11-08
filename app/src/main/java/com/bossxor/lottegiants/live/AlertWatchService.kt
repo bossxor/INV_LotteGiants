@@ -157,6 +157,8 @@ class AlertWatchService : Service() {
         @Volatile
         private var running = false
 
+        fun isRunning(): Boolean = running
+
         /** API 34+ specialUse, 그 아래는 dataSync(한도 완화 전 OEM). */
         fun foregroundType(): Int = when {
             Build.VERSION.SDK_INT >= 34 -> ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
