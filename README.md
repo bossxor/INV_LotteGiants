@@ -10,7 +10,7 @@
 | **패키지** | `com.bossxor.lottegiants` |
 | **원격** | [bossxor/INV_LotteGiants](https://github.com/bossxor/INV_LotteGiants.git) (private) |
 | **대시보드** | [프로젝트 모음](https://bossxor.github.io/works-dashboard/) |
-| **최신 릴리스** | [latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — 푸시 후 CI가 2.0.82로 덮어씀 |
+| **최신 릴리스** | [v2.0.82-261108 · latest](https://github.com/bossxor/INV_LotteGiants/releases/tag/latest) — APK·update.json 2082, 커밋 `760eb1a` |
 | **검증** | 단위 테스트 261건 통과, Release 빌드, S26 울트라에 2.0.80 ADB 설치(순위표 1.15·1.5·2.0배 화면 확인), 순위 탭·다크 모드·큰 글자 1.5배 폰 화면 확인, 2.0배 순위표 수정 확인, 2.0.75 디자인 변경(라이브 헤더·설정)을 폰 화면으로 확인, 포스트시즌 양 팀 기준 화면(라이브 탭 위쪽·경기 상세·프리뷰·요약 MVP·키플레이어·선발 투수·승리 확률)과 중계·요약·기록 탭을 지난 경기(10/20 KIA 13:1 LG)로 실기 확인 |
 
 > 집·회사에서 이어서 작업할 때는 **[작업일지.md](작업일지.md)** 를 본다. 최신이 위. 작업이 끝나면 그 파일을 고치고 push.
